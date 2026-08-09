@@ -1,9 +1,10 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { loadPublishedSummaries, type SummaryRecord } from '../../lib/summaries';
+import type { SummaryRecord } from '../../lib/summaries';
+import { loadPublishedSummaries } from '../../lib/summary-loader';
 
 export async function getStaticPaths() {
-  const summaries = await loadPublishedSummaries();
+  const summaries = loadPublishedSummaries();
   return summaries.map((record) => ({
     params: { id: record.id },
     props: { record },

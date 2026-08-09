@@ -1,27 +1,28 @@
-import { z } from 'zod';
+export interface SummaryRecord {
+  schemaVersion: 1;
+  id: string;
+  canonicalUrl: string;
+  sourceType: 'web';
+  title: string;
+  author: string | null;
+  sourcePublishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  summary: string;
+  keyPoints: string[];
+  category: string;
+  tags: string[];
+  editorial: string;
+  status: 'published' | 'archived';
+}
 
-export const SummaryRecordSchema = z.object({
-  schemaVersion: z.literal(1),
-  id: z.string(),
-  canonicalUrl: z.string().url().max(2083),
-  sourceType: z.literal('web'),
-  title: z.string(),
-  author: z.string().nullable(),
-  sourcePublishedAt: z.string().datetime({ offset: true }).nullable(),
-  createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime({ offset: true }),
-  summary: z.string(),
-  keyPoints: z.array(z.string()).min(3).max(5),
-  category: z.string(),
-  tags: z.array(z.string()).min(1).max(5),
-  editorial: z.string(),
-  status: z.enum(['published', 'archived']),
-});
+export interface SummaryCard {
+  dataset: { summaryCard?: string };
+  hidden: boolean;
+}
 
-export type SummaryRecord = z.infer<typeof SummaryRecordSchema>;
-
-export function parseSummaryRecord(record: unknown): SummaryRecord {
-  return SummaryRecordSchema.parse(record);
+export interface SummaryCardContainer<Card extends SummaryCard> {
+  append(...nodes: Card[]): void;
 }
 
 export function getPublishedSummaries(records: SummaryRecord[]): SummaryRecord[] {
@@ -52,16 +53,29 @@ export function filterAndSortSummaries(
     });
 }
 
-export async function loadPublishedSummaries(): Promise<SummaryRecord[]> {
-  const { readdirSync, readFileSync } = await import('node:fs');
-  const { fileURLToPath } = await import('node:url');
-  const summariesDirectory = fileURLToPath(new URL('../../../data/summaries/', import.meta.url));
-  const records = readdirSync(summariesDirectory)
-    .filter((fileName) => fileName.endsWith('.json'))
-    .map((fileName) => {
-      const filePath = new URL(`../../../data/summaries/${fileName}`, import.meta.url);
-      return parseSummaryRecord(JSON.parse(readFileSync(filePath, 'utf8')));
-    });
+export function serializeSummaryRecords(records: SummaryRecord[]): string {
+  return JSON.stringify(records).replaceAll('<', '\\u003c');
+}
 
-  return filterAndSortSummaries(getPublishedSummaries(records), '', '', 'newest');
+export function reorderSummaryCards<Card extends SummaryCard>(
+  container: SummaryCardContainer<Card>,
+  cards: Card[],
+  records: SummaryRecord[],
+  query: string,
+  category: string,
+  order: 'newest' | 'oldest',
+): void {
+  const sortedRecords = filterAndSortSummaries(records, query, category, order);
+  const visibleIds = new Set(sortedRecords.map((record) => record.id));
+  const cardsById = new Map(cards.map((card) => [card.dataset.summaryCard, card]));
+  const visibleCards = sortedRecords.flatMap((record) => {
+    const card = cardsById.get(record.id);
+    return card ? [card] : [];
+  });
+  const hiddenCards = cards.filter((card) => !visibleIds.has(card.dataset.summaryCard ?? ''));
+
+  cards.forEach((card) => {
+    card.hidden = !visibleIds.has(card.dataset.summaryCard ?? '');
+  });
+  container.append(...visibleCards, ...hiddenCards);
 }

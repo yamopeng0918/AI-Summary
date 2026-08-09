@@ -1,8 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { loadPublishedSummaries } from '../lib/summaries';
+import { serializeSummaryRecords } from '../lib/summaries';
+import { loadPublishedSummaries } from '../lib/summary-loader';
 
-const summaries = await loadPublishedSummaries();
+const summaries = loadPublishedSummaries();
 const categories = [...new Set(summaries.map((record) => record.category))].toSorted();
 ---
 
@@ -56,14 +57,14 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
             </article>
           ))}
         </section>
-        <script id="summary-records" type="application/json" is:inline>{JSON.stringify(summaries)}</script>
+        <script id="summary-records" type="application/json" is:inline set:html={serializeSummaryRecords(summaries)}></script>
       </>
     )
   }
 </BaseLayout>
 
 <script>
-  import { filterAndSortSummaries } from '../lib/summaries';
+  import { reorderSummaryCards, type SummaryRecord } from '../lib/summaries';
 
   const form = document.querySelector<HTMLFormElement>('#summary-filters');
   const query = document.querySelector<HTMLInputElement>('#summary-query');
@@ -72,17 +73,20 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
   const recordsElement = document.querySelector<HTMLScriptElement>('#summary-records');
   const noResults = document.querySelector<HTMLElement>('#no-results');
   const cards = document.querySelectorAll<HTMLElement>('[data-summary-card]');
-  const records = JSON.parse(recordsElement?.textContent ?? '[]');
+  const records: SummaryRecord[] = JSON.parse(recordsElement?.textContent ?? '[]');
 
   form?.addEventListener('input', () => {
-    const visibleIds = new Set(
-      filterAndSortSummaries(records, query?.value ?? '', category?.value ?? '', order?.value === 'oldest' ? 'oldest' : 'newest')
-        .map((record) => record.id),
+    const summaryList = document.querySelector<HTMLElement>('#summary-list');
+    if (!summaryList) return;
+    reorderSummaryCards(
+      { append: (...nodes) => summaryList.append(...nodes) },
+      Array.from(cards),
+      records,
+      query?.value ?? '',
+      category?.value ?? '',
+      order?.value === 'oldest' ? 'oldest' : 'newest',
     );
-    cards.forEach((card) => {
-      card.hidden = !visibleIds.has(card.dataset.summaryCard ?? '');
-    });
-    if (noResults) noResults.hidden = visibleIds.size > 0;
+    if (noResults) noResults.hidden = [...cards].every((card) => card.hidden);
   });
 
   form?.addEventListener('change', () => form.dispatchEvent(new Event('input')));

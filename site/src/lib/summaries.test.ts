@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   filterAndSortSummaries,
   getPublishedSummaries,
-  parseSummaryRecord,
+  reorderSummaryCards,
+  serializeSummaryRecords,
 } from './summaries';
+import { getSummariesDirectory, parseSummaryRecord } from './summary-loader';
 
 const newerRecord = {
   schemaVersion: 1,
@@ -37,10 +39,18 @@ const olderRecord = {
 } as const;
 
 describe('summary data', () => {
+  it('resolves the repository summary directory from the site build directory', () => {
+    expect(getSummariesDirectory('C:/workspace/site')).toBe('C:\\workspace\\data\\summaries');
+  });
+
   it('rejects a record with fewer than three key points', () => {
     expect(() =>
       parseSummaryRecord({ ...newerRecord, keyPoints: ['只有', '兩點'] }),
     ).toThrow();
+  });
+
+  it.each(['javascript:alert(1)', 'data:text/html,unsafe'])('rejects a non-HTTP canonical URL: %s', (canonicalUrl) => {
+    expect(() => parseSummaryRecord({ ...newerRecord, canonicalUrl })).toThrow();
   });
 
   it('excludes archived records', () => {
@@ -90,5 +100,28 @@ describe('summary data', () => {
     const records = [parseSummaryRecord(newerRecord), parseSummaryRecord(olderRecord)];
 
     expect(filterAndSortSummaries(records, '不存在的關鍵字', '', 'newest')).toEqual([]);
+  });
+
+  it('serializes hostile record content as valid JSON without a literal closing script tag', () => {
+    const records = [parseSummaryRecord({ ...newerRecord, title: '</script><img src=x onerror=alert(1)>' })];
+    const serialized = serializeSummaryRecords(records);
+
+    expect(serialized).not.toContain('</script');
+    expect(serialized).not.toContain('<');
+    expect(JSON.parse(serialized)[0].title).toBe('</script><img src=x onerror=alert(1)>');
+  });
+
+  it('reorders existing cards to match the requested sort without injecting HTML', () => {
+    const records = [parseSummaryRecord(newerRecord), parseSummaryRecord(olderRecord)];
+    const cards = records.map((record) => ({ dataset: { summaryCard: record.id }, hidden: false }));
+    const appendedIds: string[] = [];
+    const container = {
+      append: (...nodes: typeof cards) => appendedIds.push(...nodes.map((node) => node.dataset.summaryCard)),
+    };
+
+    reorderSummaryCards(container, cards, records, '', '', 'oldest');
+
+    expect(appendedIds).toEqual(['older', 'newer']);
+    expect(cards.every((card) => !card.hidden)).toBe(true);
   });
 });

@@ -6,7 +6,7 @@
 
 **Architecture:** A Python package owns URL normalization, extraction, summarization contracts, classification boundaries, validation, storage, orchestration, and the CLI. The Astro application reads only validated JSON from `data/summaries`, generates list/detail pages, and performs client-side search, category filtering, and date sorting without accessing secrets.
 
-**Tech Stack:** Python 3.14.6, Pydantic 2, Typer, HTTPX, Trafilatura, OpenAI Python SDK, pytest, Astro 5, TypeScript, Vitest, Node 24.18.0, npm 11.16.0.
+**Tech Stack:** Python 3.14.6, Pydantic 2, Typer, HTTPX, Trafilatura, OpenAI Python SDK, pytest, Astro 7.2.0, TypeScript, Vitest, Node 24.18.0, npm 11.16.0.
 
 ## Global Constraints
 
@@ -375,7 +375,7 @@ Commit: `git add src/ai_digest/cli.py tests/test_cli.py && git commit -m "feat: 
 
 - [ ] **Step 1: Add the site configuration and install dependencies**
 
-Create scripts `test: vitest run`, `build: astro check && astro build`, and `dev: astro dev`. Add Astro 5, TypeScript 5, Vitest 3, `@astrojs/check`, and `zod` dependencies, with Node engine `>=22`. Configure Astro for static output and `srcDir: './src'`.
+Create scripts `test: vitest run`, `build: astro check && astro build`, and `dev: astro dev`. Add Astro 7.2.0, TypeScript 5, Vitest 3, `@astrojs/check`, and `zod` dependencies, with Node engine `>=22`. Configure Astro for static output and `srcDir: './src'`.
 
 Run from `site`: `npm.cmd install`
 
