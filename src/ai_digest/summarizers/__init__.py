@@ -1,0 +1,2 @@
+"""Summary service adapters."""
+
