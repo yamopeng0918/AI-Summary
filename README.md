@@ -77,7 +77,7 @@ Set-Location site
 npm.cmd run build
 ```
 
-輸出位於 `site/dist`。目前尚未設定或執行遠端 GitHub Pages 部署。
+輸出位於 `site/dist`。專案已推送至 `https://github.com/yamopeng0918/AI-Summary.git`，但目前尚未設定或執行 GitHub Pages 部署。
 
 `npm.cmd ci` 的目前依賴狀態會顯示 `esbuild@0.28.2` 與 `esbuild@0.25.12` 安裝 script 尚未核准的通知；本專案沒有授權或執行這些 script。不要在未審查前自行批准。
 

@@ -89,7 +89,8 @@
 - [ ] 支援本機編輯與重新產生摘要。
 - [x] 支援下架與重新發布，並保留建立與更新時間。
 - [ ] 實作 `evaluate-classifier`、`build-site` 與稍後獨立的 `deploy` 指令。
-- [ ] 在取得遠端資料與明確授權後設定 GitHub repository 與 Pages。
+- [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
+- [ ] 設定 GitHub Pages 與部署流程。
 - [ ] 執行部署前建置與追蹤檔案敏感資料掃描。
 - [ ] 驗證部署失敗時保留本機資料與可重試狀態。
 
