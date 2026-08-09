@@ -152,6 +152,24 @@ def test_maps_timeout_to_retryable_error() -> None:
     assert (raised.value.code, raised.value.retryable) == ("NETWORK_TIMEOUT", True)
 
 
+@pytest.mark.parametrize("error", [httpx.ReadTimeout("slow"), httpx.ConnectError("offline")])
+def test_closes_per_hop_client_when_send_fails(error: httpx.HTTPError) -> None:
+    clients: list[httpx.Client] = []
+
+    def factory() -> httpx.Client:
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda request: (_ for _ in ()).throw(error))
+        )
+        clients.append(client)
+        return client
+
+    with pytest.raises(DigestError):
+        WebExtractor(factory).extract("https://example.com/article")
+
+    assert len(clients) == 1
+    assert clients[0].is_closed
+
+
 def test_rejects_declared_response_larger_than_two_mib() -> None:
     transport = httpx.MockTransport(
         lambda request: httpx.Response(
@@ -255,6 +273,21 @@ def test_rejects_200_paywall_page_without_login_form() -> None:
         WebExtractor(client_for(transport)).extract("https://example.com/article")
 
     assert (raised.value.code, raised.value.retryable) == ("CONTENT_UNAVAILABLE", False)
+
+
+def test_rejects_long_restricted_teaser_with_login_structure() -> None:
+    restricted_page = FIXTURE.replace(
+        "</body>",
+        "<form action=\"/login\"><input type=\"password\"></form></body>",
+    )
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers={"content-type": "text/html"}, text=restricted_page)
+    )
+
+    with pytest.raises(DigestError) as raised:
+        WebExtractor(client_for(transport)).extract("https://example.com/article")
+
+    assert (raised.value.code, raised.value.retryable) == ("LOGIN_REQUIRED", False)
 
 
 def test_isolates_same_ip_cross_host_redirects_into_separate_clients(monkeypatch: pytest.MonkeyPatch) -> None:

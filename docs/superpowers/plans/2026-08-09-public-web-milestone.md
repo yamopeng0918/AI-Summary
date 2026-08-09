@@ -223,7 +223,7 @@ Commit: `git add src/ai_digest/url_normalizer.py src/ai_digest/storage.py tests/
 
 **Interfaces:**
 - Consumes: normalized public URL and `DigestError`.
-- Produces: `WebExtractor(client: httpx.Client).extract(url: str) -> ExtractedArticle`.
+- Produces: `WebExtractor(client_factory: Callable[[], httpx.Client]).extract(url: str) -> ExtractedArticle`. A fresh client is required for each redirect hop so a validated pinned IP cannot reuse a TLS session authenticated for another logical hostname.
 
 - [ ] **Step 1: Add a representative local fixture and failing extraction tests**
 

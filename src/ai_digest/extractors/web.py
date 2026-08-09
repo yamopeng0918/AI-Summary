@@ -133,8 +133,6 @@ class _AccessWallParser(HTMLParser):
 
 
 def _access_wall_error(html: str, text: str) -> DigestError | None:
-    if len(text) >= _MIN_TEXT_LENGTH:
-        return None
     parser = _AccessWallParser()
     parser.feed(html)
     if parser.has_password_input and parser.has_login_form:
@@ -173,12 +171,6 @@ class WebExtractor:
                 )
                 request.extensions["sni_hostname"] = target.host
                 response = client.send(request, stream=True, follow_redirects=False)
-            except httpx.TimeoutException as error:
-                raise _error("NETWORK_TIMEOUT", "Source request timed out", True) from error
-            except httpx.HTTPError as error:
-                raise _error("NETWORK_ERROR", "Source request failed", True) from error
-
-            try:
                 if response.is_redirect:
                     location = response.headers.get("location")
                     if not location:
@@ -224,6 +216,10 @@ class WebExtractor:
                 if access_error is not None:
                     raise access_error
                 return self._extract_article(target.url, html, text)
+            except httpx.TimeoutException as error:
+                raise _error("NETWORK_TIMEOUT", "Source request timed out", True) from error
+            except httpx.HTTPError as error:
+                raise _error("NETWORK_ERROR", "Source request failed", True) from error
             finally:
                 if response is not None:
                     response.close()
