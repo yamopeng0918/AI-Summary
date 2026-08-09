@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { loadPublishedSummaries } from '../lib/summaries';
+
+const summaries = await loadPublishedSummaries();
+const categories = [...new Set(summaries.map((record) => record.category))].toSorted();
+---
+
+<BaseLayout title="AI Digest｜公開內容摘要">
+  <section class="page-intro" aria-labelledby="page-title">
+    <p class="eyebrow">AI DIGEST</p>
+    <h1 id="page-title">閱讀重點，保留來源脈絡。</h1>
+    <p>以繁體中文整理已發布的公開內容摘要。</p>
+  </section>
+
+  <form class="filters" id="summary-filters">
+    <label>
+      搜尋摘要
+      <input id="summary-query" name="query" type="search" placeholder="標題、摘要或重點" />
+    </label>
+    <label>
+      分類
+      <select id="summary-category" name="category">
+        <option value="">全部分類</option>
+        {categories.map((category) => <option value={category}>{category}</option>)}
+      </select>
+    </label>
+    <label>
+      排序
+      <select id="summary-order" name="order">
+        <option value="newest">最新建立</option>
+        <option value="oldest">最早建立</option>
+      </select>
+    </label>
+  </form>
+
+  {
+    summaries.length === 0 ? (
+      <p class="empty-state" id="no-data" role="status">目前還沒有已發布的摘要。</p>
+    ) : (
+      <>
+        <p class="empty-state" id="no-results" role="status" hidden>找不到符合條件的摘要。</p>
+        <section class="summary-grid" id="summary-list" aria-label="摘要列表">
+          {summaries.map((record) => (
+            <article class="summary-card" data-summary-card={record.id}>
+              <div class="card-meta">
+                <span>{record.category}</span>
+                <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
+              </div>
+              <h2><a href={`/summaries/${record.id}/`}>{record.title}</a></h2>
+              <p>{record.summary}</p>
+              <ul class="tag-list" aria-label="標籤">
+                {record.tags.map((tag) => <li>{tag}</li>)}
+              </ul>
+              <a class="card-link" href={`/summaries/${record.id}/`}>閱讀完整摘要<span aria-hidden="true"> →</span></a>
+            </article>
+          ))}
+        </section>
+        <script id="summary-records" type="application/json" is:inline>{JSON.stringify(summaries)}</script>
+      </>
+    )
+  }
+</BaseLayout>
+
+<script>
+  import { filterAndSortSummaries } from '../lib/summaries';
+
+  const form = document.querySelector<HTMLFormElement>('#summary-filters');
+  const query = document.querySelector<HTMLInputElement>('#summary-query');
+  const category = document.querySelector<HTMLSelectElement>('#summary-category');
+  const order = document.querySelector<HTMLSelectElement>('#summary-order');
+  const recordsElement = document.querySelector<HTMLScriptElement>('#summary-records');
+  const noResults = document.querySelector<HTMLElement>('#no-results');
+  const cards = document.querySelectorAll<HTMLElement>('[data-summary-card]');
+  const records = JSON.parse(recordsElement?.textContent ?? '[]');
+
+  form?.addEventListener('input', () => {
+    const visibleIds = new Set(
+      filterAndSortSummaries(records, query?.value ?? '', category?.value ?? '', order?.value === 'oldest' ? 'oldest' : 'newest')
+        .map((record) => record.id),
+    );
+    cards.forEach((card) => {
+      card.hidden = !visibleIds.has(card.dataset.summaryCard ?? '');
+    });
+    if (noResults) noResults.hidden = visibleIds.size > 0;
+  });
+
+  form?.addEventListener('change', () => form.dispatchEvent(new Event('input')));
+</script>

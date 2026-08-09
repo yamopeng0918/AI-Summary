@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { loadPublishedSummaries, type SummaryRecord } from '../../lib/summaries';
+
+export async function getStaticPaths() {
+  const summaries = await loadPublishedSummaries();
+  return summaries.map((record) => ({
+    params: { id: record.id },
+    props: { record },
+  }));
+}
+
+interface Props {
+  record: SummaryRecord;
+}
+
+const { record } = Astro.props;
+---
+
+<BaseLayout title={`${record.title}｜AI Digest`}>
+  <article class="detail">
+    <a class="back-link" href="/">← 返回摘要列表</a>
+    <header class="detail-header">
+      <p class="eyebrow">{record.category}</p>
+      <h1>{record.title}</h1>
+      <p class="detail-date">建立於 <time datetime={record.createdAt}>{record.createdAt}</time></p>
+    </header>
+
+    <section aria-labelledby="summary-heading">
+      <h2 id="summary-heading">摘要</h2>
+      <p>{record.summary}</p>
+    </section>
+    <section aria-labelledby="key-points-heading">
+      <h2 id="key-points-heading">重點</h2>
+      <ol>
+        {record.keyPoints.map((point) => <li>{point}</li>)}
+      </ol>
+    </section>
+    <section aria-labelledby="editorial-heading">
+      <h2 id="editorial-heading">AI 編輯觀點</h2>
+      <p>{record.editorial}</p>
+    </section>
+    <section aria-labelledby="tags-heading">
+      <h2 id="tags-heading">標籤</h2>
+      <ul class="tag-list">
+        {record.tags.map((tag) => <li>{tag}</li>)}
+      </ul>
+    </section>
+    <section aria-labelledby="source-heading">
+      <h2 id="source-heading">來源資料</h2>
+      <dl class="source-details">
+        <div><dt>原文連結</dt><dd><a href={record.canonicalUrl} target="_blank" rel="noopener noreferrer">{record.canonicalUrl}</a></dd></div>
+        <div><dt>來源類型</dt><dd>{record.sourceType}</dd></div>
+        <div><dt>作者</dt><dd>{record.author ?? '未提供'}</dd></div>
+        <div><dt>來源發布時間</dt><dd>{record.sourcePublishedAt ?? '未提供'}</dd></div>
+        <div><dt>建立時間</dt><dd>{record.createdAt}</dd></div>
+        <div><dt>更新時間</dt><dd>{record.updatedAt}</dd></div>
+        <div><dt>狀態</dt><dd>{record.status}</dd></div>
+        <div><dt>資料格式版本</dt><dd>{record.schemaVersion}</dd></div>
+        <div><dt>摘要 ID</dt><dd>{record.id}</dd></div>
+      </dl>
+    </section>
+  </article>
+</BaseLayout>

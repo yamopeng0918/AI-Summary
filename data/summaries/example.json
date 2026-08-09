@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "20260809-fictional-ai-digest-demo",
+  "canonicalUrl": "https://example.com/ai-digest-demo",
+  "sourceType": "web",
+  "title": "（虛構示例）AI Digest 如何整理公開網頁資訊",
+  "author": "AI Digest 範例編輯部",
+  "sourcePublishedAt": "2026-08-09T09:00:00+08:00",
+  "createdAt": "2026-08-09T10:00:00+08:00",
+  "updatedAt": "2026-08-09T10:00:00+08:00",
+  "summary": "這是一筆僅供網站展示的虛構摘要，說明 AI Digest 會將公開來源內容整理為繁體中文重點與編輯觀點。",
+  "keyPoints": [
+    "此來源網址為 example.com 的虛構展示頁面，不代表真實報導。",
+    "摘要資料在建置時驗證，網站只顯示已發布的內容。",
+    "讀者可依關鍵字、分類與日期排序瀏覽摘要。"
+  ],
+  "category": "人工智慧",
+  "tags": ["虛構示例", "AI Digest"],
+  "editorial": "示例資料刻意標示為虛構，避免被誤認為真實新聞或研究結論。",
+  "status": "published"
+}
