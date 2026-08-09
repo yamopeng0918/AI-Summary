@@ -9,6 +9,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "astro check && astro build",
+    "build:pages": "astro check && astro build && python ../scripts/verify_deployment.py --dist dist --base /AI-Summary/",
     "dev": "astro dev"
   },
   "dependencies": {
