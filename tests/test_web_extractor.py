@@ -20,8 +20,8 @@ def public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def client_for(handler: httpx.MockTransport) -> httpx.Client:
-    return httpx.Client(transport=handler)
+def client_for(transport: httpx.BaseTransport) -> callable:
+    return lambda: httpx.Client(transport=transport)
 
 
 def test_extracts_article_metadata_and_main_text_only() -> None:
@@ -194,6 +194,19 @@ def test_rejects_malformed_content_length() -> None:
     assert (raised.value.code, raised.value.retryable) == ("INVALID_CONTENT_LENGTH", False)
 
 
+def test_rejects_negative_content_length() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, headers={"content-type": "text/html", "content-length": "-1"}, text=FIXTURE
+        )
+    )
+
+    with pytest.raises(DigestError) as raised:
+        WebExtractor(client_for(transport)).extract("https://example.com/article")
+
+    assert (raised.value.code, raised.value.retryable) == ("INVALID_CONTENT_LENGTH", False)
+
+
 def test_rejects_more_than_three_redirects() -> None:
     requests = 0
 
@@ -242,3 +255,48 @@ def test_rejects_200_paywall_page_without_login_form() -> None:
         WebExtractor(client_for(transport)).extract("https://example.com/article")
 
     assert (raised.value.code, raised.value.retryable) == ("CONTENT_UNAVAILABLE", False)
+
+
+def test_isolates_same_ip_cross_host_redirects_into_separate_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))],
+    )
+    clients: list[httpx.Client] = []
+    used_clients: list[int] = []
+
+    def factory() -> httpx.Client:
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: (
+                    used_clients.append(id(client)),
+                    httpx.Response(302, headers={"location": "https://second.example/article"})
+                    if request.headers["host"] == "first.example"
+                    else httpx.Response(200, headers={"content-type": "text/html"}, text=FIXTURE)
+                )[1]
+            )
+        )
+        clients.append(client)
+        return client
+
+    WebExtractor(factory).extract("https://first.example/article")
+
+    assert len(clients) == 2
+    assert used_clients == [id(client) for client in clients]
+    assert all(client.is_closed for client in clients)
+
+
+def test_accepts_readable_article_that_discusses_paywalls_and_has_teaser_class() -> None:
+    readable_page = FIXTURE.replace(
+        "</article>",
+        "<p>本文討論 paywall 設計與訂閱模式，並比較不同媒體的公開內容策略。</p></article>"
+        "<aside class=\"paywall-teaser\">延伸閱讀</aside>",
+    )
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers={"content-type": "text/html"}, text=readable_page)
+    )
+
+    article = WebExtractor(client_for(transport)).extract("https://example.com/article")
+
+    assert "paywall" in article.text

@@ -5,6 +5,7 @@ from datetime import datetime
 from html.parser import HTMLParser
 import ipaddress
 import socket
+from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -106,57 +107,72 @@ class _AccessWallParser(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__()
-        self.has_form = False
+        self.has_login_form = False
         self.has_password_input = False
-        self.markers: set[str] = set()
+        self.has_access_overlay = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = {key.lower(): (value or "").lower() for key, value in attrs}
         if tag == "form":
-            self.has_form = True
+            action = attributes.get("action", "")
+            self.has_login_form = any(marker in action for marker in ("/login", "/signin", "/sign-in"))
         if tag == "input" and attributes.get("type") == "password":
             self.has_password_input = True
-        self.markers.update(value for value in attributes.values() if value)
+        tokens = set(attributes.get("class", "").split()) | {attributes.get("id", "")}
+        if tokens & {"paywall", "subscription-wall", "login-overlay", "access-denied"}:
+            self.has_access_overlay = True
+        if tag == "meta":
+            name = attributes.get("name") or attributes.get("property")
+            content = attributes.get("content", "")
+            if name in {"access", "article:access", "content-visibility"} and content in {
+                "login-required",
+                "subscriber-only",
+                "paywall",
+            }:
+                self.has_access_overlay = True
 
-    def handle_data(self, data: str) -> None:
-        cleaned = " ".join(data.lower().split())
-        if cleaned:
-            self.markers.add(cleaned)
 
-
-def _access_wall_error(html: str) -> DigestError | None:
+def _access_wall_error(html: str, text: str) -> DigestError | None:
+    if len(text) >= _MIN_TEXT_LENGTH:
+        return None
     parser = _AccessWallParser()
     parser.feed(html)
-    if parser.has_form and parser.has_password_input:
+    if parser.has_password_input and parser.has_login_form:
         return _error("LOGIN_REQUIRED", "Source requires login", False)
-    marker_text = " ".join(parser.markers)
-    if any(marker in marker_text for marker in ("paywall", "subscribe to continue", "subscription required", "付費牆")):
+    if parser.has_access_overlay:
         return _error("CONTENT_UNAVAILABLE", "Source content is unavailable", False)
-    if any(marker in marker_text for marker in ("請登入後閱讀", "sign in to continue", "登入後繼續閱讀")):
-        return _error("LOGIN_REQUIRED", "Source requires login", False)
     return None
+
+
+def _extract_main_text(html: str) -> str:
+    text = trafilatura.extract(html, include_comments=False, include_tables=False) or ""
+    return "\n".join(line.strip() for line in text.splitlines() if line.strip())
 
 
 class WebExtractor:
     """Retrieve one public HTML page and extract its readable article content."""
 
-    def __init__(self, client: httpx.Client) -> None:
-        self._client = client
+    def __init__(self, client_factory: Callable[[], httpx.Client]) -> None:
+        """Create an isolated HTTPX client for each validated request hop."""
+        self._client_factory = client_factory
 
     def extract(self, url: str) -> ExtractedArticle:
         target = _validate_destination(url)
         redirects = 0
 
         while True:
+            client: httpx.Client | None = None
+            response: httpx.Response | None = None
             try:
-                request = self._client.build_request(
+                client = self._client_factory()
+                request = client.build_request(
                     "GET",
                     httpx.URL(target.url).copy_with(host=target.address),
                     headers={"User-Agent": _USER_AGENT, "Host": target.host_header},
                     timeout=_TIMEOUT_SECONDS,
                 )
                 request.extensions["sni_hostname"] = target.host
-                response = self._client.send(request, stream=True, follow_redirects=False)
+                response = client.send(request, stream=True, follow_redirects=False)
             except httpx.TimeoutException as error:
                 raise _error("NETWORK_TIMEOUT", "Source request timed out", True) from error
             except httpx.HTTPError as error:
@@ -203,18 +219,20 @@ class WebExtractor:
                     if len(body) > _MAX_RESPONSE_BYTES:
                         raise _error("RESPONSE_TOO_LARGE", "Source response is too large", False)
                 html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
-                access_error = _access_wall_error(html)
+                text = _extract_main_text(html)
+                access_error = _access_wall_error(html, text)
                 if access_error is not None:
                     raise access_error
-                return self._extract_article(target.url, html)
+                return self._extract_article(target.url, html, text)
             finally:
-                response.close()
+                if response is not None:
+                    response.close()
+                if client is not None:
+                    client.close()
 
-    def _extract_article(self, canonical_url: str, html: str) -> ExtractedArticle:
+    def _extract_article(self, canonical_url: str, html: str, text: str) -> ExtractedArticle:
         metadata = extract_metadata(html)
         fallback_author, fallback_date = _fallback_metadata(html)
-        text = trafilatura.extract(html, include_comments=False, include_tables=False) or ""
-        text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
         if len(text) < _MIN_TEXT_LENGTH:
             raise _error("INSUFFICIENT_TEXT", "Source does not contain enough article text", False)
         title = metadata.title or ""
