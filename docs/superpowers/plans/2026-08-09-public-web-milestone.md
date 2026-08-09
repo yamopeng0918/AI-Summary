@@ -375,7 +375,7 @@ Commit: `git add src/ai_digest/cli.py tests/test_cli.py && git commit -m "feat: 
 
 - [ ] **Step 1: Add the site configuration and install dependencies**
 
-Create scripts `test: vitest run`, `build: astro check && astro build`, and `dev: astro dev`. Add Astro 7.2.0, TypeScript 5, Vitest 3, `@astrojs/check`, and `zod` dependencies, with Node engine `>=22`. Configure Astro for static output and `srcDir: './src'`.
+Create scripts `test: vitest run`, `build: astro check && astro build`, and `dev: astro dev`. Add Astro 7.2.0, TypeScript 5, Vitest 3, `@astrojs/check`, and `zod` dependencies, with Node engine `>=22.12.0`. Configure Astro for static output and `srcDir: './src'`.
 
 Run from `site`: `npm.cmd install`
 

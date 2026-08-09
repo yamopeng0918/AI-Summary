@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
 
 import {
   filterAndSortSummaries,
@@ -40,7 +41,9 @@ const olderRecord = {
 
 describe('summary data', () => {
   it('resolves the repository summary directory from the site build directory', () => {
-    expect(getSummariesDirectory('C:/workspace/site')).toBe('C:\\workspace\\data\\summaries');
+    const siteDirectory = resolve('workspace', 'site');
+
+    expect(getSummariesDirectory(siteDirectory)).toBe(resolve(siteDirectory, '..', 'data', 'summaries'));
   });
 
   it('rejects a record with fewer than three key points', () => {
