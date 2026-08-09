@@ -1,5 +1,6 @@
 """Safe extraction of directly readable public web articles."""
 
+from dataclasses import dataclass
 from datetime import datetime
 from html.parser import HTMLParser
 import ipaddress
@@ -26,21 +27,37 @@ def _error(code: str, message: str, retryable: bool) -> DigestError:
     return DigestError("extract", code, message, retryable)
 
 
-def _validate_destination(url: str) -> str:
-    """Normalize a URL and ensure every resolved address is public."""
+@dataclass(frozen=True)
+class _ConnectionTarget:
+    url: str
+    address: str
+    host: str
+    host_header: str
+
+
+def _validate_destination(url: str) -> _ConnectionTarget:
+    """Resolve and validate a public URL once, returning its pinned address."""
     try:
         normalized = normalize_public_url(url)
-        host = urlsplit(normalized).hostname
+        parsed = urlsplit(normalized)
+        host = parsed.hostname
         if host is None:
             raise ValueError("missing host")
         addresses = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
         if not addresses:
             raise ValueError("no addresses")
+        validated_addresses: list[str] = []
         for address_info in addresses:
             address = ipaddress.ip_address(address_info[4][0])
             if not address.is_global:
                 raise ValueError("non-public address")
-        return normalized
+            validated_addresses.append(address.compressed)
+        is_default_port = (parsed.scheme == "http" and parsed.port == 80) or (
+            parsed.scheme == "https" and parsed.port == 443
+        )
+        hostname = f"[{host}]" if ":" in host else host
+        host_header = hostname if is_default_port or parsed.port is None else f"{hostname}:{parsed.port}"
+        return _ConnectionTarget(normalized, validated_addresses[0], host, host_header)
     except (DigestError, OSError, ValueError) as error:
         raise _error("UNSAFE_DESTINATION", "URL destination is not publicly reachable", False) from error
 
@@ -84,6 +101,42 @@ def _fallback_metadata(html: str) -> tuple[str | None, datetime | None]:
     return author, date
 
 
+class _AccessWallParser(HTMLParser):
+    """Recognize explicit login and paywall page structures conservatively."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.has_form = False
+        self.has_password_input = False
+        self.markers: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = {key.lower(): (value or "").lower() for key, value in attrs}
+        if tag == "form":
+            self.has_form = True
+        if tag == "input" and attributes.get("type") == "password":
+            self.has_password_input = True
+        self.markers.update(value for value in attributes.values() if value)
+
+    def handle_data(self, data: str) -> None:
+        cleaned = " ".join(data.lower().split())
+        if cleaned:
+            self.markers.add(cleaned)
+
+
+def _access_wall_error(html: str) -> DigestError | None:
+    parser = _AccessWallParser()
+    parser.feed(html)
+    if parser.has_form and parser.has_password_input:
+        return _error("LOGIN_REQUIRED", "Source requires login", False)
+    marker_text = " ".join(parser.markers)
+    if any(marker in marker_text for marker in ("paywall", "subscribe to continue", "subscription required", "付費牆")):
+        return _error("CONTENT_UNAVAILABLE", "Source content is unavailable", False)
+    if any(marker in marker_text for marker in ("請登入後閱讀", "sign in to continue", "登入後繼續閱讀")):
+        return _error("LOGIN_REQUIRED", "Source requires login", False)
+    return None
+
+
 class WebExtractor:
     """Retrieve one public HTML page and extract its readable article content."""
 
@@ -91,17 +144,18 @@ class WebExtractor:
         self._client = client
 
     def extract(self, url: str) -> ExtractedArticle:
-        current_url = _validate_destination(url)
+        target = _validate_destination(url)
         redirects = 0
 
         while True:
             try:
                 request = self._client.build_request(
                     "GET",
-                    current_url,
-                    headers={"User-Agent": _USER_AGENT},
+                    httpx.URL(target.url).copy_with(host=target.address),
+                    headers={"User-Agent": _USER_AGENT, "Host": target.host_header},
                     timeout=_TIMEOUT_SECONDS,
                 )
+                request.extensions["sni_hostname"] = target.host
                 response = self._client.send(request, stream=True, follow_redirects=False)
             except httpx.TimeoutException as error:
                 raise _error("NETWORK_TIMEOUT", "Source request timed out", True) from error
@@ -115,7 +169,7 @@ class WebExtractor:
                         raise _error("HTTP_ERROR", "Source returned an invalid redirect", False)
                     if redirects >= _MAX_REDIRECTS:
                         raise _error("TOO_MANY_REDIRECTS", "Source redirected too many times", False)
-                    current_url = _validate_destination(urljoin(current_url, location))
+                    target = _validate_destination(urljoin(target.url, location))
                     redirects += 1
                     continue
 
@@ -133,15 +187,26 @@ class WebExtractor:
                     raise _error("INVALID_CONTENT_TYPE", "Source is not an HTML page", False)
 
                 declared_length = response.headers.get("content-length")
-                if declared_length and int(declared_length) > _MAX_RESPONSE_BYTES:
-                    raise _error("RESPONSE_TOO_LARGE", "Source response is too large", False)
+                if declared_length:
+                    try:
+                        declared_size = int(declared_length)
+                    except ValueError as error:
+                        raise _error("INVALID_CONTENT_LENGTH", "Source sent an invalid content length", False) from error
+                    if declared_size < 0:
+                        raise _error("INVALID_CONTENT_LENGTH", "Source sent an invalid content length", False)
+                    if declared_size > _MAX_RESPONSE_BYTES:
+                        raise _error("RESPONSE_TOO_LARGE", "Source response is too large", False)
 
                 body = bytearray()
                 for chunk in response.iter_bytes():
                     body.extend(chunk)
                     if len(body) > _MAX_RESPONSE_BYTES:
                         raise _error("RESPONSE_TOO_LARGE", "Source response is too large", False)
-                return self._extract_article(current_url, bytes(body).decode(response.encoding or "utf-8", errors="replace"))
+                html = bytes(body).decode(response.encoding or "utf-8", errors="replace")
+                access_error = _access_wall_error(html)
+                if access_error is not None:
+                    raise access_error
+                return self._extract_article(target.url, html)
             finally:
                 response.close()
 
