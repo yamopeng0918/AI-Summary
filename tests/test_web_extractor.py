@@ -290,6 +290,37 @@ def test_rejects_long_restricted_teaser_with_login_structure() -> None:
     assert (raised.value.code, raised.value.retryable) == ("LOGIN_REQUIRED", False)
 
 
+def test_retains_login_signal_after_a_later_benign_form() -> None:
+    restricted_page = FIXTURE.replace(
+        "</body>",
+        "<form action=\"/login\"><input type=\"password\"></form>"
+        "<form action=\"/newsletter\"><input type=\"email\"></form></body>",
+    )
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers={"content-type": "text/html"}, text=restricted_page)
+    )
+
+    with pytest.raises(DigestError) as raised:
+        WebExtractor(client_for(transport)).extract("https://example.com/article")
+
+    assert (raised.value.code, raised.value.retryable) == ("LOGIN_REQUIRED", False)
+
+
+def test_rejects_long_content_with_explicit_paywall_metadata() -> None:
+    restricted_page = FIXTURE.replace(
+        "</head>",
+        "<meta name=\"access\" content=\"subscriber-only\"></head>",
+    )
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, headers={"content-type": "text/html"}, text=restricted_page)
+    )
+
+    with pytest.raises(DigestError) as raised:
+        WebExtractor(client_for(transport)).extract("https://example.com/article")
+
+    assert (raised.value.code, raised.value.retryable) == ("CONTENT_UNAVAILABLE", False)
+
+
 def test_isolates_same_ip_cross_host_redirects_into_separate_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         socket,

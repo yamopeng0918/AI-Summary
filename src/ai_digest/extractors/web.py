@@ -115,7 +115,7 @@ class _AccessWallParser(HTMLParser):
         attributes = {key.lower(): (value or "").lower() for key, value in attrs}
         if tag == "form":
             action = attributes.get("action", "")
-            self.has_login_form = any(marker in action for marker in ("/login", "/signin", "/sign-in"))
+            self.has_login_form |= any(marker in action for marker in ("/login", "/signin", "/sign-in"))
         if tag == "input" and attributes.get("type") == "password":
             self.has_password_input = True
         tokens = set(attributes.get("class", "").split()) | {attributes.get("id", "")}
