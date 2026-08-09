@@ -28,7 +28,7 @@ def _now() -> datetime:
 
 
 def _repository() -> SummaryRepository:
-    return SummaryRepository(Path("data/summaries"))
+    return SummaryRepository(Path(os.environ.get("AI_DIGEST_SUMMARY_ROOT", "data/summaries")))
 
 
 def _web_client_factory() -> httpx.Client:

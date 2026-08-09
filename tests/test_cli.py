@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from typer.testing import CliRunner
 
+from ai_digest import cli
 from ai_digest.cli import create_app
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 from ai_digest.storage import SummaryRepository
@@ -121,3 +122,51 @@ def test_archive_and_publish_change_status_without_changing_content(tmp_path) ->
     assert published_record.model_dump(exclude={"status", "updated_at"}) == original.model_dump(
         exclude={"status", "updated_at"}
     )
+
+
+def test_production_app_keeps_local_commands_available_without_an_openai_key(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", str(tmp_path))
+    repository = SummaryRepository(tmp_path)
+    repository.save(make_record())
+    runner = CliRunner()
+
+    listed = runner.invoke(cli.app, ["list"])
+    shown = runner.invoke(cli.app, ["show", "example"])
+    archived = runner.invoke(cli.app, ["archive", "example"])
+    published = runner.invoke(cli.app, ["publish", "example"])
+    added = runner.invoke(cli.app, ["add", "https://example.com/article"])
+
+    assert listed.exit_code == 0
+    assert "example" in listed.stdout
+    assert shown.exit_code == 0
+    assert json.loads(shown.stdout)["id"] == "example"
+    assert archived.exit_code == 0
+    assert published.exit_code == 0
+    assert repository.get("example").status == "published"
+    assert added.exit_code == 1
+    assert json.loads(added.stderr) == {
+        "stage": "input",
+        "code": "MISSING_API_KEY",
+        "message": "OPENAI_API_KEY is required for add",
+        "retryable": False,
+    }
+
+
+def test_production_defaults_and_web_extractor_wiring(tmp_path, monkeypatch) -> None:
+    assert cli._repository().root == Path("data/summaries")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    captured: dict[str, object] = {}
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+    monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: object())
+
+    cli._workflow()
+
+    extractor = captured["extractor"]
+    assert isinstance(extractor, cli.WebExtractor)
+    assert extractor._client_factory is cli._web_client_factory
