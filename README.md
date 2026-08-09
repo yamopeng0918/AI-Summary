@@ -2,7 +2,7 @@
 
 AI Digest 是一套在本機執行的公開內容摘要工具。目前的第一個可交付里程碑支援「可直接讀取的公開網頁 → 繁體中文結構化摘要 → 本機 JSON → Astro 靜態網站」。
 
-完整 MVP 仍要加入 YouTube 公開影片、無須登入的公開社群單篇貼文、可量化的分類模型與 GitHub Pages 部署。PDF／論文、OCR 與標籤篩選是核心 MVP 穩定後才評估的選配項目。
+完整 MVP 仍要加入 YouTube 公開影片、無須登入的公開社群單篇貼文、可量化的分類模型，並完成 GitHub Pages 的真實遠端部署驗收。PDF／論文、OCR 與標籤篩選是核心 MVP 穩定後才評估的選配項目。
 
 ## 環境需求
 
@@ -70,14 +70,39 @@ npm.cmd test
 npm.cmd run dev
 ```
 
-開發伺服器會在終端顯示本機網址。產生靜態網站：
+開發伺服器會在終端顯示本機網址。一般本機建置：
 
 ```powershell
 Set-Location site
 npm.cmd run build
 ```
 
-輸出位於 `site/dist`。專案已推送至 `https://github.com/yamopeng0918/AI-Summary.git`，但目前尚未設定或執行 GitHub Pages 部署。
+GitHub Pages 專用的完整本機 gate 會同時執行 Astro 檢查、建置及 `/AI-Summary/` base-path 連結驗證：
+
+```powershell
+Set-Location site
+npm.cmd run build:pages
+```
+
+兩種建置的輸出都位於 `site/dist`。部署前也可在 repository 根目錄掃描追蹤檔案與建置輸出：
+
+```powershell
+python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/
+```
+
+## GitHub Pages 操作
+
+預期公開網址是 <https://yamopeng0918.github.io/AI-Summary/>。`.github/workflows/deploy-pages.yml` 已在本機完成驗證；push 到 `master` 會自動觸發，也可到 GitHub repository 的 **Actions → Deploy to GitHub Pages → Run workflow** 手動觸發。
+
+部署完成後，在 repository 根目錄執行公開 smoke check：
+
+```powershell
+python scripts/smoke_pages.py
+```
+
+若 Actions 執行失敗，前往 **Actions → Deploy to GitHub Pages → 該次失敗的 workflow run → Re-run jobs** 重試，並先查看失敗 job 的日誌。工作流程、本機 `build:pages`、敏感資料掃描與離線 smoke checker 都已準備完成；但本次尚未實際觸發遠端 Pages deployment，也未對公開網址執行 smoke acceptance，因此兩項狀態均為 **UNVERIFIED**。
+
+專案已推送至 <https://github.com/yamopeng0918/AI-Summary.git>；不得只因本機 gate 通過就宣稱公開網站已部署。
 
 `npm.cmd ci` 的目前依賴狀態會顯示 `esbuild@0.28.2` 與 `esbuild@0.25.12` 安裝 script 尚未核准的通知；本專案沒有授權或執行這些 script。不要在未審查前自行批准。
 
@@ -90,5 +115,5 @@ npm.cmd run build
 - 訓練並驗收優於最大類基準的分類模型。
 - YouTube 有字幕與無可用字幕流程。
 - 無須登入的公開社群單篇貼文。
-- GitHub Pages 遠端設定與獨立部署指令。
+- GitHub Pages 真實遠端 deployment 與公開 smoke acceptance。
 - 核心 MVP 穩定後才評估 PDF／論文、OCR 與標籤篩選。

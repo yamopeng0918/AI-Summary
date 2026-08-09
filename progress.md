@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：第一個「公開網頁 → 摘要 JSON → 本機 Astro」里程碑已完成自動化整合驗證；真實來源驗收尚未執行
+> 目前階段：GitHub Pages workflow 與完整本機部署 gate 已驗證；真實遠端 deployment、公開 smoke 與真實來源驗收尚未執行
 >
-> 下次續作：由使用者提供並核准可直接讀取的公開文章 URL 與本機 OpenAI 憑證，完成真實來源驗收
+> 下次續作：先執行並驗收真實 GitHub Pages deployment 與公開 smoke，再由使用者提供核准的公開文章 URL 與本機 OpenAI 憑證完成真實來源驗收
 
 ## 專案目標
 
@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
-| GitHub repository 與 Pages | 部分完成 | repository 已設定並推送 `master`；GitHub Pages 設定與部署尚未開始 |
+| GitHub repository 與 Pages | 本機就緒／遠端未驗證 | workflow、base path、artifact verifier、bounded smoke checker 與完整本機 gate 已通過；真實 deployment 與公開 smoke 為 **UNVERIFIED** |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -60,6 +60,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 開發用固定分類器 | 只用於管線串接，不視為分類模型完成 |
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
+| npm advisory audit | 本次唯一 `npm audit --json` 嘗試因 registry endpoint 無法連線而無 advisory 結果，保持 **UNVERIFIED**，不得宣稱零漏洞 |
+| GitHub Pages 遠端驗收 | workflow 與本機 gate 已完成；尚未觸發真實 deployment 或對公開網址執行 smoke acceptance |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
@@ -67,8 +69,12 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ### 2026-08-09
 
+- 完成 GitHub Pages base-path 支援、部署 artifact verifier、bounded public smoke checker 與 official Actions workflow；job-level Pages 權限維持最小範圍。
+- 完整本機 gate 通過：Python 112 項、Vitest 24 項、Astro 0 diagnostics、2 個 routes，追蹤檔案與 `site/dist` 掃描均無違規。
+- `site/dist` 的 internal links 已直接確認以 `/AI-Summary/` 開頭，外部原文連結使用 HTTPS。
+- 本次 `npm audit --json` 因 registry endpoint 無法連線，狀態保持 **UNVERIFIED**；未重試或推測零漏洞。
+- 尚未觸發真實 GitHub Pages deployment，也未對 <https://yamopeng0918.github.io/AI-Summary/> 執行公開 smoke acceptance，兩項均為 **UNVERIFIED**。
 - 已將 GitHub repository 設為 `origin`，並把本機 `master` 推送至 `https://github.com/yamopeng0918/AI-Summary.git`；本機與遠端提交皆為 `3c644d3`。
-- 尚未建立 GitHub Pages 設定、部署工作流程或公開網站驗收，因此不得將遠端部署標記為完成。
 - 根據核准規格將核心 MVP 統一為一般公開網頁、YouTube 公開影片與無須登入的公開社群單篇貼文。
 - 將 PDF／論文、OCR 與標籤篩選移為核心 MVP 穩定後的選配工作。
 - 完成公開網頁第一里程碑程式與本機 Astro 網站，並以本地 fixture-to-JSON 整合測試驗證真實擷取器邊界、Schema 儲存與重複 URL 拒絕。
@@ -89,7 +95,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 1. 取得使用者對一個可直接讀取公開文章 URL 的明確核准，並由使用者在本機提供 OpenAI 憑證。
 2. 執行真實公開網頁 `add`，確認各階段輸出、合法 JSON 與無憑證外洩。
 3. 重新建置 Astro，確認新資料的詳情頁出現於 `site/dist`。
-4. 設定並驗證 GitHub Pages 部署流程，再進入分類資料標註與可重現評估、YouTube 及公開社群里程碑。
+4. 觸發 GitHub Pages workflow，驗證真實 deployment 與公開 smoke；完成前保持 **UNVERIFIED**。
+5. 遠端部署驗收後，再進入分類資料標註與可重現評估、YouTube 及公開社群里程碑。
 
 ## 更新規則
 

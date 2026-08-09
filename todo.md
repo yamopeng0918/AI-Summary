@@ -51,7 +51,8 @@
 - [x] 支援關鍵字搜尋、單一分類篩選與最新／最舊日期排序。
 - [x] 忽略 `archived` 資料、處理無資料與無搜尋結果；資料驗證失敗時採 fail-closed，直接中止靜態建置。
 - [x] 完成手機與桌面版基本響應式介面與本機靜態建置。
-- [ ] 建立 GitHub Pages 遠端設定與部署流程。
+- [x] 建立 GitHub Pages workflow、`/AI-Summary/` base path、artifact verifier 與本機 `build:pages` gate。
+- [ ] 觸發真實 GitHub Pages deployment 並完成公開 smoke acceptance（**UNVERIFIED**）。
 
 ### 文件與安全收尾
 
@@ -90,8 +91,9 @@
 - [x] 支援下架與重新發布，並保留建立與更新時間。
 - [ ] 實作 `evaluate-classifier`、`build-site` 與稍後獨立的 `deploy` 指令。
 - [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
-- [ ] 設定 GitHub Pages 與部署流程。
-- [ ] 執行部署前建置與追蹤檔案敏感資料掃描。
+- [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
+- [ ] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（**UNVERIFIED**）。
+- [x] 執行部署前建置與追蹤檔案、`site/dist` 敏感資料掃描。
 - [ ] 驗證部署失敗時保留本機資料與可重試狀態。
 
 ## 選配後續工作（不列入核心 MVP）
