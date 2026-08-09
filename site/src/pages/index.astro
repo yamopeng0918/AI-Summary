@@ -1,8 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { summaryPath } from '../lib/paths';
 import { serializeSummaryRecords } from '../lib/summaries';
 import { loadPublishedSummaries } from '../lib/summary-loader';
 
+const baseUrl = import.meta.env.BASE_URL;
 const summaries = loadPublishedSummaries();
 const categories = [...new Set(summaries.map((record) => record.category))].toSorted();
 ---
@@ -48,12 +50,12 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
                 <span>{record.category}</span>
                 <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
               </div>
-              <h2><a href={`/summaries/${record.id}/`}>{record.title}</a></h2>
+              <h2><a href={summaryPath(baseUrl, record.id)}>{record.title}</a></h2>
               <p>{record.summary}</p>
               <ul class="tag-list" aria-label="標籤">
                 {record.tags.map((tag) => <li>{tag}</li>)}
               </ul>
-              <a class="card-link" href={`/summaries/${record.id}/`}>閱讀完整摘要<span aria-hidden="true"> →</span></a>
+              <a class="card-link" href={summaryPath(baseUrl, record.id)}>閱讀完整摘要<span aria-hidden="true"> →</span></a>
             </article>
           ))}
         </section>
