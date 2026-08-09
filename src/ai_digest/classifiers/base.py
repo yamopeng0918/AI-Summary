@@ -8,4 +8,3 @@ class Classifier(Protocol):
 
     def predict(self, text: str) -> str:
         """Return one category label."""
-

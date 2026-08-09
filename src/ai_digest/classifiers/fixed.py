@@ -14,4 +14,3 @@ class FixedClassifier:
     def predict(self, text: str) -> str:
         """Return the configured category without inspecting the text."""
         return self._category
-

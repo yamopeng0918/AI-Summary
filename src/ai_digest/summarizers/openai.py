@@ -61,4 +61,3 @@ class OpenAISummarizer:
             raise
         except (AttributeError, IndexError, TypeError, ValidationError) as error:
             raise DigestError("summarize", "INVALID_RESPONSE", "Summary response is invalid", False) from error
-

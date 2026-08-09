@@ -111,4 +111,3 @@ def test_openai_summarizer_maps_known_failures_to_safe_digest_errors(
     assert (error.stage, error.code, error.retryable) == ("summarize", code, retryable)
     assert article.text not in error.message
     assert str(article.canonical_url) not in error.message
-

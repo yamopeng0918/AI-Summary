@@ -10,4 +10,3 @@ class Summarizer(Protocol):
 
     def summarize(self, article: ExtractedArticle) -> SummaryDraft:
         """Summarize an already extracted article."""
-
