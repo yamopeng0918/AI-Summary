@@ -20,7 +20,10 @@ class SummaryRepository:
     def save(self, record: SummaryRecord) -> Path:
         """Atomically save a new record unless its canonical URL already exists."""
         destination = self._record_path(record.id)
-        for existing in self._load_all():
+        existing_records = self._load_all()
+        if any(existing.id == record.id for existing in existing_records):
+            raise DigestError("save", "DUPLICATE_ID", "A summary already exists for this ID", False)
+        for existing in existing_records:
             if str(existing.canonical_url) == str(record.canonical_url):
                 raise DigestError(
                     "save", "DUPLICATE_URL", "A summary already exists for this URL", False

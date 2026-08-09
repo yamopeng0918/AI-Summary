@@ -17,6 +17,17 @@ def test_removes_default_http_port_and_tracking_parameters() -> None:
 
 
 @pytest.mark.parametrize(
+    ("raw_url", "expected_url"),
+    [
+        ("https://example.com/a/../article", "https://example.com/article"),
+        ("https://example.com/a/./article", "https://example.com/a/article"),
+    ],
+)
+def test_resolves_dot_segments_in_paths(raw_url: str, expected_url: str) -> None:
+    assert normalize_public_url(raw_url) == expected_url
+
+
+@pytest.mark.parametrize(
     "raw_url",
     [
         "ftp://example.com/article",
@@ -28,6 +39,8 @@ def test_removes_default_http_port_and_tracking_parameters() -> None:
         "https://224.0.0.1/article",
         "https://0.0.0.0/article",
         "https://[::1]/article",
+        "https://127.1/article",
+        "https://0x7f000001/article",
     ],
 )
 def test_rejects_non_public_or_unsafe_urls(raw_url: str) -> None:

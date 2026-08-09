@@ -22,6 +22,8 @@ def _normalize_host(host: str) -> str:
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
+        address = _legacy_ipv4_address(host)
+    if address is None:
         try:
             return host.encode("idna").decode("ascii")
         except UnicodeError as error:
@@ -38,8 +40,76 @@ def _normalize_host(host: str) -> str:
     return address.compressed
 
 
+def _legacy_ipv4_address(host: str) -> ipaddress.IPv4Address | None:
+    parts = host.split(".")
+    if not 1 <= len(parts) <= 4:
+        return None
+    numbers = [_legacy_ipv4_component(part) for part in parts]
+    if any(number is None for number in numbers):
+        return None
+
+    values = [number for number in numbers if number is not None]
+    limits = ((0xFFFFFFFF,), (0xFF, 0xFFFFFF), (0xFF, 0xFF, 0xFFFF), (0xFF,) * 4)
+    if any(value > limit for value, limit in zip(values, limits[len(values) - 1])):
+        return None
+
+    address = values[-1]
+    for index, value in enumerate(values[:-1]):
+        address |= value << (24 - index * 8)
+    try:
+        return ipaddress.IPv4Address(address)
+    except ipaddress.AddressValueError:
+        return None
+
+
+def _legacy_ipv4_component(value: str) -> int | None:
+    if value.lower().startswith("0x"):
+        digits, base = value[2:], 16
+    elif len(value) > 1 and value.startswith("0"):
+        digits, base = value[1:], 8
+    else:
+        digits, base = value, 10
+    if not digits:
+        return None
+    try:
+        return int(digits, base)
+    except ValueError:
+        return None
+
+
+def _remove_dot_segments(path: str) -> str:
+    input_buffer = path
+    output = ""
+    while input_buffer:
+        if input_buffer.startswith("../"):
+            input_buffer = input_buffer[3:]
+        elif input_buffer.startswith("./"):
+            input_buffer = input_buffer[2:]
+        elif input_buffer.startswith("/./"):
+            input_buffer = input_buffer[2:]
+        elif input_buffer == "/.":
+            input_buffer = "/"
+        elif input_buffer.startswith("/../"):
+            input_buffer = input_buffer[3:]
+            output = output.rsplit("/", 1)[0]
+        elif input_buffer == "/..":
+            input_buffer = "/"
+            output = output.rsplit("/", 1)[0]
+        elif input_buffer in {".", ".."}:
+            input_buffer = ""
+        else:
+            separator = input_buffer.find("/", 1) if input_buffer.startswith("/") else input_buffer.find("/")
+            if separator == -1:
+                output += input_buffer
+                input_buffer = ""
+            else:
+                output += input_buffer[:separator]
+                input_buffer = input_buffer[separator:]
+    return output
+
+
 def _normalize_path(path: str) -> str:
-    normalized = quote(unquote(path or "/"), safe=_PATH_SAFE)
+    normalized = quote(_remove_dot_segments(unquote(path or "/")), safe=_PATH_SAFE)
     if normalized != "/":
         normalized = normalized.rstrip("/")
     return normalized or "/"
