@@ -21,7 +21,7 @@ const tagsSchema = z
   .min(1)
   .max(5)
   .superRefine((tags, context) => {
-    const normalized = tags.map((tag) => tag.toLocaleLowerCase());
+    const normalized = tags.map((tag) => tag.toUpperCase().toLowerCase());
     if (new Set(normalized).size !== normalized.length) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: 'tags must be unique' });
     }

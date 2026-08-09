@@ -33,7 +33,7 @@ def _normalize_tags(values: Any) -> Any:
         if not isinstance(value, str) or not value.strip():
             raise ValueError("tags must not be blank")
         tag = value.strip()
-        normalized_key = tag.casefold()
+        normalized_key = tag.upper().lower()
         if normalized_key not in seen:
             seen.add(normalized_key)
             normalized.append(tag)

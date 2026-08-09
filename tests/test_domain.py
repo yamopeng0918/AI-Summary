@@ -76,6 +76,12 @@ def test_summary_record_normalizes_tags_preserving_first_spelling() -> None:
     assert record.tags == ["OpenAI", "AI"]
 
 
+def test_summary_record_normalizes_unicode_tags_with_shared_upper_lower_fold() -> None:
+    record = valid_record(tags=["Straße", "STRASSE", "ı", "I"])
+
+    assert record.tags == ["Straße", "ı"]
+
+
 def test_domain_models_reject_blank_strings_and_naive_article_dates() -> None:
     with pytest.raises(ValidationError):
         SummaryDraft(summary="", keyPoints=["一", "二", "三"], tags=["標籤"], editorial="觀點")

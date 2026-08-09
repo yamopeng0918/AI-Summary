@@ -70,7 +70,7 @@ describe('summary data', () => {
     expect(() => parseSummaryRecord({ ...newerRecord, category: 'not-configured' })).toThrow();
   });
 
-  it.each([[' AI'], ['AI '], ['AI', 'ai']])(
+  it.each([[' AI'], ['AI '], ['AI', 'ai'], ['Straße', 'STRASSE']])(
     'rejects non-normalized or duplicate tags: %j',
     (...tags) => {
       expect(() => parseSummaryRecord({ ...newerRecord, tags })).toThrow();
