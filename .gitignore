@@ -1,2 +1,13 @@
 .worktrees/
 .superpowers/
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.coverage
+htmlcov/
+models/
+site/node_modules/
+site/dist/
+.astro/

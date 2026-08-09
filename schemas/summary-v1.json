@@ -1,0 +1,119 @@
+{
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "canonicalUrl": {
+      "format": "uri",
+      "maxLength": 2083,
+      "minLength": 1,
+      "title": "Canonicalurl",
+      "type": "string"
+    },
+    "sourceType": {
+      "const": "web",
+      "title": "Sourcetype",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Author"
+    },
+    "sourcePublishedAt": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Sourcepublishedat"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "title": "Createdat",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "title": "Updatedat",
+      "type": "string"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "keyPoints": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "minItems": 3,
+      "title": "Keypoints",
+      "type": "array"
+    },
+    "category": {
+      "title": "Category",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "minItems": 1,
+      "title": "Tags",
+      "type": "array"
+    },
+    "editorial": {
+      "title": "Editorial",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "published",
+        "archived"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "canonicalUrl",
+    "sourceType",
+    "title",
+    "author",
+    "sourcePublishedAt",
+    "createdAt",
+    "updatedAt",
+    "summary",
+    "keyPoints",
+    "category",
+    "tags",
+    "editorial",
+    "status"
+  ],
+  "title": "SummaryRecord",
+  "type": "object"
+}
