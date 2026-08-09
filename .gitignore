@@ -11,3 +11,4 @@ models/
 site/node_modules/
 site/dist/
 .astro/
+*.egg-info/

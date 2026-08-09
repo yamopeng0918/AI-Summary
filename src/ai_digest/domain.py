@@ -136,4 +136,3 @@ class DigestError(Exception):
             "message": self.message,
             "retryable": self.retryable,
         }
-
