@@ -69,7 +69,7 @@ def test_local_fixture_runs_through_real_extractor_to_valid_published_json(
         workflow.run("https://example.com/article", NOW)
 
     assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
-        "save",
+        "input",
         "DUPLICATE_URL",
         False,
     )

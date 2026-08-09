@@ -73,8 +73,11 @@ class SummaryRepository:
     def _load_path(self, path: Path) -> SummaryRecord:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            return SummaryRecord.model_validate(payload)
-        except (OSError, json.JSONDecodeError, ValidationError) as error:
+            record = SummaryRecord.model_validate(payload)
+            if path.stem != record.id:
+                raise ValueError("record ID does not match filename")
+            return record
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError) as error:
             raise DigestError(
                 "save", "INVALID_EXISTING_DATA", "Stored summary data is invalid", False
             ) from error

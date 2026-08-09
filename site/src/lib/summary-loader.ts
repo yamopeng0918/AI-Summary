@@ -5,6 +5,28 @@ import { z } from 'zod';
 
 import { filterAndSortSummaries, getPublishedSummaries, type SummaryRecord } from './summaries';
 
+const nonBlankString = z.string().refine((value) => value.trim().length > 0, 'must not be blank');
+const normalizedTag = nonBlankString.refine(
+  (value) => value === value.trim(),
+  'tag must not have surrounding whitespace',
+);
+
+const categoriesPath = resolve(process.cwd(), '..', 'data', 'categories.json');
+const validCategories = new Set(
+  z.array(nonBlankString).parse(JSON.parse(readFileSync(categoriesPath, 'utf8'))),
+);
+
+const tagsSchema = z
+  .array(normalizedTag)
+  .min(1)
+  .max(5)
+  .superRefine((tags, context) => {
+    const normalized = tags.map((tag) => tag.toLocaleLowerCase());
+    if (new Set(normalized).size !== normalized.length) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: 'tags must be unique' });
+    }
+  });
+
 const isHttpUrl = (value: string): boolean => {
   try {
     const { protocol } = new URL(value);
@@ -16,19 +38,19 @@ const isHttpUrl = (value: string): boolean => {
 
 export const SummaryRecordSchema: z.ZodType<SummaryRecord> = z.object({
   schemaVersion: z.literal(1),
-  id: z.string(),
+  id: nonBlankString,
   canonicalUrl: z.string().url().max(2083).refine(isHttpUrl, 'canonicalUrl must use HTTP or HTTPS'),
   sourceType: z.literal('web'),
-  title: z.string(),
-  author: z.string().nullable(),
+  title: nonBlankString,
+  author: nonBlankString.nullable(),
   sourcePublishedAt: z.string().datetime({ offset: true }).nullable(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),
-  summary: z.string(),
-  keyPoints: z.array(z.string()).min(3).max(5),
-  category: z.string(),
-  tags: z.array(z.string()).min(1).max(5),
-  editorial: z.string(),
+  summary: nonBlankString,
+  keyPoints: z.array(nonBlankString).min(3).max(5),
+  category: nonBlankString.refine((value) => validCategories.has(value), 'unknown category'),
+  tags: tagsSchema,
+  editorial: nonBlankString,
   status: z.enum(['published', 'archived']),
 });
 

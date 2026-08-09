@@ -1,5 +1,6 @@
 """Orchestration for adding one web article summary."""
 
+from collections.abc import Callable
 from datetime import datetime
 import hashlib
 import re
@@ -40,25 +41,32 @@ class AddArticleWorkflow:
         summarizer: Summarizer,
         classifier: Classifier,
         repository: SummaryRepository,
+        on_progress: Callable[[str], None] | None = None,
     ) -> None:
         self._extractor = extractor
         self._summarizer = summarizer
         self._classifier = classifier
         self._repository = repository
+        self._on_progress = on_progress or (lambda stage: None)
 
     def run(self, raw_url: str, now: datetime) -> SummaryRecord:
         """Create and atomically save a published summary record."""
+        self._on_progress("input")
         canonical_url = normalize_public_url(raw_url)
         if any(str(record.canonical_url) == canonical_url for record in self._repository.list()):
-            raise DigestError("save", "DUPLICATE_URL", "A summary already exists for this URL", False)
+            raise DigestError("input", "DUPLICATE_URL", "A summary already exists for this URL", False)
 
+        self._on_progress("extract")
         article = self._extractor.extract(canonical_url)
+        self._on_progress("summarize")
         draft = self._summarizer.summarize(article)
         classifier_text = "\n\n".join([article.title, draft.summary, "\n".join(draft.key_points)])
+        self._on_progress("classify")
         category = self._classifier.predict(classifier_text)
         if category not in VALID_CATEGORIES:
             raise DigestError("classify", "INVALID_CATEGORY", "Category is not configured", False)
 
+        self._on_progress("validate")
         try:
             record = SummaryRecord(
                 schemaVersion=1,
@@ -80,5 +88,6 @@ class AddArticleWorkflow:
         except ValidationError as error:
             raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False) from error
 
+        self._on_progress("save")
         self._repository.save(record)
         return record

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -80,11 +81,51 @@ def test_get_returns_saved_record(tmp_path) -> None:
     assert repository.get("example") == saved
 
 
+def test_production_records_round_trip_from_list_to_get() -> None:
+    repository = SummaryRepository(Path(__file__).parents[1] / "data" / "summaries")
+
+    records = repository.list()
+
+    assert records
+    assert [repository.get(record.id) for record in records] == records
+
+
+def test_list_rejects_filename_that_does_not_match_record_id(tmp_path) -> None:
+    record = make_record("inside")
+    (tmp_path / "outside.json").write_text(
+        record.model_dump_json(by_alias=True), encoding="utf-8"
+    )
+
+    with pytest.raises(DigestError) as raised:
+        SummaryRepository(tmp_path).list()
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "save",
+        "INVALID_EXISTING_DATA",
+        False,
+    )
+
+
 def test_get_rejects_invalid_existing_json(tmp_path) -> None:
     (tmp_path / "broken.json").write_text("{", encoding="utf-8")
 
     with pytest.raises(DigestError) as raised:
         SummaryRepository(tmp_path).list()
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "save",
+        "INVALID_EXISTING_DATA",
+        False,
+    )
+
+
+@pytest.mark.parametrize("operation", ["list", "get"])
+def test_repository_rejects_invalid_utf8(operation: str, tmp_path) -> None:
+    (tmp_path / "broken.json").write_bytes(b"\xff")
+    repository = SummaryRepository(tmp_path)
+
+    with pytest.raises(DigestError) as raised:
+        getattr(repository, operation)(*("broken",) if operation == "get" else ())
 
     assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
         "save",

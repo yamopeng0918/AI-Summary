@@ -98,12 +98,23 @@ def make_workflow(
     existing: list[SummaryRecord] | None = None,
     summarizer_error: Exception | None = None,
     classifier_error: Exception | None = None,
+    progress: list[str] | None = None,
 ) -> tuple[AddArticleWorkflow, FakeRepository, FakeClassifier]:
     extractor = FakeExtractor(events, article or make_article())
     summarizer: Summarizer = FakeSummarizer(events, make_draft(), summarizer_error)
     classifier: Classifier = FakeClassifier(events, category, classifier_error)
     repository = FakeRepository(events, existing)
-    return AddArticleWorkflow(extractor, summarizer, classifier, repository), repository, classifier
+    return (
+        AddArticleWorkflow(
+            extractor,
+            summarizer,
+            classifier,
+            repository,
+            on_progress=progress.append if progress is not None else None,
+        ),
+        repository,
+        classifier,
+    )
 
 
 def test_fixed_classifier_validates_category_and_implements_classifier_protocol() -> None:
@@ -117,7 +128,8 @@ def test_fixed_classifier_validates_category_and_implements_classifier_protocol(
 
 def test_workflow_runs_normalize_preflight_extract_summarize_classify_and_save_in_order(monkeypatch) -> None:
     events: list[str] = []
-    workflow, repository, classifier = make_workflow(events)
+    progress: list[str] = []
+    workflow, repository, classifier = make_workflow(events, progress=progress)
 
     def normalize(raw_url: str) -> str:
         events.append(f"normalize:{raw_url}")
@@ -144,6 +156,9 @@ def test_workflow_runs_normalize_preflight_extract_summarize_classify_and_save_i
     assert result.updated_at == NOW
     assert result.tags == ["AI", "資料科學"]
     assert classifier.inputs == ["可信賴的 AI 摘要\n\n這是一段繁體中文摘要。\n\n第一個重點\n第二個重點\n第三個重點"]
+
+
+    assert progress == ["input", "extract", "summarize", "classify", "validate", "save"]
 
 
 def test_workflow_generates_readable_deterministic_unicode_title_slug() -> None:
@@ -183,7 +198,7 @@ def test_workflow_rejects_existing_canonical_url_before_any_remote_stage(monkeyp
         workflow.run("https://example.com/article", NOW)
 
     assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
-        "save",
+        "input",
         "DUPLICATE_URL",
         False,
     )
@@ -220,3 +235,19 @@ def test_workflow_leaves_repository_empty_when_an_upstream_stage_fails(
     assert raised.value.stage == stage
     assert repository.saved == []
     assert "save" not in events
+
+
+def test_workflow_progress_stops_after_early_failure() -> None:
+    events: list[str] = []
+    progress: list[str] = []
+    workflow, repository, _ = make_workflow(
+        events,
+        summarizer_error=DigestError("summarize", "FAILED", "safe", False),
+        progress=progress,
+    )
+
+    with pytest.raises(DigestError):
+        workflow.run("https://example.com/article", NOW)
+
+    assert progress == ["input", "extract", "summarize"]
+    assert repository.saved == []

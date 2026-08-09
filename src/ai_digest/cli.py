@@ -20,7 +20,6 @@ from ai_digest.workflow import AddArticleWorkflow
 
 
 _TAIPEI = ZoneInfo("Asia/Taipei")
-_STAGES = ("input", "extract", "summarize", "classify", "save")
 
 
 def _now() -> datetime:
@@ -35,17 +34,18 @@ def _web_client_factory() -> httpx.Client:
     return httpx.Client()
 
 
-def _workflow() -> AddArticleWorkflow:
+def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWorkflow:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise DigestError("input", "MISSING_API_KEY", "OPENAI_API_KEY is required for add", False)
     return AddArticleWorkflow(
         extractor=WebExtractor(client_factory=_web_client_factory),
         summarizer=OpenAISummarizer(
-            OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+            OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-5-mini")
         ),
         classifier=FixedClassifier(sorted(VALID_CATEGORIES)[0]),
         repository=_repository(),
+        on_progress=on_progress,
     )
 
 
@@ -54,7 +54,7 @@ def _emit(payload: dict[str, object], *, err: bool = False) -> None:
 
 
 def create_app(
-    workflow_factory: Callable[[], AddArticleWorkflow],
+    workflow_factory: Callable[[Callable[[str], None]], AddArticleWorkflow],
     repository_factory: Callable[[], SummaryRepository],
     clock: Callable[[], datetime],
 ) -> typer.Typer:
@@ -69,9 +69,7 @@ def create_app(
     def add(url: str) -> None:
         """Extract, summarize, classify, and save one public article URL."""
         try:
-            for stage in _STAGES:
-                _emit({"stage": stage})
-            record = workflow_factory().run(url, clock())
+            record = workflow_factory(lambda stage: _emit({"stage": stage})).run(url, clock())
             path = repository_factory().root / f"{record.id}.json"
             _emit({"stage": "complete", "id": record.id, "path": str(path)})
         except DigestError as error:

@@ -1,10 +1,12 @@
 from pathlib import Path
 import socket
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
 from ai_digest.domain import DigestError
+from ai_digest.extractors import web
 from ai_digest.extractors.web import WebExtractor
 
 
@@ -40,6 +42,40 @@ def test_extracts_article_metadata_and_main_text_only() -> None:
     assert "地方政府近年開始" in article.text
     assert "限時優惠廣告" not in article.text
     assert "首頁｜科技" not in article.text
+
+
+def test_blank_extracted_title_maps_to_safe_extract_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        web,
+        "extract_metadata",
+        lambda html: SimpleNamespace(title="   ", author=None, date=None),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        WebExtractor(client_for(httpx.MockTransport(lambda request: pytest.fail("unused"))))._extract_article(
+            "https://example.com/article", "<html></html>", "x" * 200
+        )
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "extract",
+        "INSUFFICIENT_TEXT",
+        False,
+    )
+
+
+def test_blank_extracted_author_is_normalized_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        web,
+        "extract_metadata",
+        lambda html: SimpleNamespace(title=" Article title ", author="   ", date=None),
+    )
+
+    article = WebExtractor(
+        client_for(httpx.MockTransport(lambda request: pytest.fail("unused")))
+    )._extract_article("https://example.com/article", "<html></html>", "x" * 200)
+
+    assert article.title == "Article title"
+    assert article.author is None
 
 
 def test_rejects_redirect_to_private_destination() -> None:

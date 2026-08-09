@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
@@ -8,6 +9,10 @@ import {
   serializeSummaryRecords,
 } from './summaries';
 import { getSummariesDirectory, parseSummaryRecord } from './summary-loader';
+
+const approvedCategories = JSON.parse(
+  readFileSync(resolve('..', 'data', 'categories.json'), 'utf8'),
+) as string[];
 
 const newerRecord = {
   schemaVersion: 1,
@@ -34,7 +39,7 @@ const olderRecord = {
   title: '資料工程實務',
   summary: '整理資料管線的可維護性。',
   keyPoints: ['建立監控', '定期備份', '維護文件'],
-  category: '資料工程',
+  category: approvedCategories.find((category) => category !== newerRecord.category)!,
   createdAt: '2026-08-01T12:00:00+08:00',
   updatedAt: '2026-08-01T12:00:00+08:00',
 } as const;
@@ -51,6 +56,26 @@ describe('summary data', () => {
       parseSummaryRecord({ ...newerRecord, keyPoints: ['只有', '兩點'] }),
     ).toThrow();
   });
+
+  it.each([
+    ['title', { title: '   ' }],
+    ['key point', { keyPoints: ['   ', 'Second', 'Third'] }],
+    ['tag', { tags: ['   '] }],
+    ['editorial', { editorial: '   ' }],
+  ])('rejects a record with a blank %s', (_field, changes) => {
+    expect(() => parseSummaryRecord({ ...newerRecord, ...changes })).toThrow();
+  });
+
+  it('rejects an unknown category', () => {
+    expect(() => parseSummaryRecord({ ...newerRecord, category: 'not-configured' })).toThrow();
+  });
+
+  it.each([[' AI'], ['AI '], ['AI', 'ai']])(
+    'rejects non-normalized or duplicate tags: %j',
+    (...tags) => {
+      expect(() => parseSummaryRecord({ ...newerRecord, tags })).toThrow();
+    },
+  );
 
   it.each(['javascript:alert(1)', 'data:text/html,unsafe'])('rejects a non-HTTP canonical URL: %s', (canonicalUrl) => {
     expect(() => parseSummaryRecord({ ...newerRecord, canonicalUrl })).toThrow();
@@ -86,7 +111,7 @@ describe('summary data', () => {
   it('filters records to one category', () => {
     const records = [parseSummaryRecord(newerRecord), parseSummaryRecord(olderRecord)];
 
-    expect(filterAndSortSummaries(records, '', '資料工程', 'newest').map((record) => record.id)).toEqual([
+    expect(filterAndSortSummaries(records, '', olderRecord.category, 'newest').map((record) => record.id)).toEqual([
       'older',
     ]);
   });

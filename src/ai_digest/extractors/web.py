@@ -9,6 +9,7 @@ from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
 import httpx
+from pydantic import ValidationError
 import trafilatura
 from trafilatura.metadata import extract_metadata
 
@@ -71,6 +72,13 @@ def _published_at(value: str | None) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo is not None and parsed.utcoffset() is not None else None
+
+
+def _trim_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    return cleaned or None
 
 
 class _MetadataParser(HTMLParser):
@@ -231,13 +239,16 @@ class WebExtractor:
         fallback_author, fallback_date = _fallback_metadata(html)
         if len(text) < _MIN_TEXT_LENGTH:
             raise _error("INSUFFICIENT_TEXT", "Source does not contain enough article text", False)
-        title = metadata.title or ""
+        title = _trim_optional(metadata.title)
         if not title:
             raise _error("INSUFFICIENT_TEXT", "Source does not contain an article title", False)
-        return ExtractedArticle(
-            canonical_url=canonical_url,
-            title=title,
-            author=metadata.author or fallback_author,
-            published_at=fallback_date or _published_at(metadata.date),
-            text=text,
-        )
+        try:
+            return ExtractedArticle(
+                canonical_url=canonical_url,
+                title=title,
+                author=_trim_optional(metadata.author) or _trim_optional(fallback_author),
+                published_at=fallback_date or _published_at(metadata.date),
+                text=text,
+            )
+        except ValidationError as error:
+            raise _error("INVALID_METADATA", "Source metadata is invalid", False) from error
