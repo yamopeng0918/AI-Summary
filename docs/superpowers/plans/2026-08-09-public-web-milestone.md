@@ -391,7 +391,7 @@ Expected: FAIL because `src/lib/summaries.ts` is missing.
 
 - [ ] **Step 3: Implement validated loading and filtering**
 
-Define a Zod schema matching `summary-v1.json`, export its inferred `SummaryRecord` type, load `../../data/summaries/*.json` with `import.meta.glob`, parse every file, filter `published`, and implement:
+Define a Zod schema matching `summary-v1.json` and export its inferred `SummaryRecord` type. At build time, use read-only Node `fs` APIs to load `../../../data/summaries/*.json` relative to `site/src/lib/summaries.ts`, parse every file, filter `published`, and implement:
 
 ```ts
 export function filterAndSortSummaries(
@@ -444,11 +444,11 @@ Build the real `WebExtractor` with `httpx.MockTransport` serving `tests/fixtures
 
 Run: `python -m pytest tests/test_local_pipeline.py -v`
 
-Expected: FAIL if any component boundary is not wired correctly; if it passes immediately because Task 4 already covers the exact integration, narrow the Task 4 test to orchestration and keep this test as the first complete real-component integration before proceeding.
+Expected: PASS if the earlier TDD cycles already established every component boundary. This is an integration verification test over already tested production behavior, so it does not need to be forced red. If it fails, confirm the failure identifies a real cross-component mismatch before changing production code.
 
 - [ ] **Step 2: Make only the wiring changes required by the integration test**
 
-Add no new product behavior. Correct dependency construction, serialization, or protocol mismatches exposed by Step 1, then rerun until the integration test passes.
+Add no new product behavior. If Step 1 fails, first add the smallest failing unit or orchestration test that isolates the missing behavior, confirm that focused test fails for the expected reason, then correct dependency construction, serialization, or protocol mismatches and rerun both tests until they pass.
 
 - [ ] **Step 3: Update project documentation**
 
