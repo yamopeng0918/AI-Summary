@@ -9,6 +9,10 @@ from ai_digest import storage
 from ai_digest.storage import SummaryRepository
 
 
+def test_repository_annotations_do_not_resolve_list_method_as_builtin() -> None:
+    assert SummaryRepository._load_all.__annotations__["return"] == "list[SummaryRecord]"
+
+
 def make_record(record_id: str = "second", **changes: object) -> SummaryRecord:
     payload = {
         "schemaVersion": 1,
