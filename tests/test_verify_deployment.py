@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.verify_deployment import scan_sensitive_files, verify_generated_links
+from scripts.verify_deployment import main, scan_sensitive_files, verify_generated_links
 
 
 def test_sensitive_scan_flags_real_token_shapes(tmp_path: Path) -> None:
@@ -103,3 +103,43 @@ def test_generated_links_reports_a_missing_dist_directory(tmp_path: Path) -> Non
     assert verify_generated_links(missing, "/AI-Summary/") == [
         f"{missing}: distribution directory is missing"
     ]
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "contents", "violation"),
+    [
+        (
+            Path("assets") / "app.js",
+            "const key = 'sk-proj-" + "A" * 32 + "';",
+            "OpenAI API key",
+        ),
+        (
+            Path("index.html"),
+            "<!-- github_pat_" + "A" * 32 + " -->",
+            "GitHub token",
+        ),
+        (
+            Path("keys") / "private.txt",
+            "-----BEGIN " + "PRIVATE KEY-----",
+            "private key",
+        ),
+        (
+            Path("config") / ".env",
+            "SAFE_PLACEHOLDER=",
+            "tracked .env file",
+        ),
+    ],
+)
+def test_dist_cli_recursively_rejects_sensitive_generated_files(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    relative_path: Path,
+    contents: str,
+    violation: str,
+) -> None:
+    leaked = tmp_path / relative_path
+    leaked.parent.mkdir(parents=True, exist_ok=True)
+    leaked.write_text(contents, encoding="utf-8")
+
+    assert main(["--dist", str(tmp_path), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == f"{leaked}: {violation}\n"

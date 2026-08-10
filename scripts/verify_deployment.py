@@ -87,6 +87,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             scan_sensitive_files(Path(line) for line in tracked.stdout.splitlines() if line)
         )
     if args.dist is not None:
+        violations.extend(
+            scan_sensitive_files(
+                path for path in sorted(args.dist.rglob("*")) if path.is_file()
+            )
+        )
         violations.extend(verify_generated_links(args.dist, args.base))
 
     for violation in violations:
