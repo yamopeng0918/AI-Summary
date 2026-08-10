@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-09
+> 最後同步：2026-08-10
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -52,7 +52,7 @@
 - [x] 忽略 `archived` 資料、處理無資料與無搜尋結果；資料驗證失敗時採 fail-closed，直接中止靜態建置。
 - [x] 完成手機與桌面版基本響應式介面與本機靜態建置。
 - [x] 建立 GitHub Pages workflow、`/AI-Summary/` base path、artifact verifier 與本機 `build:pages` gate。
-- [ ] 觸發真實 GitHub Pages deployment 並完成公開 smoke acceptance（**UNVERIFIED**）。
+- [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（run `31354210514`，commit `bf6f65b8953338c71b3e17d893089caca61d89fd`）。
 
 ### 文件與安全收尾
 
@@ -92,7 +92,7 @@
 - [ ] 實作 `evaluate-classifier`、`build-site` 與稍後獨立的 `deploy` 指令。
 - [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
 - [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
-- [ ] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（**UNVERIFIED**）。
+- [x] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（<https://yamopeng0918.github.io/AI-Summary/>）。
 - [x] 執行部署前建置與追蹤檔案、`site/dist` 敏感資料掃描。
 - [ ] 驗證部署失敗時保留本機資料與可重試狀態。
 

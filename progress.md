@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-09
+> 最後更新：2026-08-10
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：GitHub Pages workflow 與完整本機部署 gate 已驗證；真實遠端 deployment、公開 smoke 與真實來源驗收尚未執行
+> 目前階段：GitHub Pages 已完成真實部署與公開 smoke 驗收；真實公開網頁來源驗收尚未執行
 >
-> 下次續作：先執行並驗收真實 GitHub Pages deployment 與公開 smoke，再由使用者提供核准的公開文章 URL 與本機 OpenAI 憑證完成真實來源驗收
+> 下次續作：由使用者提供核准的公開文章 URL 與本機 OpenAI 憑證，完成真實來源驗收
 
 ## 專案目標
 
@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
-| GitHub repository 與 Pages | 本機就緒／遠端未驗證 | workflow、base path、artifact verifier、bounded smoke checker 與完整本機 gate 已通過；真實 deployment 與公開 smoke 為 **UNVERIFIED** |
+| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `bf6f65b8953338c71b3e17d893089caca61d89fd` 已由 workflow run `31354210514` 成功部署，公開網址與 demo detail 均通過 smoke 驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -60,12 +60,21 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 開發用固定分類器 | 只用於管線串接，不視為分類模型完成 |
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
-| npm advisory audit | 本次唯一 `npm audit --json` 嘗試因 registry endpoint 無法連線而無 advisory 結果，保持 **UNVERIFIED**，不得宣稱零漏洞 |
-| GitHub Pages 遠端驗收 | workflow 與本機 gate 已完成；尚未觸發真實 deployment 或對公開網址執行 smoke acceptance |
+| npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；run `31354210514` 成功部署並通過 workflow 內及獨立公開 smoke 驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-10
+
+- GitHub Pages Source 已設定為 GitHub Actions（`build_type=workflow`），公開網址為 <https://yamopeng0918.github.io/AI-Summary/>。
+- 部署 commit `bf6f65b8953338c71b3e17d893089caca61d89fd` 的 workflow run [`31354210514`](https://github.com/yamopeng0918/AI-Summary/actions/runs/31354210514) 結論為 `success`；首頁與 `20260809-fictional-ai-digest-demo` 詳情頁均已發布。
+- 獨立執行 `python scripts/smoke_pages.py --site-root https://yamopeng0918.github.io/AI-Summary/ --demo-id 20260809-fictional-ai-digest-demo --attempts 6 --delay-seconds 10 --timeout-seconds 15`，exit code 為 0。
+- 首次 run `31352649651` 因 Python 3.12 annotation shadowing 失敗；以 TDD 修正為 `bf6f65b`，focused 1 項與完整 Python 113 項測試均通過。
+- run `31354117164` 的 build 成功，但因 Pages 尚未建立而在 deploy 失敗；建立 Pages 並設為 workflow source 後，手動 dispatch 的 run `31354210514` 完整成功。
+- `npm audit --json` 已成功取得 advisory 結果，info、low、moderate、high、critical 均為 0。
 
 ### 2026-08-09
 
@@ -95,8 +104,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 1. 取得使用者對一個可直接讀取公開文章 URL 的明確核准，並由使用者在本機提供 OpenAI 憑證。
 2. 執行真實公開網頁 `add`，確認各階段輸出、合法 JSON 與無憑證外洩。
 3. 重新建置 Astro，確認新資料的詳情頁出現於 `site/dist`。
-4. 觸發 GitHub Pages workflow，驗證真實 deployment 與公開 smoke；完成前保持 **UNVERIFIED**。
-5. 遠端部署驗收後，再進入分類資料標註與可重現評估、YouTube 及公開社群里程碑。
+4. 進入分類資料標註與可重現評估、YouTube 及公開社群里程碑。
 
 ## 更新規則
 
