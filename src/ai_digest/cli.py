@@ -9,12 +9,15 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import typer
+from google import genai
 from openai import OpenAI
 
 from ai_digest.classifiers.fixed import FixedClassifier
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.storage import SummaryRepository
+from ai_digest.summarizers.base import Summarizer
+from ai_digest.summarizers.gemini import GeminiSummarizer
 from ai_digest.summarizers.openai import OpenAISummarizer
 from ai_digest.workflow import AddArticleWorkflow
 
@@ -34,15 +37,27 @@ def _web_client_factory() -> httpx.Client:
     return httpx.Client()
 
 
+def _summarizer() -> Summarizer:
+    provider = os.environ.get("AI_DIGEST_PROVIDER", "gemini").strip().lower()
+    if provider == "gemini":
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise DigestError("input", "MISSING_API_KEY", "GEMINI_API_KEY is required for add", False)
+        return GeminiSummarizer(
+            genai.Client(api_key=api_key), os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+        )
+    if provider == "openai":
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise DigestError("input", "MISSING_API_KEY", "OPENAI_API_KEY is required for add", False)
+        return OpenAISummarizer(OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-5-mini"))
+    raise DigestError("input", "INVALID_PROVIDER", "AI_DIGEST_PROVIDER must be gemini or openai", False)
+
+
 def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWorkflow:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise DigestError("input", "MISSING_API_KEY", "OPENAI_API_KEY is required for add", False)
     return AddArticleWorkflow(
         extractor=WebExtractor(client_factory=_web_client_factory),
-        summarizer=OpenAISummarizer(
-            OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-5-mini")
-        ),
+        summarizer=_summarizer(),
         classifier=FixedClassifier(sorted(VALID_CATEGORIES)[0]),
         repository=_repository(),
         on_progress=on_progress,

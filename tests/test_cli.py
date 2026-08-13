@@ -152,8 +152,10 @@ def test_archive_and_publish_change_status_without_changing_content(tmp_path) ->
     )
 
 
-def test_production_app_keeps_local_commands_available_without_an_openai_key(tmp_path, monkeypatch) -> None:
+def test_production_app_keeps_local_commands_available_without_a_provider_key(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("AI_DIGEST_PROVIDER", raising=False)
     monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", str(tmp_path))
     repository = SummaryRepository(tmp_path)
     repository.save(make_record())
@@ -176,26 +178,116 @@ def test_production_app_keeps_local_commands_available_without_an_openai_key(tmp
     assert json.loads(added.stderr) == {
         "stage": "input",
         "code": "MISSING_API_KEY",
-        "message": "OPENAI_API_KEY is required for add",
+        "message": "GEMINI_API_KEY is required for add",
         "retryable": False,
     }
 
 
-def test_production_defaults_and_web_extractor_wiring(tmp_path, monkeypatch) -> None:
+def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatch) -> None:
     assert cli._repository().root == Path("data/summaries")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("AI_DIGEST_PROVIDER", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
     captured: dict[str, object] = {}
 
     class FakeWorkflow:
         def __init__(self, **dependencies: object) -> None:
             captured.update(dependencies)
 
+    class FakeGeminiClient:
+        def __init__(self, *, api_key: str) -> None:
+            captured["gemini_api_key"] = api_key
+
+    class FakeGeminiSummarizer:
+        def __init__(self, client: object, model: str) -> None:
+            captured["gemini_client"] = client
+            captured["summarizer_model"] = model
+
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
-    monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: object())
+    monkeypatch.setattr(cli, "genai", type("FakeGenAI", (), {"Client": FakeGeminiClient}), raising=False)
+    monkeypatch.setattr(cli, "GeminiSummarizer", FakeGeminiSummarizer, raising=False)
 
     cli._workflow()
 
     extractor = captured["extractor"]
     assert isinstance(extractor, cli.WebExtractor)
     assert extractor._client_factory is cli._web_client_factory
-    assert captured["summarizer"]._model == "gpt-5-mini"
+    assert captured["gemini_api_key"] == "test-key"
+    assert captured["summarizer_model"] == "gemini-2.5-flash"
+
+
+def test_production_can_select_openai(monkeypatch) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    captured: dict[str, object] = {}
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+    class FakeOpenAISummarizer:
+        def __init__(self, client: object, model: str) -> None:
+            captured["openai_client"] = client
+            captured["summarizer_model"] = model
+
+    monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: captured.update(openai_api_key=api_key))
+    monkeypatch.setattr(cli, "OpenAISummarizer", FakeOpenAISummarizer)
+
+    cli._workflow()
+
+    assert captured["openai_api_key"] == "test-key"
+    assert captured["summarizer_model"] == "gpt-5-mini"
+
+
+def test_unknown_provider_is_rejected_without_creating_a_client(monkeypatch) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "anthropic")
+
+    try:
+        cli._workflow()
+    except DigestError as error:
+        assert error.as_dict() == {
+            "stage": "input",
+            "code": "INVALID_PROVIDER",
+            "message": "AI_DIGEST_PROVIDER must be gemini or openai",
+            "retryable": False,
+        }
+    else:
+        raise AssertionError("expected an invalid provider error")
+
+
+def test_missing_gemini_key_mentions_only_gemini_configuration(monkeypatch) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "other-provider-key")
+
+    try:
+        cli._workflow()
+    except DigestError as error:
+        assert error.as_dict() == {
+            "stage": "input",
+            "code": "MISSING_API_KEY",
+            "message": "GEMINI_API_KEY is required for add",
+            "retryable": False,
+        }
+    else:
+        raise AssertionError("expected a missing Gemini API key error")
+
+
+def test_missing_openai_key_mentions_only_openai_configuration(monkeypatch) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "other-provider-key")
+
+    try:
+        cli._workflow()
+    except DigestError as error:
+        assert error.as_dict() == {
+            "stage": "input",
+            "code": "MISSING_API_KEY",
+            "message": "OPENAI_API_KEY is required for add",
+            "retryable": False,
+        }
+    else:
+        raise AssertionError("expected a missing OpenAI API key error")
