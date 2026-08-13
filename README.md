@@ -9,7 +9,7 @@ AI Digest 是一套在本機執行的公開內容摘要工具。目前的第一�
 - Windows PowerShell
 - Python 3.12 以上
 - Node.js 22.12.0 以上與 npm
-- 只有執行真實 `add` 時才需要 OpenAI API 金鑰
+- 只有執行真實 `add` 時才需要所選摘要 provider 的 API 金鑰
 
 ## Python 安裝
 
@@ -26,14 +26,7 @@ python -m pip install -e ".[dev]"
 
 ## 本機設定
 
-金鑰只設在目前 PowerShell 進程，不得寫入 repository：
-
-```powershell
-$env:OPENAI_API_KEY = '<your-openai-api-key>'
-$env:OPENAI_MODEL = 'gpt-5-mini' # 選用
-```
-
-### Summary provider
+金鑰只設在目前 PowerShell 進程，不得寫入 repository。摘要 provider 設定如下：
 
 Gemini is the default provider. Configure Gemini explicitly in PowerShell:
 
@@ -112,7 +105,7 @@ python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summar
 
 ## GitHub Pages 操作
 
-預期公開網址是 <https://yamopeng0918.github.io/AI-Summary/>。`.github/workflows/deploy-pages.yml` 已在本機完成驗證；push 到 `master` 會自動觸發，也可到 GitHub repository 的 **Actions → Deploy to GitHub Pages → Run workflow** 手動觸發。
+公開網址是 <https://yamopeng0918.github.io/AI-Summary/>。`.github/workflows/deploy-pages.yml` 會在 push 到 `master` 時自動觸發，也可到 GitHub repository 的 **Actions → Deploy to GitHub Pages → Run workflow** 手動觸發。最新已記錄的部署為 workflow run `31674616177`，成功部署 commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`，公開首頁與 demo 詳情頁均已通過 smoke acceptance。
 
 部署完成後，在 repository 根目錄執行公開 smoke check：
 
@@ -120,20 +113,19 @@ python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summar
 python scripts/smoke_pages.py
 ```
 
-若 Actions 執行失敗，前往 **Actions → Deploy to GitHub Pages → 該次失敗的 workflow run → Re-run jobs** 重試，並先查看失敗 job 的日誌。工作流程、本機 `build:pages`、敏感資料掃描與離線 smoke checker 都已準備完成；但本次尚未實際觸發遠端 Pages deployment，也未對公開網址執行 smoke acceptance，因此兩項狀態均為 **UNVERIFIED**。
+若 Actions 執行失敗，前往 **Actions → Deploy to GitHub Pages → 該次失敗的 workflow run → Re-run jobs** 重試，並先查看失敗 job 的日誌。後續部署仍應先執行本機 `build:pages`、敏感資料掃描與 smoke checker。
 
-專案已推送至 <https://github.com/yamopeng0918/AI-Summary.git>；不得只因本機 gate 通過就宣稱公開網站已部署。
+專案已推送至 <https://github.com/yamopeng0918/AI-Summary.git>；只有實際成功的 workflow run 與公開 smoke acceptance 可作為部署完成證據。
 
 `npm.cmd ci` 的目前依賴狀態會顯示 `esbuild@0.28.2` 與 `esbuild@0.25.12` 安裝 script 尚未核准的通知；本專案沒有授權或執行這些 script。不要在未審查前自行批准。
 
 ## 目前範圍與後續
 
-本里程碑已建立公開網頁擷取、OpenAI 結構化摘要邊界、JSON Schema 驗證與儲存、本機 CLI，以及 Astro 列表、詳情、搜尋、分類篩選與日期排序。
+本里程碑已建立公開網頁擷取、Gemini 與 OpenAI 結構化摘要邊界、provider-aware CLI、JSON Schema 驗證與儲存，以及 Astro 列表、詳情、搜尋、分類篩選與日期排序。
 
 以下是後續里程碑：
 
 - 訓練並驗收優於最大類基準的分類模型。
 - YouTube 有字幕與無可用字幕流程。
 - 無須登入的公開社群單篇貼文。
-- GitHub Pages 真實遠端 deployment 與公開 smoke acceptance。
 - 核心 MVP 穩定後才評估 PDF／論文、OCR 與標籤篩選。

@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：GitHub Pages 已完成真實部署與公開 smoke 驗收；真實公開網頁來源驗收尚未執行
+> 目前階段：GitHub Pages 已完成真實部署與公開 smoke 驗收；provider 選擇自動化測試已完成，Gemini 真實公開網頁來源驗收尚未執行
 >
-> 下次續作：由使用者提供核准的公開文章 URL 與本機 OpenAI 憑證，完成真實來源驗收
+> 下次續作：由使用者提供核准的公開文章 URL 與本機 `GEMINI_API_KEY`，完成 Gemini 真實來源驗收
 
 ## 專案目標
 
@@ -25,8 +25,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 階段 | 狀態 | 進度摘要 |
 |---|---|---|
 | 企畫與需求收斂 | 已完成 | 核心三來源 MVP、非目標、架構邊界與驗收標準已納入核准規格 |
-| 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、摘要邊界、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接 |
-| 公開網頁真實來源驗收 | 未驗證 | 未提供使用者核准 URL 與 OpenAI 憑證；不以任意網址代替 |
+| 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 132 項通過 |
+| 公開網頁真實來源驗收 | 未驗證 | 未提供使用者核准 URL 與本機 `GEMINI_API_KEY`；不以任意網址代替。Gemini live acceptance 為 **UNVERIFIED** |
 | 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
@@ -46,17 +46,17 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 - [x] 本地 HTML fixture 經真實 `WebExtractor`、確定性摘要替身、`FixedClassifier` 與 `SummaryRepository` 產生一筆合法 `published` JSON。
 - [x] 相同 URL 第二次執行回報 `DUPLICATE_URL` 且不新增檔案。
-- [x] OpenAI 結構輸出驗證失敗時不會寫入不完整資料。
+- [x] Gemini 與 OpenAI 結構輸出驗證失敗時不會寫入不完整資料；CLI 預設 Gemini、可明確選擇 OpenAI，且只驗證所選 provider 的金鑰。
 - [x] Astro 能驗證資料並建置首頁與獨立詳情頁，提供搜尋、分類篩選與日期排序。
 - [x] 已執行追蹤檔案憑證格式掃描與差異空白檢查。
-- [ ] 使用一個由使用者提供並核准的真實公開文章與本機 OpenAI 憑證完成端到端驗收。
+- [ ] 使用一個由使用者提供並核准的真實公開文章與本機 `GEMINI_API_KEY` 完成端到端驗收；Gemini live acceptance 為 **UNVERIFIED**。
 
 ## 已知風險、阻礙與設定注意事項
 
 | 項目 | 目前處理原則 |
 |---|---|
 | 公開來源受付費牆、登入或反爬蟲限制 | 不嘗試繞過，回報明確的結構化錯誤 |
-| 真實網頁與 OpenAI 驗收 | 尚缺使用者核准 URL 與憑證，明確記錄為未驗證 |
+| 真實網頁與 Gemini 驗收 | 尚缺使用者核准 URL 與本機 `GEMINI_API_KEY`，明確記錄為 **UNVERIFIED** |
 | 開發用固定分類器 | 只用於管線串接，不視為分類模型完成 |
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
@@ -107,7 +107,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 取得使用者對一個可直接讀取公開文章 URL 的明確核准，並由使用者在本機提供 OpenAI 憑證。
+1. 取得使用者對一個可直接讀取公開文章 URL 的明確核准，並由使用者在本機提供 `GEMINI_API_KEY`。
 2. 執行真實公開網頁 `add`，確認各階段輸出、合法 JSON 與無憑證外洩。
 3. 重新建置 Astro，確認新資料的詳情頁出現於 `site/dist`。
 4. 進入分類資料標註與可重現評估、YouTube 及公開社群里程碑。

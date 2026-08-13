@@ -33,7 +33,7 @@
 - [x] 擷取公開 HTML 文章的標題、作者、日期、正文與正規化來源 URL。
 - [x] 排除導覽與非正文內容。
 - [x] 對登入、付費牆、無足夠正文、HTTP 與網路失敗回報明確錯誤。
-- [x] 建立 OpenAI 結構化摘要邊界，驗證短摘要、3～5 個重點、1～5 個標籤與編輯觀點。
+- [x] 建立 Gemini 與 OpenAI 結構化摘要邊界，驗證短摘要、3～5 個重點、1～5 個標籤與編輯觀點。
 - [x] 確認摘要回傳不合格時不會寫入不完整資料。
 
 ### 管線與 CLI
@@ -42,7 +42,7 @@
 - [x] 實作 `add`、`list`、`show`、`archive` 與 `publish` CLI 指令。
 - [x] 以本地 HTML fixture、真實 `WebExtractor`、確定性摘要替身、`FixedClassifier` 與暫存 repository 完成 fixture-to-JSON 整合測試。
 - [x] 驗證同一 URL 第二次新增被拒絕且檔案數不變。
-- [ ] 取得使用者核准的公開文章 URL 與本機 OpenAI 憑證，執行一次真實來源驗收（**UNVERIFIED**）。
+- [ ] 取得使用者核准的公開文章 URL 與本機 `GEMINI_API_KEY`，執行一次 Gemini 真實來源驗收（**UNVERIFIED**）。
 
 ### Astro 本機網站
 
@@ -115,4 +115,3 @@
 
 - [x] Provider-aware CLI composition: Gemini is the default; OpenAI is explicit; only the selected provider key is required; there is no automatic fallback; `list`, `show`, `archive`, and `publish` are key-free.
 - [x] Automated provider configuration coverage completed; the full Python suite passed 132 tests.
-- [ ] Run Gemini live acceptance with a real Gemini API key and a user-approved public article (**UNVERIFIED** until then).
