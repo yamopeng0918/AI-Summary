@@ -115,3 +115,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 ## 更新規則
 
 每次工作結束後，在「進度紀錄」最上方新增日期與完成事項，並同步更新整體階段、驗收勾選、`todo.md`、風險與重要決策。只能勾選已實際完成且通過相稱驗證的項目。
+
+## Provider configuration update (2026-08-13)
+
+- Provider-aware CLI composition is complete and automated tests cover the Gemini default, explicit OpenAI selection, invalid providers, selected-key validation, and key-free local commands.
+- Gemini is the default (`GEMINI_API_KEY`, default model `gemini-2.5-flash`); OpenAI is selected explicitly (`OPENAI_API_KEY`, default model `gpt-5-mini`). There is no automatic fallback.
+- Full Python automation passed: 132 tests. No real Gemini API key or public-article live acceptance was used, so Gemini live acceptance remains **UNVERIFIED**.

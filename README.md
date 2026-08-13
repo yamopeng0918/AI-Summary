@@ -33,6 +33,26 @@ $env:OPENAI_API_KEY = '<your-openai-api-key>'
 $env:OPENAI_MODEL = 'gpt-5-mini' # 選用
 ```
 
+### Summary provider
+
+Gemini is the default provider. Configure Gemini explicitly in PowerShell:
+
+```powershell
+$env:AI_DIGEST_PROVIDER = 'gemini'
+$env:GEMINI_API_KEY = '<your-gemini-api-key>'
+$env:GEMINI_MODEL = 'gemini-2.5-flash' # optional; this is the default
+```
+
+To use OpenAI explicitly:
+
+```powershell
+$env:AI_DIGEST_PROVIDER = 'openai'
+$env:OPENAI_API_KEY = '<your-openai-api-key>'
+$env:OPENAI_MODEL = 'gpt-5-mini' # optional; this is the default
+```
+
+There is no automatic fallback between providers. `add` requires only the API key for the selected provider. Local `list`, `show`, `archive`, and `publish` commands do not require either provider key.
+
 可用 `AI_DIGEST_SUMMARY_ROOT` 將 JSON 寫入其他本機目錄；未設定時使用 `data/summaries`。
 
 ```powershell

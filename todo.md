@@ -110,3 +110,9 @@
 - 2026-07-30 的原始排程曾將 PDF／論文、特定社群平台、圖片 OCR、NotebookLM、標籤篩選與遠端部署並列為四週必做範圍。
 - 2026-08-09 依核准設計規格修正為三來源核心 MVP；PDF／論文、OCR 與標籤篩選改為選配，遠端部署、YouTube、社群與正式分類器改由後續里程碑完成。
 - 本清單保留上述歷史改動，但完成狀態以實際通過驗證的成果為準。
+
+## Provider configuration update (2026-08-13)
+
+- [x] Provider-aware CLI composition: Gemini is the default; OpenAI is explicit; only the selected provider key is required; there is no automatic fallback; `list`, `show`, `archive`, and `publish` are key-free.
+- [x] Automated provider configuration coverage completed; the full Python suite passed 132 tests.
+- [ ] Run Gemini live acceptance with a real Gemini API key and a user-approved public article (**UNVERIFIED** until then).
