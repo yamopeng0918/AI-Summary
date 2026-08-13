@@ -1,6 +1,6 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-10
+> 最後更新：2026-08-13
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
-| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `bf6f65b8953338c71b3e17d893089caca61d89fd` 已由 workflow run `31354210514` 成功部署，公開網址與 demo detail 均通過 smoke 驗收 |
+| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；最終 commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1` 已由 workflow run `31674616177` 成功部署，公開網址與 demo detail 均通過 smoke 驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -61,11 +61,17 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
-| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；run `31354210514` 成功部署並通過 workflow 內及獨立公開 smoke 驗收 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31674616177` 成功部署最終安全修正，並通過 workflow 內及獨立公開 smoke 驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-13
+
+- 最終安全修正 `7f7dc1e` 已將生成的 `site/dist` 檔案納入 OpenAI key、GitHub token、私密金鑰與 `.env` 敏感資料掃描。
+- GitHub Actions run [`31674616177`](https://github.com/yamopeng0918/AI-Summary/actions/runs/31674616177) 已成功部署 commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`。
+- 重新執行公開 smoke checker，首頁與示範摘要詳情頁均通過；本機與 GitHub `master` 雜湊一致。
 
 ### 2026-08-10
 

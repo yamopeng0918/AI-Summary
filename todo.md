@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-10
+> 最後同步：2026-08-13
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -52,7 +52,7 @@
 - [x] 忽略 `archived` 資料、處理無資料與無搜尋結果；資料驗證失敗時採 fail-closed，直接中止靜態建置。
 - [x] 完成手機與桌面版基本響應式介面與本機靜態建置。
 - [x] 建立 GitHub Pages workflow、`/AI-Summary/` base path、artifact verifier 與本機 `build:pages` gate。
-- [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（run `31354210514`，commit `bf6f65b8953338c71b3e17d893089caca61d89fd`）。
+- [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（最新 run `31674616177`，commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`）。
 
 ### 文件與安全收尾
 
