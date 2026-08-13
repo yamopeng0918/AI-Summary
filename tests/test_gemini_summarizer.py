@@ -2,7 +2,11 @@
 
 from types import SimpleNamespace
 
-from ai_digest.domain import ExtractedArticle, SummaryDraft
+import httpx
+import pytest
+from google.genai import errors
+
+from ai_digest.domain import DigestError, ExtractedArticle, SummaryDraft
 from ai_digest.summarizers.base import Summarizer
 from ai_digest.summarizers.gemini import GeminiSummarizer
 
@@ -33,6 +37,8 @@ class FakeModels:
 
     def generate_content(self, **kwargs: object) -> object:
         self.calls.append(kwargs)
+        if isinstance(self._response, Exception):
+            raise self._response
         return self._response
 
 
@@ -55,3 +61,82 @@ def test_gemini_summarizer_uses_structured_output_and_returns_validated_draft() 
     assert call["config"].response_mime_type == "application/json"
     assert call["config"].response_schema is SummaryDraft
     assert make_article().title in call["contents"]
+
+
+@pytest.mark.parametrize(
+    ("outcome", "code", "retryable"),
+    [
+        (httpx.ReadTimeout("slow"), "TIMEOUT", True),
+        (httpx.ConnectError("offline"), "REQUEST_FAILED", True),
+        (
+            errors.ClientError(429, {"error": {"code": 429, "message": "quota"}}),
+            "RATE_LIMITED",
+            True,
+        ),
+        (
+            errors.ClientError(400, {"error": {"code": 400, "message": "bad"}}),
+            "REQUEST_FAILED",
+            False,
+        ),
+        (
+            errors.ServerError(500, {"error": {"code": 500, "message": "down"}}),
+            "REQUEST_FAILED",
+            True,
+        ),
+    ],
+)
+def test_gemini_summarizer_maps_provider_failures(
+    outcome: Exception, code: str, retryable: bool
+) -> None:
+    article = make_article()
+
+    with pytest.raises(DigestError) as raised:
+        GeminiSummarizer(FakeClient(outcome), "test-gemini").summarize(article)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "summarize",
+        code,
+        retryable,
+    )
+    assert article.text not in raised.value.message
+    assert str(article.canonical_url) not in raised.value.message
+
+
+@pytest.mark.parametrize(
+    ("response", "code"),
+    [
+        (
+            SimpleNamespace(parsed=None, candidates=[object()], prompt_feedback=None),
+            "INVALID_RESPONSE",
+        ),
+        (
+            SimpleNamespace(
+                parsed={"summary": "incomplete"}, candidates=[object()], prompt_feedback=None
+            ),
+            "INVALID_RESPONSE",
+        ),
+        (
+            SimpleNamespace(
+                parsed=None,
+                candidates=[],
+                prompt_feedback=SimpleNamespace(block_reason="SAFETY"),
+            ),
+            "REFUSAL",
+        ),
+    ],
+)
+def test_gemini_summarizer_maps_invalid_response_and_refusal(
+    response: object, code: str
+) -> None:
+    article = make_article()
+
+    with pytest.raises(DigestError) as raised:
+        GeminiSummarizer(FakeClient(response), "test-gemini").summarize(article)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "summarize",
+        code,
+        False,
+    )
+    assert article.text not in raised.value.message
+    assert str(article.canonical_url) not in raised.value.message
