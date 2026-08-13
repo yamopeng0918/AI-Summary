@@ -35,12 +35,21 @@
 **Files:**
 - Create: `tests/test_gemini_summarizer.py`
 - Create: `src/ai_digest/summarizers/gemini.py`
+- Modify: `pyproject.toml`
 
 **Interfaces:**
 - Consumes: `ExtractedArticle`, `SummaryDraft`, and `DigestError` from `ai_digest.domain`; a client exposing `models.generate_content(model=..., contents=..., config=...)`.
 - Produces: `class GeminiSummarizer(client: Any, model: str)` with `summarize(article: ExtractedArticle) -> SummaryDraft`.
 
-- [ ] **Step 1: Write the failing success-path test**
+- [ ] **Step 1: Add and install the bounded SDK dependency**
+
+Add `"google-genai>=2.7,<3"` to `[project].dependencies` in `pyproject.toml`, then install the editable development environment.
+
+Run: `python -m pip install -e ".[dev]"`
+
+Expected: installation succeeds and `python -c "from google import genai"` exits 0.
+
+- [ ] **Step 2: Write the failing success-path test**
 
 Create a fake client that records `generate_content` arguments and returns `SimpleNamespace(parsed=make_draft(), candidates=[object()], prompt_feedback=None)`. Assert that `GeminiSummarizer(...).summarize(article)` returns the draft and that the call uses the selected model plus a `GenerateContentConfig` whose `response_mime_type` is `application/json` and `response_schema` is `SummaryDraft`.
 
@@ -59,13 +68,13 @@ def test_gemini_summarizer_uses_structured_output_and_returns_validated_draft() 
     assert make_article().title in call["contents"]
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [ ] **Step 3: Run the focused test and verify RED**
 
 Run: `$env:PYTHONPATH="$PWD\src"; python -m pytest tests/test_gemini_summarizer.py::test_gemini_summarizer_uses_structured_output_and_returns_validated_draft -q`
 
 Expected: FAIL because `ai_digest.summarizers.gemini` does not exist.
 
-- [ ] **Step 3: Implement the minimal successful adapter**
+- [ ] **Step 4: Implement the minimal successful adapter**
 
 Use `types.GenerateContentConfig(response_mime_type="application/json", response_schema=SummaryDraft, system_instruction=_SYSTEM_INSTRUCTION)`, call `client.models.generate_content`, and validate `response.parsed` with `SummaryDraft.model_validate`. Keep the prompt limited to the article title and text and reuse the behavioral requirements of the existing OpenAI system instruction.
 
@@ -88,16 +97,16 @@ class GeminiSummarizer:
         return SummaryDraft.model_validate(response.parsed)
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [ ] **Step 5: Run the focused test and verify GREEN**
 
-Run the Step 2 command.
+Run the Step 3 command.
 
 Expected: `1 passed`.
 
-- [ ] **Step 5: Commit the successful adapter slice**
+- [ ] **Step 6: Commit the successful adapter slice**
 
 ```powershell
-git add -- tests/test_gemini_summarizer.py src/ai_digest/summarizers/gemini.py
+git add -- tests/test_gemini_summarizer.py src/ai_digest/summarizers/gemini.py pyproject.toml
 git commit -m "feat: add Gemini structured summarizer"
 ```
 
@@ -182,7 +191,6 @@ git commit -m "test: cover Gemini provider failures"
 **Files:**
 - Modify: `tests/test_cli.py`
 - Modify: `src/ai_digest/cli.py`
-- Modify: `pyproject.toml`
 
 **Interfaces:**
 - Consumes: `AI_DIGEST_PROVIDER`, provider-specific key/model environment variables, `genai.Client`, `GeminiSummarizer`, and existing OpenAI composition.
@@ -217,15 +225,7 @@ Run: `$env:PYTHONPATH="$PWD\src"; python -m pytest tests/test_cli.py -q`
 
 Expected: Gemini-default and provider-selection assertions fail because `_workflow` is OpenAI-only.
 
-- [ ] **Step 3: Add the SDK dependency**
-
-Add `"google-genai>=2.7,<3"` to `[project].dependencies` in `pyproject.toml`, then install the editable development environment with:
-
-Run: `python -m pip install -e ".[dev]"`
-
-Expected: installation succeeds and `python -c "from google import genai"` exits 0.
-
-- [ ] **Step 4: Implement provider selection in `_workflow`**
+- [ ] **Step 3: Implement provider selection in `_workflow`**
 
 Add a small `_summarizer()` helper so key validation and client creation remain separate from extractor/repository wiring.
 
@@ -250,7 +250,7 @@ def _summarizer() -> Summarizer:
 
 Use `_summarizer()` in `_workflow`; do not alter `create_app` or local command dependency injection.
 
-- [ ] **Step 5: Run CLI and full Python tests and verify GREEN**
+- [ ] **Step 4: Run CLI and full Python tests and verify GREEN**
 
 Run:
 
@@ -262,10 +262,10 @@ python -m pytest -q
 
 Expected: focused CLI tests pass; the full Python suite reports zero failures.
 
-- [ ] **Step 6: Commit provider composition**
+- [ ] **Step 5: Commit provider composition**
 
 ```powershell
-git add -- tests/test_cli.py src/ai_digest/cli.py pyproject.toml
+git add -- tests/test_cli.py src/ai_digest/cli.py
 git commit -m "feat: select Gemini or OpenAI provider"
 ```
 
