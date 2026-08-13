@@ -103,6 +103,28 @@ def test_gemini_summarizer_maps_provider_failures(
 
 
 @pytest.mark.parametrize(
+    "outcome",
+    [
+        errors.APIError(302, {"error": {"code": 302, "message": "unexpected response"}}),
+        errors.UnknownApiResponseError("response could not be parsed"),
+    ],
+)
+def test_gemini_summarizer_maps_unclassified_sdk_failures(outcome: Exception) -> None:
+    article = make_article()
+
+    with pytest.raises(DigestError) as raised:
+        GeminiSummarizer(FakeClient(outcome), "test-gemini").summarize(article)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "summarize",
+        "REQUEST_FAILED",
+        False,
+    )
+    assert article.text not in raised.value.message
+    assert str(article.canonical_url) not in raised.value.message
+
+
+@pytest.mark.parametrize(
     ("response", "code"),
     [
         (

@@ -42,6 +42,10 @@ class GeminiSummarizer:
             raise DigestError("summarize", "REQUEST_FAILED", "Summary request failed", False) from error
         except errors.ServerError as error:
             raise DigestError("summarize", "REQUEST_FAILED", "Summary request failed", True) from error
+        except errors.APIError as error:
+            raise DigestError("summarize", "REQUEST_FAILED", "Summary request failed", False) from error
+        except errors.UnknownApiResponseError as error:
+            raise DigestError("summarize", "REQUEST_FAILED", "Summary request failed", False) from error
 
         try:
             if not response.candidates and response.prompt_feedback.block_reason:
