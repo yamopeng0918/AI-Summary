@@ -144,7 +144,11 @@ class SummaryPublisher:
 
     def commit_and_push(self, record: SummaryRecord, path: Path) -> str:
         """Commit exactly one new summary file and push master without rewriting history."""
-        relative_path = self._repository_relative_path(path)
+        expected_path = self._expected_publish_path(record)
+        if path.resolve(strict=False) != expected_path:
+            raise PublishError("deploy", "summary file path does not match record id")
+
+        relative_path = self._repository_relative_path(expected_path)
         existing = self.run_command(
             ["git", "cat-file", "-e", f"HEAD:{relative_path}"], self.config.repository_root
         )
@@ -202,6 +206,20 @@ class SummaryPublisher:
             ).as_posix()
         except ValueError as error:
             raise PublishError("deploy", "summary file path is outside the repository") from error
+
+    def _expected_publish_path(self, record: SummaryRecord) -> Path:
+        root = self.config.summary_root.resolve(strict=False)
+        raw_path = self.config.summary_root / f"{record.id}.json"
+        try:
+            relative_path = raw_path.relative_to(self.config.summary_root)
+        except ValueError as error:
+            raise PublishError("deploy", "summary file path does not match record id") from error
+        if len(relative_path.parts) != 1:
+            raise PublishError("deploy", "summary file path does not match record id")
+        path = raw_path.resolve(strict=False)
+        if path.parent != root:
+            raise PublishError("deploy", "summary file path does not match record id")
+        return path
 
     @staticmethod
     def _stdout_text(result: CommandResult) -> str:

@@ -293,6 +293,32 @@ def test_commit_and_push_rejects_extra_staged_paths() -> None:
     ]
 
 
+def test_commit_and_push_rejects_a_mismatched_summary_filename_before_git() -> None:
+    record = make_record("example")
+    path = SUMMARY_ROOT / "different.json"
+    runner = RecordingRunner([])
+
+    with pytest.raises(PublishError) as raised:
+        make_publisher(runner).commit_and_push(record, path)
+
+    assert raised.value.stage == "deploy"
+    assert raised.value.message == "summary file path does not match record id"
+    assert runner.calls == []
+
+
+def test_commit_and_push_rejects_an_in_repo_non_summary_path_before_git() -> None:
+    record = make_record("example")
+    path = REPOSITORY_ROOT / "README.md"
+    runner = RecordingRunner([])
+
+    with pytest.raises(PublishError) as raised:
+        make_publisher(runner).commit_and_push(record, path)
+
+    assert raised.value.stage == "deploy"
+    assert raised.value.message == "summary file path does not match record id"
+    assert runner.calls == []
+
+
 def test_resolve_summary_creates_a_new_summary_when_no_canonical_match_exists(tmp_path) -> None:
     created = make_record("created", canonicalUrl="https://example.com/article")
     add_calls: list[str] = []
