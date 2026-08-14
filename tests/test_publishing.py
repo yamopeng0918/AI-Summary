@@ -116,4 +116,18 @@ def test_preflight_maps_git_command_failures_to_sanitized_error() -> None:
         make_publisher(runner).preflight()
 
     assert raised.value.stage == "preflight"
-    assert raised.value.message == "fatal: unsafe details"
+    assert raised.value.message == "git command failed"
+
+
+def test_preflight_does_not_leak_credentials_from_git_stderr() -> None:
+    leaked_token = "ghp_superSecretToken123"
+    leaked_url = f"https://oauth2:{leaked_token}@github.com/yamopeng0918/AI-Summary.git"
+    runner = RecordingRunner([result(returncode=128, stderr=f"fatal: could not read from {leaked_url}\n")])
+
+    with pytest.raises(PublishError) as raised:
+        make_publisher(runner).preflight()
+
+    assert raised.value.stage == "preflight"
+    assert raised.value.message == "git command failed"
+    assert leaked_token not in raised.value.message
+    assert leaked_url not in raised.value.message

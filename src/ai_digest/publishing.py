@@ -95,6 +95,5 @@ class SummaryPublisher:
     def _run_checked(self, command: Sequence[str], stage: str, cwd: Path) -> CommandResult:
         result = self.run_command(command, cwd)
         if result.returncode != 0:
-            message = result.stderr.strip().splitlines()[0] if result.stderr.strip() else "command failed"
-            raise PublishError(stage, message)
+            raise PublishError(stage, "git command failed")
         return result
