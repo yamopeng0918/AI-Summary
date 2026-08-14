@@ -1,8 +1,55 @@
 from pathlib import Path
+import subprocess
 
 import pytest
 
-from scripts.verify_deployment import main, scan_sensitive_files, verify_generated_links
+from scripts.verify_deployment import (
+    main,
+    scan_sensitive_files,
+    tracked_paths,
+    verify_generated_links,
+)
+
+
+def test_tracked_paths_supports_utf8_filenames(monkeypatch: pytest.MonkeyPatch) -> None:
+    completed = subprocess.CompletedProcess(
+        ["git", "ls-files", "-z"],
+        0,
+        stdout="data/summaries/中文摘要.json\0".encode(),
+        stderr=b"",
+    )
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        calls.append((command, kwargs))
+        return completed
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert tracked_paths() == [Path("data/summaries/中文摘要.json")]
+    assert calls == [
+        (["git", "ls-files", "-z"], {"check": True, "capture_output": True})
+    ]
+
+
+def test_tracked_paths_propagates_git_failure_without_text_decoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = subprocess.CalledProcessError(
+        128,
+        ["git", "ls-files", "-z"],
+        stderr="fatal: 中文路徑".encode(),
+    )
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        raise failure
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(subprocess.CalledProcessError) as raised:
+        tracked_paths()
+
+    assert raised.value is failure
 
 
 def test_sensitive_scan_flags_real_token_shapes(tmp_path: Path) -> None:

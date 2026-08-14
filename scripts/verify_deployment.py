@@ -71,6 +71,20 @@ def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
     return violations
 
 
+def tracked_paths() -> list[Path]:
+    """Return Git-tracked paths without display quoting or locale decoding."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        check=True,
+        capture_output=True,
+    )
+    return [
+        Path(raw_path.decode("utf-8", errors="surrogateescape"))
+        for raw_path in result.stdout.split(b"\0")
+        if raw_path
+    ]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("--tracked", action="store_true", help="scan Git-tracked files")
@@ -80,12 +94,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     violations: list[str] = []
     if args.tracked:
-        tracked = subprocess.run(
-            ["git", "ls-files"], check=True, capture_output=True, text=True
-        )
-        violations.extend(
-            scan_sensitive_files(Path(line) for line in tracked.stdout.splitlines() if line)
-        )
+        violations.extend(scan_sensitive_files(tracked_paths()))
     if args.dist is not None:
         violations.extend(
             scan_sensitive_files(
