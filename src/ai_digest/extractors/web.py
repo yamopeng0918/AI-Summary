@@ -6,7 +6,7 @@ from html.parser import HTMLParser
 import ipaddress
 import socket
 from typing import Callable
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 from pydantic import ValidationError
@@ -32,16 +32,18 @@ def _error(code: str, message: str, retryable: bool) -> DigestError:
 @dataclass(frozen=True)
 class _ConnectionTarget:
     url: str
+    canonical_url: str
     address: str
     host: str
     host_header: str
 
 
-def _validate_destination(url: str) -> _ConnectionTarget:
+def _validate_destination(url: str, *, preserve_trailing_slash: bool = False) -> _ConnectionTarget:
     """Resolve and validate a public URL once, returning its pinned address."""
     try:
         normalized = normalize_public_url(url)
         parsed = urlsplit(normalized)
+        original = urlsplit(url)
         host = parsed.hostname
         if host is None:
             raise ValueError("missing host")
@@ -59,7 +61,19 @@ def _validate_destination(url: str) -> _ConnectionTarget:
         )
         hostname = f"[{host}]" if ":" in host else host
         host_header = hostname if is_default_port or parsed.port is None else f"{hostname}:{parsed.port}"
-        return _ConnectionTarget(normalized, validated_addresses[0], host, host_header)
+        transport_path = parsed.path
+        if preserve_trailing_slash and original.path.endswith("/") and transport_path != "/":
+            transport_path += "/"
+        transport_url = urlunsplit(
+            (parsed.scheme, parsed.netloc, transport_path, parsed.query, "")
+        )
+        return _ConnectionTarget(
+            transport_url,
+            normalized,
+            validated_addresses[0],
+            host,
+            host_header,
+        )
     except (DigestError, OSError, ValueError) as error:
         raise _error("UNSAFE_DESTINATION", "URL destination is not publicly reachable", False) from error
 
@@ -185,7 +199,9 @@ class WebExtractor:
                         raise _error("HTTP_ERROR", "Source returned an invalid redirect", False)
                     if redirects >= _MAX_REDIRECTS:
                         raise _error("TOO_MANY_REDIRECTS", "Source redirected too many times", False)
-                    target = _validate_destination(urljoin(target.url, location))
+                    target = _validate_destination(
+                        urljoin(target.url, location), preserve_trailing_slash=True
+                    )
                     redirects += 1
                     continue
 
@@ -223,7 +239,7 @@ class WebExtractor:
                 access_error = _access_wall_error(html, text)
                 if access_error is not None:
                     raise access_error
-                return self._extract_article(target.url, html, text)
+                return self._extract_article(target.canonical_url, html, text)
             except httpx.TimeoutException as error:
                 raise _error("NETWORK_TIMEOUT", "Source request timed out", True) from error
             except httpx.HTTPError as error:

@@ -275,6 +275,23 @@ def test_rejects_more_than_three_redirects() -> None:
     assert (raised.value.code, requests) == ("TOO_MANY_REDIRECTS", 4)
 
 
+def test_preserves_redirect_trailing_slash_for_transport() -> None:
+    requested_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        if request.url.path == "/article":
+            return httpx.Response(301, headers={"location": "/article/"})
+        return httpx.Response(200, headers={"content-type": "text/html"}, text=FIXTURE)
+
+    article = WebExtractor(client_for(httpx.MockTransport(handler))).extract(
+        "https://example.com/article/"
+    )
+
+    assert requested_paths == ["/article", "/article/"]
+    assert str(article.canonical_url) == "https://example.com/article"
+
+
 @pytest.mark.parametrize("status_code", [401, 403])
 def test_maps_auth_http_failures_to_login_required(status_code: int) -> None:
     with pytest.raises(DigestError) as raised:
