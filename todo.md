@@ -111,6 +111,14 @@
 - 2026-08-09 依核准設計規格修正為三來源核心 MVP；PDF／論文、OCR 與標籤篩選改為選配，遠端部署、YouTube、社群與正式分類器改由後續里程碑完成。
 - 本清單保留上述歷史改動，但完成狀態以實際通過驗證的成果為準。
 
+## Task 5: one-command publishing (2026-08-14)
+
+- [x] 新增 `scripts/publish_url.py`，以固定 repo / Pages / workflow 預設值組合本機 one-command publishing 流程。
+- [x] 新增 `tests/test_publish_url_script.py`，覆蓋單一 URL 參數、成功輸出、安全錯誤、subprocess `shell=False` 與固定 User-Agent。
+- [x] 更新 `README.md`，記錄 `publish_url.py` 的 `.venv` 與已啟用 venv 兩種執行方式。
+- [ ] 以使用者新提供或明確核准的公開文章 URL 完成 Task 5 creation-path 端到端驗收，並記錄新的 commit / workflow run / 公開頁面結果。
+- [x] 以不經網路安裝的本地既有前端依賴完成 Task 5 frontend gates：Vitest 24 passed、Astro check 0 errors/0 warnings/0 hints、Pages build 3 pages、build:pages internal dist verifier passed、`python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` exit 0。
+
 ## Provider configuration update (2026-08-13)
 
 - [x] Provider-aware CLI composition: Gemini is the default; OpenAI is explicit; only the selected provider key is required; there is no automatic fallback; `list`, `show`, `archive`, and `publish` are key-free.

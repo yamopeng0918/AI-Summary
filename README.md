@@ -64,6 +64,29 @@ ai-digest publish '<summary-id>'
 
 `add` 只處理可直接讀取的公開 HTML 文章，遇到登入、付費牆、私有位址或其他不可讀來源會明確失敗。目前 CLI 使用 `FixedClassifier` 只是開發期串接邊界，不是已完成的分類模型。正式分類器必須以可重現評估記錄 Accuracy、Macro F1、混淆矩陣與最大類基準，而且測試 Accuracy 必須嚴格高於該基準。
 
+## One-command publishing script
+
+Run the end-to-end local publishing workflow for one public article URL with the project venv Python:
+
+```powershell
+& '.\.venv\Scripts\python.exe' scripts/publish_url.py 'https://example.com/public-article'
+```
+
+If the venv is already active, you can run:
+
+```powershell
+python scripts/publish_url.py 'https://example.com/public-article'
+```
+
+The script uses the approved repository defaults:
+
+- summaries under `data/summaries`
+- GitHub repository `yamopeng0918/AI-Summary`
+- Pages root `https://yamopeng0918.github.io/AI-Summary/`
+- workflow name `Deploy to GitHub Pages`
+
+It prints the published summary ID, commit SHA, workflow URL, and public detail URL on success. It reports safe structured errors on stderr without echoing provider keys.
+
 ## 測試
 
 在 repository 根目錄執行：

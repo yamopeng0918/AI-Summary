@@ -77,6 +77,16 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 使用核准文章 `https://pala.tw/python-web-crawler/` 執行預設 Gemini live acceptance，所有階段 `input`、`extract`、`summarize`、`classify`、`validate`、`save`、`complete` 均成功，record ID 為 `20260814-python爬蟲新手筆記-pala-tw-8ed66e81`。
 - 暫存目錄僅產生一筆 JSON；以 `SummaryRepository` 重新載入後確認 Schema 有效、`published`、3 個重點、有效分類、5 個標籤，且不含 `GEMINI_API_KEY`、`OPENAI_API_KEY` 或 `GITHUB_TOKEN` 標記。暫存驗收資料未加入 repository。
 
+### Task 5 local verification update (2026-08-14)
+
+- Added `scripts/publish_url.py` as the thin one-command publishing entry point and covered it with `tests/test_publish_url_script.py`.
+- Verified the new script locally with focused tests: `8 passed, 1 warning`.
+- Re-ran the full Python suite after the script/docs updates: `180 passed, 1 warning`.
+- Kept Task 5 composition on the approved local defaults only: `SummaryRepository(Path("data/summaries"))`, `cli._workflow().run(url, cli._now())`, subprocess with `shell=False`, and urllib requests with the fixed `AI-Digest-Publisher/1.0` user agent.
+- After the controller linked this worktree to the main checkout's existing matching frontend dependencies without network access, the remaining local frontend gates all passed: Vitest `24 passed`; Astro check reported `0 errors`, `0 warnings`, and `0 hints`; Pages build emitted `3 page(s) built`; the build:pages internal dist verifier passed; and `python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` exited `0`.
+- `git diff --check` exited `0` after the Task 5 documentation updates, with line-ending warnings only.
+- End-to-end acceptance for the creation path is still pending a newly supplied or explicitly approved public article URL. No new live provider call, Git push, GitHub Actions run, or public Pages verification was executed in this Task 5 local pass.
+
 ### 2026-08-13
 
 - 最終安全修正 `7f7dc1e` 已將生成的 `site/dist` 檔案納入 OpenAI key、GitHub token、私密金鑰與 `.env` 敏感資料掃描。
