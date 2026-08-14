@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence, TypeAlias
 
+from ai_digest.domain import DigestError, SummaryRecord
+from ai_digest.url_normalizer import normalize_public_url
+
 
 @dataclass
 class PublishError(Exception):
@@ -61,6 +64,28 @@ class SummaryPublisher:
         self.sleep = sleep
         self.now = now
 
+    def resolve_summary(self, raw_url: str) -> tuple[SummaryRecord, Path, bool]:
+        """Return an existing summary or create one new summary for publication."""
+        try:
+            canonical_url = normalize_public_url(raw_url)
+        except DigestError as error:
+            raise PublishError("summary", error.message) from error
+
+        matches = [
+            record for record in self.repository.list() if str(record.canonical_url) == canonical_url
+        ]
+        if len(matches) > 1:
+            raise PublishError("summary", "multiple summaries already exist for this URL")
+        if matches:
+            record = matches[0]
+            path = self._summary_path(record.id)
+            if not path.is_file():
+                raise PublishError("summary", "stored summary file is missing")
+            return record, path, False
+
+        record = self.add_summary(raw_url)
+        return record, self._summary_path(record.id), True
+
     def preflight(self) -> None:
         """Require the clean, up-to-date master repository needed for publishing."""
         root = self._run_checked(
@@ -97,3 +122,10 @@ class SummaryPublisher:
         if result.returncode != 0:
             raise PublishError(stage, "git command failed")
         return result
+
+    def _summary_path(self, record_id: str) -> Path:
+        root = self.config.summary_root.resolve(strict=False)
+        path = (self.config.summary_root / f"{record_id}.json").resolve(strict=False)
+        if path.parent != root:
+            raise PublishError("summary", "summary file path is invalid")
+        return path
