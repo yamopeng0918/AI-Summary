@@ -164,17 +164,19 @@ def test_rejects_hostname_that_resolves_to_private_address(monkeypatch: pytest.M
     assert raised.value.code == "UNSAFE_DESTINATION"
 
 
-def test_sets_project_user_agent_and_fifteen_second_timeout() -> None:
+def test_sets_html_accept_project_user_agent_and_fifteen_second_timeout() -> None:
     observed: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         observed["user_agent"] = request.headers["user-agent"]
+        observed["accept"] = request.headers["accept"]
         observed["timeout"] = request.extensions["timeout"]
         return httpx.Response(200, headers={"content-type": "text/html"}, text=FIXTURE)
 
     WebExtractor(client_for(httpx.MockTransport(handler))).extract("https://example.com/article")
 
     assert observed["user_agent"] == "AI-Digest/0.1 (+https://github.com/ai-digest)"
+    assert observed["accept"] == "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     assert observed["timeout"] == {"connect": 15.0, "read": 15.0, "write": 15.0, "pool": 15.0}
 
 

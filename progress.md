@@ -86,6 +86,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - After the controller linked this worktree to the main checkout's existing matching frontend dependencies without network access, the remaining local frontend gates all passed: Vitest `24 passed`; Astro check reported `0 errors`, `0 warnings`, and `0 hints`; Pages build emitted `3 page(s) built`; the build:pages internal dist verifier passed; and `python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` exited `0`.
 - `git diff --check` exited `0` after the Task 5 documentation updates, with line-ending warnings only.
 - End-to-end acceptance for the creation path is still pending a newly supplied or explicitly approved public article URL. No new live provider call, Git push, GitHub Actions run, or public Pages verification was executed in this Task 5 local pass.
+- The first acceptance attempt for `https://henyahouse.com/python-learning-path/` stopped safely before saving because the CDN returned HTTP 403 to the extractor's sparse request headers. A controlled comparison confirmed the public page returns HTTP 200 when the existing project User-Agent includes a standard HTML `Accept` header; TDD added that content-negotiation header without browser impersonation or access-control bypass. The focused extractor suite passed `30` tests; live acceptance retry remains pending until this fix is committed and pushed.
 
 ### 2026-08-13
 

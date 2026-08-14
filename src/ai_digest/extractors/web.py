@@ -188,7 +188,11 @@ class WebExtractor:
                 request = client.build_request(
                     "GET",
                     httpx.URL(target.url).copy_with(host=target.address),
-                    headers={"User-Agent": _USER_AGENT, "Host": target.host_header},
+                    headers={
+                        "User-Agent": _USER_AGENT,
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Host": target.host_header,
+                    },
                     timeout=_TIMEOUT_SECONDS,
                 )
                 request.extensions["sni_hostname"] = target.host
