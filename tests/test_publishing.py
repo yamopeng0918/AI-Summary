@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -29,7 +30,9 @@ class RecordingRunner:
         return self.responses.pop(0)
 
 
-def result(stdout: str = "", *, returncode: int = 0, stderr: str = "") -> CommandResult:
+def result(
+    stdout: str | bytes = "", *, returncode: int = 0, stderr: str = ""
+) -> CommandResult:
     return CommandResult(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
@@ -88,6 +91,24 @@ def expected_commands() -> list[list[str]]:
         ["git", "status", "--porcelain", "--untracked-files=no"],
         ["git", "fetch", "origin", "master"],
         ["git", "rev-list", "--left-right", "--count", "master...origin/master"],
+    ]
+
+
+def expected_gate_commands() -> list[list[str]]:
+    npm = "npm.cmd" if sys.platform == "win32" else "npm"
+    return [
+        [sys.executable, "-m", "pytest"],
+        [npm, "test"],
+        [npm, "run", "build:pages"],
+        [
+            sys.executable,
+            "scripts/verify_deployment.py",
+            "--tracked",
+            "--dist",
+            "site/dist",
+            "--base",
+            "/AI-Summary/",
+        ],
     ]
 
 
@@ -169,6 +190,107 @@ def test_preflight_does_not_leak_credentials_from_git_stderr() -> None:
     assert raised.value.message == "git command failed"
     assert leaked_token not in raised.value.message
     assert leaked_url not in raised.value.message
+
+
+def test_run_gates_runs_all_local_checks_in_order() -> None:
+    runner = RecordingRunner([result(), result(), result(), result()])
+
+    make_publisher(runner).run_gates()
+
+    assert [command for command, _ in runner.calls] == expected_gate_commands()
+    assert [cwd for _, cwd in runner.calls] == [
+        REPOSITORY_ROOT,
+        REPOSITORY_ROOT / "site",
+        REPOSITORY_ROOT / "site",
+        REPOSITORY_ROOT,
+    ]
+
+
+@pytest.mark.parametrize("failed_index", range(4))
+def test_run_gates_stops_at_first_failed_check(failed_index: int) -> None:
+    runner = RecordingRunner(
+        [
+            result(returncode=1) if index == failed_index else result()
+            for index in range(failed_index + 1)
+        ]
+    )
+
+    with pytest.raises(PublishError) as raised:
+        make_publisher(runner).run_gates()
+
+    assert raised.value.stage == "deploy"
+    assert len(runner.calls) == failed_index + 1
+    assert [command for command, _ in runner.calls] == expected_gate_commands()[: failed_index + 1]
+
+
+def test_commit_and_push_stages_only_one_utf8_summary_and_returns_head_sha() -> None:
+    record = make_record("摘要")
+    path = SUMMARY_ROOT / "摘要.json"
+    relative_path = "data/summaries/摘要.json"
+    commit_sha = "a" * 40
+    runner = RecordingRunner(
+        [
+            result(returncode=1),
+            result(),
+            result(relative_path.encode("utf-8") + b"\0"),
+            result(),
+            result(f"{commit_sha}\n"),
+            result(),
+        ]
+    )
+
+    returned_sha = make_publisher(runner).commit_and_push(record, path)
+
+    assert returned_sha == commit_sha
+    assert [command for command, _ in runner.calls] == [
+        ["git", "cat-file", "-e", f"HEAD:{relative_path}"],
+        ["git", "add", "--", relative_path],
+        ["git", "diff", "--cached", "--name-only", "-z"],
+        ["git", "commit", "-m", "content: publish 摘要"],
+        ["git", "rev-parse", "HEAD"],
+        ["git", "push", "origin", "master"],
+    ]
+    assert [cwd for _, cwd in runner.calls] == [REPOSITORY_ROOT] * 6
+
+
+def test_commit_and_push_reuses_head_file_without_empty_commit() -> None:
+    record = make_record("existing")
+    path = SUMMARY_ROOT / "existing.json"
+    relative_path = "data/summaries/existing.json"
+    file_commit = "b" * 40
+    runner = RecordingRunner([result(), result(f"{file_commit}\n"), result()])
+
+    returned_sha = make_publisher(runner).commit_and_push(record, path)
+
+    assert returned_sha == file_commit
+    assert [command for command, _ in runner.calls] == [
+        ["git", "cat-file", "-e", f"HEAD:{relative_path}"],
+        ["git", "log", "-1", "--format=%H", "--", relative_path],
+        ["git", "push", "origin", "master"],
+    ]
+    assert [cwd for _, cwd in runner.calls] == [REPOSITORY_ROOT] * 3
+
+
+def test_commit_and_push_rejects_extra_staged_paths() -> None:
+    record = make_record("example")
+    path = SUMMARY_ROOT / "example.json"
+    runner = RecordingRunner(
+        [
+            result(returncode=1),
+            result(),
+            result(b"data/summaries/example.json\0README.md\0"),
+        ]
+    )
+
+    with pytest.raises(PublishError) as raised:
+        make_publisher(runner).commit_and_push(record, path)
+
+    assert raised.value.stage == "deploy"
+    assert [command for command, _ in runner.calls] == [
+        ["git", "cat-file", "-e", "HEAD:data/summaries/example.json"],
+        ["git", "add", "--", "data/summaries/example.json"],
+        ["git", "diff", "--cached", "--name-only", "-z"],
+    ]
 
 
 def test_resolve_summary_creates_a_new_summary_when_no_canonical_match_exists(tmp_path) -> None:
