@@ -50,7 +50,9 @@ def _request(url: str) -> tuple[int, bytes]:
 
 
 def _fetch_json(url: str) -> object:
-    _status, payload = _request(url)
+    status, payload = _request(url)
+    if status != 200:
+        raise RuntimeError("request failed")
     return json.loads(payload.decode("utf-8"))
 
 
@@ -62,9 +64,15 @@ def _fetch_text(url: str) -> tuple[int, str]:
 def _build_publisher() -> SummaryPublisher:
     repository_root = REPOSITORY_ROOT
     summary_root = repository_root / "data" / "summaries"
+    repository = SummaryRepository(Path("data/summaries"))
 
     def add_summary(url: str):
-        return cli._workflow().run(url, cli._now())
+        return cli.AddArticleWorkflow(
+            extractor=cli.WebExtractor(client_factory=cli._web_client_factory),
+            summarizer=cli._summarizer(),
+            classifier=cli.FixedClassifier(sorted(cli.VALID_CATEGORIES)[0]),
+            repository=repository,
+        ).run(url, cli._now())
 
     return SummaryPublisher(
         config=PublishingConfig(
@@ -74,7 +82,7 @@ def _build_publisher() -> SummaryPublisher:
             github_repository=DEFAULT_GITHUB_REPOSITORY,
             workflow_name=DEFAULT_WORKFLOW_NAME,
         ),
-        repository=SummaryRepository(Path("data/summaries")),
+        repository=repository,
         add_summary=add_summary,
         run_command=_run_command,
         fetch_json=_fetch_json,

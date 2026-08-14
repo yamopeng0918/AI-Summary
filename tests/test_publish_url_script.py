@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -199,18 +200,40 @@ def test_fetch_json_uses_the_fixed_user_agent(monkeypatch: pytest.MonkeyPatch) -
     }
 
 
-def test_build_publisher_uses_fixed_defaults_and_existing_cli_workflow(
+def test_fetch_json_rejects_non_200_responses_without_exposing_the_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        publish_url,
+        "_request",
+        lambda _url: (503, b'{"token":"secret"}'),
+    )
+
+    with pytest.raises(RuntimeError) as raised:
+        publish_url._fetch_json("https://example.com/api")
+
+    assert str(raised.value) == "request failed"
+    assert "secret" not in str(raised.value)
+
+
+def test_build_publisher_uses_fixed_defaults_and_existing_cli_components(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     record = make_record("created")
-    calls: list[object] = []
+    captured: dict[str, object] = {}
 
     class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
         def run(self, url: str, now: datetime) -> SummaryRecord:
-            calls.append(("run", url, now))
+            captured["run"] = (url, now)
             return record
 
-    monkeypatch.setattr(publish_url.cli, "_workflow", lambda on_progress=None: calls.append(("workflow", on_progress)) or FakeWorkflow())
+    monkeypatch.setattr(publish_url.cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(publish_url.cli, "WebExtractor", lambda client_factory: ("extractor", client_factory))
+    monkeypatch.setattr(publish_url.cli, "FixedClassifier", lambda category: ("classifier", category))
+    monkeypatch.setattr(publish_url.cli, "_summarizer", lambda: "summarizer")
     monkeypatch.setattr(
         publish_url.cli,
         "_now",
@@ -227,10 +250,67 @@ def test_build_publisher_uses_fixed_defaults_and_existing_cli_workflow(
     assert publisher.config.site_root == "https://yamopeng0918.github.io/AI-Summary/"
     assert publisher.config.github_repository == "yamopeng0918/AI-Summary"
     assert publisher.config.workflow_name == "Deploy to GitHub Pages"
-    assert calls == [
-        ("workflow", None),
-        ("run", "https://example.com/article", datetime(2026, 8, 14, 12, 0, tzinfo=TAIPEI)),
-    ]
+    assert captured["repository"] is publisher.repository
+    assert captured["summarizer"] == "summarizer"
+    assert captured["run"] == (
+        "https://example.com/article",
+        datetime(2026, 8, 14, 12, 0, tzinfo=TAIPEI),
+    )
+
+
+def test_build_publisher_uses_one_script_owned_repository_for_workflow_save_and_resume(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    record = make_record("created")
+    script_repository_root = Path("data/summaries")
+    env_repository_root = Path("C:/elsewhere/summaries")
+    captured: dict[str, object] = {}
+
+    class FakeRepository:
+        def __init__(self, root: Path) -> None:
+            self.root = root
+            self._records: list[SummaryRecord] = []
+
+        def save(self, saved_record: SummaryRecord) -> None:
+            self._records.append(saved_record)
+
+        def list(self) -> list[SummaryRecord]:
+            return list(self._records)
+
+    fake_repository = FakeRepository(script_repository_root)
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+        def run(self, url: str, now: datetime) -> SummaryRecord:
+            captured["run"] = (url, now)
+            repository = captured["repository"]
+            assert isinstance(repository, FakeRepository)
+            repository.save(record)
+            return record
+
+    monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", os.fspath(env_repository_root))
+    monkeypatch.setattr(publish_url, "SummaryRepository", lambda path: fake_repository)
+    monkeypatch.setattr(publish_url.cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(publish_url.cli, "WebExtractor", lambda client_factory: ("extractor", client_factory))
+    monkeypatch.setattr(publish_url.cli, "FixedClassifier", lambda category: ("classifier", category))
+    monkeypatch.setattr(publish_url.cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(
+        publish_url.cli,
+        "_now",
+        lambda: datetime(2026, 8, 14, 12, 0, tzinfo=TAIPEI),
+    )
+
+    publisher = publish_url._build_publisher()
+    created = publisher.add_summary("https://example.com/article")
+
+    assert created == record
+    assert publisher.repository is fake_repository
+    assert captured["repository"] is fake_repository
+    assert publisher.repository.root == script_repository_root
+    assert publisher.repository.root != env_repository_root
+    assert publisher.repository.list() == [record]
 
 
 def test_script_starts_by_file_path_in_a_clean_subprocess_without_module_errors() -> None:

@@ -81,7 +81,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 - Added `scripts/publish_url.py` as the thin one-command publishing entry point and covered it with `tests/test_publish_url_script.py`.
 - Verified the new script locally with focused tests: `8 passed, 1 warning`.
-- Re-ran the full Python suite after the script/docs updates: `181 passed, 1 warning`, including the subprocess startup regression that executes `python -I scripts/publish_url.py --help`.
+- Re-ran the full Python suite after the final review fixes: `183 passed, 1 warning`, including the subprocess startup regression that executes `python -I scripts/publish_url.py --help` plus the new script-owned repository and non-200 workflow-status regressions.
 - Kept Task 5 composition on the approved local defaults only: `SummaryRepository(Path("data/summaries"))`, `cli._workflow().run(url, cli._now())`, subprocess with `shell=False`, and urllib requests with the fixed `AI-Digest-Publisher/1.0` user agent.
 - After the controller linked this worktree to the main checkout's existing matching frontend dependencies without network access, the remaining local frontend gates all passed: Vitest `24 passed`; Astro check reported `0 errors`, `0 warnings`, and `0 hints`; Pages build emitted `3 page(s) built`; the build:pages internal dist verifier passed; and `python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` exited `0`.
 - `git diff --check` exited `0` after the Task 5 documentation updates, with line-ending warnings only.
