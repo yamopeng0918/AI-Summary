@@ -99,7 +99,7 @@ def test_main_prints_success_output_with_id_commit_workflow_and_detail_url(
 def test_main_reports_publish_error_safely_without_echoing_the_url_or_key(
     monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
-    secret = "ghp_superSecretToken123"
+    secret = "credential-marker-publish-123"
     url = "https://example.com/private?token=123"
     publisher = FakePublisher(
         error=PublishError("deploy", "local publish failed")
@@ -122,7 +122,7 @@ def test_main_reports_publish_error_safely_without_echoing_the_url_or_key(
 def test_main_reports_digest_error_safely_without_echoing_the_url_or_key(
     monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
-    secret = "sk-proj-SECRET1234567890"
+    secret = "credential-marker-digest-456"
     url = "https://example.com/public-article"
     publisher = FakePublisher(
         error=DigestError("input", "FAILED", "safe input failure", False)
