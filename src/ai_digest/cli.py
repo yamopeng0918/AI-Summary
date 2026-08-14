@@ -44,7 +44,7 @@ def _summarizer() -> Summarizer:
         if not api_key:
             raise DigestError("input", "MISSING_API_KEY", "GEMINI_API_KEY is required for add", False)
         return GeminiSummarizer(
-            genai.Client(api_key=api_key), os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+            genai.Client(api_key=api_key), os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
         )
     if provider == "openai":
         api_key = os.environ.get("OPENAI_API_KEY")

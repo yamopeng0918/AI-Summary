@@ -213,7 +213,7 @@ def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatc
     assert isinstance(extractor, cli.WebExtractor)
     assert extractor._client_factory is cli._web_client_factory
     assert captured["gemini_api_key"] == "test-key"
-    assert captured["summarizer_model"] == "gemini-2.5-flash"
+    assert captured["summarizer_model"] == "gemini-3.6-flash"
 
 
 def test_production_can_select_openai(monkeypatch) -> None:

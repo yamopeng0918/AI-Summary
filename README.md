@@ -33,7 +33,7 @@ Gemini is the default provider. Configure Gemini explicitly in PowerShell:
 ```powershell
 $env:AI_DIGEST_PROVIDER = 'gemini'
 $env:GEMINI_API_KEY = '<your-gemini-api-key>'
-$env:GEMINI_MODEL = 'gemini-2.5-flash' # optional; this is the default
+$env:GEMINI_MODEL = 'gemini-3.6-flash' # optional; this is the default
 ```
 
 To use OpenAI explicitly:
