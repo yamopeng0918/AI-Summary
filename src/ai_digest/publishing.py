@@ -125,7 +125,14 @@ class SummaryPublisher:
 
     def _summary_path(self, record_id: str) -> Path:
         root = self.config.summary_root.resolve(strict=False)
-        path = (self.config.summary_root / f"{record_id}.json").resolve(strict=False)
+        raw_path = self.config.summary_root / f"{record_id}.json"
+        try:
+            relative_path = raw_path.relative_to(self.config.summary_root)
+        except ValueError as error:
+            raise PublishError("summary", "summary file path is invalid") from error
+        if len(relative_path.parts) != 1:
+            raise PublishError("summary", "summary file path is invalid")
+        path = raw_path.resolve(strict=False)
         if path.parent != root:
             raise PublishError("summary", "summary file path is invalid")
         return path

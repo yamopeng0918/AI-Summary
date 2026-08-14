@@ -246,3 +246,18 @@ def test_resolve_summary_maps_invalid_public_urls_to_a_safe_publishing_error(tmp
 
     assert raised.value.stage == "summary"
     assert raised.value.message == "URL must be a public HTTP(S) URL"
+
+
+def test_resolve_summary_rejects_new_records_whose_ids_hide_traversal_segments(tmp_path) -> None:
+    created = make_record("nested/../escape", canonicalUrl="https://example.com/article")
+
+    with pytest.raises(PublishError) as raised:
+        make_publisher(
+            RecordingRunner([]),
+            repository=FakeRepository([]),
+            add_summary=lambda _raw_url: created,
+            summary_root=tmp_path,
+        ).resolve_summary("https://example.com/article")
+
+    assert raised.value.stage == "summary"
+    assert raised.value.message == "summary file path is invalid"
