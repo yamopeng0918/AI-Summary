@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-13
+> 最後同步：2026-08-14
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -42,7 +42,7 @@
 - [x] 實作 `add`、`list`、`show`、`archive` 與 `publish` CLI 指令。
 - [x] 以本地 HTML fixture、真實 `WebExtractor`、確定性摘要替身、`FixedClassifier` 與暫存 repository 完成 fixture-to-JSON 整合測試。
 - [x] 驗證同一 URL 第二次新增被拒絕且檔案數不變。
-- [ ] 取得使用者核准的公開文章 URL 與本機 `GEMINI_API_KEY`，執行一次 Gemini 真實來源驗收（**UNVERIFIED**）。
+- [x] 取得使用者核准的公開文章 URL 與本機 `GEMINI_API_KEY`，以預設 `gemini-3.6-flash` 完成一次 Gemini 真實來源驗收與暫存 JSON 驗證。
 
 ### Astro 本機網站
 
@@ -115,3 +115,4 @@
 
 - [x] Provider-aware CLI composition: Gemini is the default; OpenAI is explicit; only the selected provider key is required; there is no automatic fallback; `list`, `show`, `archive`, and `publish` are key-free.
 - [x] Automated provider configuration coverage completed; the full Python suite passed 132 tests.
+- [x] Migrated the Gemini default to stable `gemini-3.6-flash`; full Python automation passed 133 tests and the user-approved live acceptance completed on 2026-08-14.

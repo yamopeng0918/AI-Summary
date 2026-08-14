@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-13
+> 最後更新：2026-08-14
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：GitHub Pages 已完成真實部署與公開 smoke 驗收；provider 選擇自動化測試已完成，Gemini 真實公開網頁來源驗收尚未執行
+> 目前階段：GitHub Pages 與 Gemini 真實公開網頁來源驗收已完成；下一核心里程碑為正式分類模型
 >
-> 下次續作：由使用者提供核准的公開文章 URL 與本機 `GEMINI_API_KEY`，完成 Gemini 真實來源驗收
+> 下次續作：建立人工標註分類資料集，訓練並可重現評估優於最大類基準的分類模型
 
 ## 專案目標
 
@@ -25,8 +25,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 階段 | 狀態 | 進度摘要 |
 |---|---|---|
 | 企畫與需求收斂 | 已完成 | 核心三來源 MVP、非目標、架構邊界與驗收標準已納入核准規格 |
-| 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 132 項通過 |
-| 公開網頁真實來源驗收 | 未驗證 | 未提供使用者核准 URL 與本機 `GEMINI_API_KEY`；不以任意網址代替。Gemini live acceptance 為 **UNVERIFIED** |
+| 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 133 項通過 |
+| 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
@@ -49,14 +49,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - [x] Gemini 與 OpenAI 結構輸出驗證失敗時不會寫入不完整資料；CLI 預設 Gemini、可明確選擇 OpenAI，且只驗證所選 provider 的金鑰。
 - [x] Astro 能驗證資料並建置首頁與獨立詳情頁，提供搜尋、分類篩選與日期排序。
 - [x] 已執行追蹤檔案憑證格式掃描與差異空白檢查。
-- [ ] 使用一個由使用者提供並核准的真實公開文章與本機 `GEMINI_API_KEY` 完成端到端驗收；Gemini live acceptance 為 **UNVERIFIED**。
+- [x] 使用一個由使用者提供並核准的真實公開文章與本機 `GEMINI_API_KEY` 完成端到端驗收；生成 JSON 已重新載入並通過 Schema 與敏感資訊檢查。
 
 ## 已知風險、阻礙與設定注意事項
 
 | 項目 | 目前處理原則 |
 |---|---|
 | 公開來源受付費牆、登入或反爬蟲限制 | 不嘗試繞過，回報明確的結構化錯誤 |
-| 真實網頁與 Gemini 驗收 | 尚缺使用者核准 URL 與本機 `GEMINI_API_KEY`，明確記錄為 **UNVERIFIED** |
+| 真實網頁與 Gemini 驗收 | 已以核准文章與預設 `gemini-3.6-flash` 通過；SDK 仍輸出 Models API 的 AFC 建議警告，但不影響 structured-output 結果 |
 | 開發用固定分類器 | 只用於管線串接，不視為分類模型完成 |
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
@@ -66,6 +66,13 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-14
+
+- 以 TDD 修正尾端斜線重新導向：canonical URL 仍為 `https://pala.tw/python-web-crawler`，HTTP transport 會保留伺服器 `Location` 提供的 `/`；回歸測試先重現 `TOO_MANY_REDIRECTS`，修正後完整 Python suite 133 項通過。
+- Gemini API 對新使用者拒絕原預設 `gemini-2.5-flash`；依官方穩定模型文件與使用者核准，以 TDD 將預設更新為固定版本 `gemini-3.6-flash`，保留 `GEMINI_MODEL` override 且不加入自動 fallback。
+- 使用核准文章 `https://pala.tw/python-web-crawler/` 執行預設 Gemini live acceptance，所有階段 `input`、`extract`、`summarize`、`classify`、`validate`、`save`、`complete` 均成功，record ID 為 `20260814-python爬蟲新手筆記-pala-tw-8ed66e81`。
+- 暫存目錄僅產生一筆 JSON；以 `SummaryRepository` 重新載入後確認 Schema 有效、`published`、3 個重點、有效分類、5 個標籤，且不含 `GEMINI_API_KEY`、`OPENAI_API_KEY` 或 `GITHUB_TOKEN` 標記。暫存驗收資料未加入 repository。
 
 ### 2026-08-13
 
@@ -107,10 +114,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 取得使用者對一個可直接讀取公開文章 URL 的明確核准，並由使用者在本機提供 `GEMINI_API_KEY`。
-2. 執行真實公開網頁 `add`，確認各階段輸出、合法 JSON 與無憑證外洩。
-3. 重新建置 Astro，確認新資料的詳情頁出現於 `site/dist`。
-4. 進入分類資料標註與可重現評估、YouTube 及公開社群里程碑。
+1. 建立 4～6 個互斥主分類的人工標註資料集與版本／內容雜湊。
+2. 以固定 random seed 訓練 TF-IDF 與 Logistic Regression，記錄 Accuracy、Macro F1、混淆矩陣與最大類基準。
+3. 模型測試 Accuracy 嚴格高於最大類基準後，再進入 YouTube 與公開社群里程碑。
 
 ## 更新規則
 
@@ -119,5 +125,5 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 ## Provider configuration update (2026-08-13)
 
 - Provider-aware CLI composition is complete and automated tests cover the Gemini default, explicit OpenAI selection, invalid providers, selected-key validation, and key-free local commands.
-- Gemini is the default (`GEMINI_API_KEY`, default model `gemini-2.5-flash`); OpenAI is selected explicitly (`OPENAI_API_KEY`, default model `gpt-5-mini`). There is no automatic fallback.
-- Full Python automation passed: 132 tests. No real Gemini API key or public-article live acceptance was used, so Gemini live acceptance remains **UNVERIFIED**.
+- Gemini is the default (`GEMINI_API_KEY`, default model migrated to `gemini-3.6-flash` on 2026-08-14); OpenAI is selected explicitly (`OPENAI_API_KEY`, default model `gpt-5-mini`). There is no automatic fallback.
+- Full Python automation passed: 133 tests. Gemini live acceptance completed on 2026-08-14 with the user-approved public article and a temporary repository.
