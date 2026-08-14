@@ -1,9 +1,16 @@
 from pathlib import Path
 import sys
+from urllib.parse import quote
 
 import pytest
 
-from ai_digest.publishing import CommandResult, PublishError, PublishingConfig, SummaryPublisher
+from ai_digest.publishing import (
+    CommandResult,
+    PublishError,
+    PublishingConfig,
+    PublishResult,
+    SummaryPublisher,
+)
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 
 
@@ -64,6 +71,12 @@ def make_publisher(
     repository: object | None = None,
     add_summary=None,
     summary_root: Path = SUMMARY_ROOT,
+    fetch_json=None,
+    fetch_text=None,
+    sleep=None,
+    now=None,
+    poll_attempts: int = 30,
+    poll_delay_seconds: float = 10,
 ) -> SummaryPublisher:
     config = PublishingConfig(
         repository_root=REPOSITORY_ROOT,
@@ -71,16 +84,18 @@ def make_publisher(
         site_root="https://yamopeng0918.github.io/AI-Summary/",
         github_repository="yamopeng0918/AI-Summary",
         workflow_name="Deploy to GitHub Pages",
+        poll_attempts=poll_attempts,
+        poll_delay_seconds=poll_delay_seconds,
     )
     return SummaryPublisher(
         config=config,
         repository=repository if repository is not None else object(),
         add_summary=add_summary or (lambda _url: None),
         run_command=runner,
-        fetch_json=lambda _url: {},
-        fetch_text=lambda _url: (200, ""),
-        sleep=lambda _seconds: None,
-        now=lambda: 0,
+        fetch_json=fetch_json or (lambda _url: {}),
+        fetch_text=fetch_text or (lambda _url: (200, "")),
+        sleep=sleep or (lambda _seconds: None),
+        now=now or (lambda: 0),
     )
 
 
@@ -317,6 +332,411 @@ def test_commit_and_push_rejects_an_in_repo_non_summary_path_before_git() -> Non
     assert raised.value.stage == "deploy"
     assert raised.value.message == "summary file path does not match record id"
     assert runner.calls == []
+
+
+def test_wait_for_workflow_ignores_other_commits_and_workflows_until_matching_success() -> None:
+    commit_sha = "a" * 40
+    workflow_url = "https://github.com/yamopeng0918/AI-Summary/actions/runs/42"
+    api_url = (
+        "https://api.github.com/repos/yamopeng0918/AI-Summary/actions/runs"
+        f"?head_sha={commit_sha}&per_page=20"
+    )
+    responses = [
+        {
+            "workflow_runs": [
+                {
+                    "head_sha": "b" * 40,
+                    "name": "Deploy to GitHub Pages",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://github.com/yamopeng0918/AI-Summary/actions/runs/11",
+                }
+            ]
+        },
+        {
+            "workflow_runs": [
+                {
+                    "head_sha": commit_sha,
+                    "name": "Different Workflow",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": "https://github.com/yamopeng0918/AI-Summary/actions/runs/12",
+                }
+            ]
+        },
+        {
+            "workflow_runs": [
+                {
+                    "head_sha": commit_sha,
+                    "name": "Deploy to GitHub Pages",
+                    "status": "queued",
+                    "conclusion": None,
+                    "html_url": workflow_url,
+                }
+            ]
+        },
+        {
+            "workflow_runs": [
+                {
+                    "head_sha": commit_sha,
+                    "name": "Deploy to GitHub Pages",
+                    "status": "in_progress",
+                    "conclusion": None,
+                    "html_url": workflow_url,
+                }
+            ]
+        },
+        {
+            "workflow_runs": [
+                {
+                    "head_sha": commit_sha,
+                    "name": "Deploy to GitHub Pages",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": workflow_url,
+                }
+            ]
+        },
+    ]
+    seen_urls: list[str] = []
+    sleeps: list[float] = []
+
+    def fake_fetch_json(url: str) -> dict[str, object]:
+        seen_urls.append(url)
+        return responses.pop(0)
+
+    workflow_run_url = make_publisher(
+        RecordingRunner([]),
+        fetch_json=fake_fetch_json,
+        sleep=lambda seconds: sleeps.append(seconds),
+        poll_attempts=5,
+        poll_delay_seconds=7,
+    ).wait_for_workflow(commit_sha)
+
+    assert workflow_run_url == workflow_url
+    assert seen_urls == [api_url] * 5
+    assert sleeps == [7, 7, 7, 7]
+
+
+def test_wait_for_workflow_raises_for_a_failed_matching_run_without_sleeping() -> None:
+    commit_sha = "a" * 40
+    publisher = make_publisher(
+        RecordingRunner([]),
+        fetch_json=lambda _url: {
+            "workflow_runs": [
+                {
+                    "head_sha": commit_sha,
+                    "name": "Deploy to GitHub Pages",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/yamopeng0918/AI-Summary/actions/runs/99",
+                }
+            ]
+        },
+        sleep=lambda _seconds: pytest.fail("wait_for_workflow should not sleep after completion"),
+    )
+
+    with pytest.raises(PublishError) as raised:
+        publisher.wait_for_workflow(commit_sha)
+
+    assert raised.value.stage == "workflow"
+    assert raised.value.message == "workflow run failed"
+
+
+def test_wait_for_workflow_times_out_after_bounded_incomplete_attempts() -> None:
+    commit_sha = "a" * 40
+    sleeps: list[float] = []
+    seen_urls: list[str] = []
+
+    def fake_fetch_json(url: str) -> dict[str, object]:
+        seen_urls.append(url)
+        return {"workflow_runs": []}
+
+    publisher = make_publisher(
+        RecordingRunner([]),
+        fetch_json=fake_fetch_json,
+        sleep=lambda seconds: sleeps.append(seconds),
+        poll_attempts=3,
+        poll_delay_seconds=5,
+    )
+
+    with pytest.raises(PublishError) as raised:
+        publisher.wait_for_workflow(commit_sha)
+
+    assert raised.value.stage == "workflow"
+    assert raised.value.message == "workflow run did not complete in time"
+    assert len(seen_urls) == 3
+    assert sleeps == [5, 5]
+
+
+def test_verify_public_uses_cache_busted_homepage_and_quoted_detail_route() -> None:
+    record_id = "中文 摘要?#"
+    homepage_url = "https://yamopeng0918.github.io/AI-Summary/?verify=1723600000"
+    detail_url = (
+        "https://yamopeng0918.github.io/AI-Summary/summaries/"
+        f"{quote(record_id, safe='')}/"
+    )
+    seen_urls: list[str] = []
+
+    def fake_fetch_text(url: str) -> tuple[int, str]:
+        seen_urls.append(url)
+        if url == homepage_url:
+            return 200, f"<a>{record_id}</a>"
+        if url == detail_url:
+            return 200, "<h1>detail</h1>"
+        raise AssertionError(url)
+
+    make_publisher(
+        RecordingRunner([]),
+        fetch_text=fake_fetch_text,
+        now=lambda: 1723600000,
+    ).verify_public(record_id)
+
+    assert seen_urls == [homepage_url, detail_url]
+
+
+@pytest.mark.parametrize(
+    ("fetch_text", "expected_message"),
+    [
+        (
+            lambda _url: (503, "down"),
+            "public page request failed",
+        ),
+        (
+            lambda _url: (_ for _ in ()).throw(RuntimeError("boom")),
+            "public page request failed",
+        ),
+    ],
+    ids=["non-200", "fetch-error"],
+)
+def test_verify_public_maps_request_problems_to_safe_public_errors(fetch_text, expected_message) -> None:
+    publisher = make_publisher(
+        RecordingRunner([]),
+        fetch_text=fetch_text,
+        now=lambda: 1,
+    )
+
+    with pytest.raises(PublishError) as raised:
+        publisher.verify_public("example")
+
+    assert raised.value.stage == "public"
+    assert raised.value.message == expected_message
+
+
+def test_verify_public_rejects_homepages_missing_the_exact_record_id() -> None:
+    publisher = make_publisher(
+        RecordingRunner([]),
+        fetch_text=lambda _url: (200, "<a>something-else</a>"),
+        now=lambda: 1,
+    )
+
+    with pytest.raises(PublishError) as raised:
+        publisher.verify_public("example")
+
+    assert raised.value.stage == "public"
+    assert raised.value.message == "published summary is not visible on the homepage"
+
+
+def test_publish_orchestrates_a_new_summary_successfully(tmp_path) -> None:
+    record = make_record("fresh", canonicalUrl="https://example.com/article")
+    calls: list[object] = []
+
+    def add_summary(raw_url: str) -> SummaryRecord:
+        calls.append(("add_summary", raw_url))
+        return record
+
+    publisher = make_publisher(
+        RecordingRunner([]),
+        repository=FakeRepository([]),
+        add_summary=add_summary,
+        summary_root=tmp_path,
+    )
+    publisher.preflight = lambda: calls.append("preflight")
+    publisher.run_gates = lambda: calls.append("run_gates")
+    publisher.commit_and_push = lambda current_record, path: calls.append(
+        ("commit_and_push", current_record.id, path)
+    ) or ("c" * 40)
+    publisher.wait_for_workflow = lambda commit_sha: calls.append(
+        ("wait_for_workflow", commit_sha)
+    ) or "https://github.com/yamopeng0918/AI-Summary/actions/runs/77"
+    publisher.verify_public = lambda record_id: calls.append(("verify_public", record_id))
+
+    result = publisher.publish("https://example.com/article?utm_source=newsletter")
+
+    assert result == PublishResult(
+        record_id="fresh",
+        commit_sha="c" * 40,
+        workflow_url="https://github.com/yamopeng0918/AI-Summary/actions/runs/77",
+        detail_url="https://yamopeng0918.github.io/AI-Summary/summaries/fresh/",
+    )
+    assert calls == [
+        "preflight",
+        ("add_summary", "https://example.com/article?utm_source=newsletter"),
+        "run_gates",
+        ("commit_and_push", "fresh", tmp_path / "fresh.json"),
+        ("wait_for_workflow", "c" * 40),
+        ("verify_public", "fresh"),
+    ]
+
+
+def test_publish_reuses_retained_json_without_calling_the_provider(tmp_path) -> None:
+    record = make_record("existing", canonicalUrl="https://example.com/article")
+    existing_path = tmp_path / "existing.json"
+    existing_path.write_text(record.model_dump_json(by_alias=True), encoding="utf-8")
+    add_calls: list[str] = []
+    calls: list[object] = []
+
+    publisher = make_publisher(
+        RecordingRunner([]),
+        repository=FakeRepository([record]),
+        add_summary=lambda raw_url: add_calls.append(raw_url) or make_record("unexpected"),
+        summary_root=tmp_path,
+    )
+    publisher.preflight = lambda: calls.append("preflight")
+    publisher.run_gates = lambda: calls.append("run_gates")
+    publisher.commit_and_push = lambda current_record, path: calls.append(
+        ("commit_and_push", current_record.id, path)
+    ) or ("d" * 40)
+    publisher.wait_for_workflow = lambda commit_sha: calls.append(
+        ("wait_for_workflow", commit_sha)
+    ) or "https://github.com/yamopeng0918/AI-Summary/actions/runs/88"
+    publisher.verify_public = lambda record_id: calls.append(("verify_public", record_id))
+
+    result = publisher.publish("https://example.com/article?utm_source=newsletter")
+
+    assert result.record_id == "existing"
+    assert result.commit_sha == "d" * 40
+    assert add_calls == []
+    assert calls == [
+        "preflight",
+        "run_gates",
+        ("commit_and_push", "existing", existing_path),
+        ("wait_for_workflow", "d" * 40),
+        ("verify_public", "existing"),
+    ]
+
+
+def test_publish_supports_an_already_pushed_resume_without_calling_the_provider(tmp_path) -> None:
+    record = make_record("existing", canonicalUrl="https://example.com/article")
+    existing_path = tmp_path / "existing.json"
+    existing_path.write_text(record.model_dump_json(by_alias=True), encoding="utf-8")
+    add_calls: list[str] = []
+    calls: list[object] = []
+
+    publisher = make_publisher(
+        RecordingRunner([]),
+        repository=FakeRepository([record]),
+        add_summary=lambda raw_url: add_calls.append(raw_url) or make_record("unexpected"),
+        summary_root=tmp_path,
+    )
+    publisher.preflight = lambda: calls.append("preflight")
+    publisher.run_gates = lambda: calls.append("run_gates")
+    publisher.commit_and_push = lambda current_record, path: calls.append(
+        ("commit_and_push", current_record.id, path)
+    ) or ("e" * 40)
+    publisher.wait_for_workflow = lambda commit_sha: calls.append(
+        ("wait_for_workflow", commit_sha)
+    ) or "https://github.com/yamopeng0918/AI-Summary/actions/runs/89"
+    publisher.verify_public = lambda record_id: calls.append(("verify_public", record_id))
+
+    result = publisher.publish("https://example.com/article")
+
+    assert result.workflow_url.endswith("/89")
+    assert add_calls == []
+    assert calls == [
+        "preflight",
+        "run_gates",
+        ("commit_and_push", "existing", existing_path),
+        ("wait_for_workflow", "e" * 40),
+        ("verify_public", "existing"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("failing_step", "expected_calls"),
+    [
+        (
+            "run_gates",
+            ["preflight", ("add_summary", "https://example.com/article"), "run_gates"],
+        ),
+        (
+            "commit_and_push",
+            [
+                "preflight",
+                ("add_summary", "https://example.com/article"),
+                "run_gates",
+                ("commit_and_push", "fresh"),
+            ],
+        ),
+        (
+            "wait_for_workflow",
+            [
+                "preflight",
+                ("add_summary", "https://example.com/article"),
+                "run_gates",
+                ("commit_and_push", "fresh"),
+                ("wait_for_workflow", "f" * 40),
+            ],
+        ),
+        (
+            "verify_public",
+            [
+                "preflight",
+                ("add_summary", "https://example.com/article"),
+                "run_gates",
+                ("commit_and_push", "fresh"),
+                ("wait_for_workflow", "f" * 40),
+                ("verify_public", "fresh"),
+            ],
+        ),
+    ],
+)
+def test_publish_stops_after_the_first_failing_stage(
+    tmp_path, failing_step: str, expected_calls: list[object]
+) -> None:
+    record = make_record("fresh", canonicalUrl="https://example.com/article")
+    calls: list[object] = []
+
+    def add_summary(raw_url: str) -> SummaryRecord:
+        calls.append(("add_summary", raw_url))
+        return record
+
+    publisher = make_publisher(
+        RecordingRunner([]),
+        repository=FakeRepository([]),
+        add_summary=add_summary,
+        summary_root=tmp_path,
+    )
+    publisher.preflight = lambda: calls.append("preflight")
+
+    def fail(stage: str) -> None:
+        raise PublishError(stage, f"{stage} failed")
+
+    publisher.run_gates = (
+        (lambda: calls.append("run_gates") or fail("deploy"))
+        if failing_step == "run_gates"
+        else (lambda: calls.append("run_gates"))
+    )
+    publisher.commit_and_push = (
+        (lambda current_record, _path: calls.append(("commit_and_push", current_record.id)) or fail("deploy"))
+        if failing_step == "commit_and_push"
+        else (lambda current_record, _path: calls.append(("commit_and_push", current_record.id)) or ("f" * 40))
+    )
+    publisher.wait_for_workflow = (
+        (lambda commit_sha: calls.append(("wait_for_workflow", commit_sha)) or fail("workflow"))
+        if failing_step == "wait_for_workflow"
+        else (lambda commit_sha: calls.append(("wait_for_workflow", commit_sha)) or "https://github.com/yamopeng0918/AI-Summary/actions/runs/90")
+    )
+    publisher.verify_public = (
+        (lambda record_id: calls.append(("verify_public", record_id)) or fail("public"))
+        if failing_step == "verify_public"
+        else (lambda record_id: calls.append(("verify_public", record_id)))
+    )
+
+    with pytest.raises(PublishError):
+        publisher.publish("https://example.com/article")
+
+    assert calls == expected_calls
 
 
 def test_resolve_summary_creates_a_new_summary_when_no_canonical_match_exists(tmp_path) -> None:

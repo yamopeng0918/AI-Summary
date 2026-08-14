@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Any, Callable, Sequence, TypeAlias
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from ai_digest.domain import DigestError, SummaryRecord
 from ai_digest.url_normalizer import normalize_public_url
@@ -40,6 +41,16 @@ class PublishingConfig:
     workflow_name: str
     poll_attempts: int = 30
     poll_delay_seconds: float = 10
+
+
+@dataclass(frozen=True)
+class PublishResult:
+    """The stable output of a successful publish run."""
+
+    record_id: str
+    commit_sha: str
+    workflow_url: str
+    detail_url: str
 
 
 class SummaryPublisher:
@@ -187,6 +198,57 @@ class SummaryPublisher:
         self._run_deploy_checked(["git", "push", "origin", "master"], self.config.repository_root)
         return commit
 
+    def wait_for_workflow(self, commit_sha: str) -> str:
+        """Wait for the matching GitHub Actions workflow run to succeed."""
+        url = (
+            f"https://api.github.com/repos/{self.config.github_repository}/actions/runs"
+            f"?head_sha={commit_sha}&per_page=20"
+        )
+        for attempt in range(self.config.poll_attempts):
+            try:
+                payload = self.fetch_json(url)
+            except Exception as error:
+                raise PublishError("workflow", "workflow status request failed") from error
+
+            workflow_run = self._matching_workflow_run(payload, commit_sha)
+            if workflow_run is not None:
+                status = workflow_run.get("status")
+                if status == "completed":
+                    if workflow_run.get("conclusion") == "success":
+                        run_url = str(workflow_run.get("html_url") or "")
+                        if not run_url:
+                            raise PublishError("workflow", "workflow run URL is unavailable")
+                        return run_url
+                    raise PublishError("workflow", "workflow run failed")
+            if attempt + 1 < self.config.poll_attempts:
+                self.sleep(self.config.poll_delay_seconds)
+        raise PublishError("workflow", "workflow run did not complete in time")
+
+    def verify_public(self, record_id: str) -> None:
+        """Verify the public Pages routes expose the published summary."""
+        homepage_url = self._cache_busted_homepage_url()
+        homepage = self._fetch_public_text(homepage_url)
+        if record_id not in homepage:
+            raise PublishError("public", "published summary is not visible on the homepage")
+
+        detail_url = self.detail_url(record_id)
+        self._fetch_public_text(detail_url)
+
+    def publish(self, raw_url: str) -> PublishResult:
+        """Run the full local-only publishing workflow."""
+        self.preflight()
+        record, path, _created = self.resolve_summary(raw_url)
+        self.run_gates()
+        commit_sha = self.commit_and_push(record, path)
+        workflow_url = self.wait_for_workflow(commit_sha)
+        self.verify_public(record.id)
+        return PublishResult(
+            record_id=record.id,
+            commit_sha=commit_sha,
+            workflow_url=workflow_url,
+            detail_url=self.detail_url(record.id),
+        )
+
     def _run_checked(self, command: Sequence[str], stage: str, cwd: Path) -> CommandResult:
         result = self.run_command(command, cwd)
         if result.returncode != 0:
@@ -220,6 +282,43 @@ class SummaryPublisher:
         if path.parent != root:
             raise PublishError("deploy", "summary file path does not match record id")
         return path
+
+    def _matching_workflow_run(
+        self, payload: object, commit_sha: str
+    ) -> dict[str, object] | None:
+        if not isinstance(payload, dict):
+            return None
+        runs = payload.get("workflow_runs")
+        if not isinstance(runs, list):
+            return None
+        for run in runs:
+            if not isinstance(run, dict):
+                continue
+            if run.get("head_sha") != commit_sha:
+                continue
+            if run.get("name") != self.config.workflow_name:
+                continue
+            return run
+        return None
+
+    def _cache_busted_homepage_url(self) -> str:
+        parts = urlsplit(self.config.site_root)
+        query = parse_qsl(parts.query, keep_blank_values=True)
+        query.append(("verify", str(self.now())))
+        return urlunsplit(parts._replace(query=urlencode(query)))
+
+    def detail_url(self, record_id: str) -> str:
+        base = self.config.site_root.rstrip("/")
+        return f"{base}/summaries/{quote(record_id, safe='')}/"
+
+    def _fetch_public_text(self, url: str) -> str:
+        try:
+            status_code, text = self.fetch_text(url)
+        except Exception as error:
+            raise PublishError("public", "public page request failed") from error
+        if status_code != 200:
+            raise PublishError("public", "public page request failed")
+        return text
 
     @staticmethod
     def _stdout_text(result: CommandResult) -> str:
