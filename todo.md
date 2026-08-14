@@ -116,7 +116,7 @@
 - [x] 新增 `scripts/publish_url.py`，以固定 repo / Pages / workflow 預設值組合本機 one-command publishing 流程。
 - [x] 新增 `tests/test_publish_url_script.py`，覆蓋單一 URL 參數、成功輸出、安全錯誤、subprocess `shell=False` 與固定 User-Agent。
 - [x] 更新 `README.md`，記錄 `publish_url.py` 的 `.venv` 與已啟用 venv 兩種執行方式。
-- [ ] 以使用者新提供或明確核准的公開文章 URL 完成 Task 5 creation-path 端到端驗收，並記錄新的 commit / workflow run / 公開頁面結果。
+- [x] 以使用者核准的 `https://henyahouse.com/python-learning-path/` 完成 Task 5 creation-path 端到端驗收；摘要 commit `5dfd87e24158ec4226c44a09a32c659b5fa1a197`、workflow run `31797946291` 與公開列表／詳情頁均已驗證。
 - [x] 以不經網路安裝的本地既有前端依賴完成 Task 5 frontend gates：Vitest 24 passed、Astro check 0 errors/0 warnings/0 hints、Pages build 3 pages、build:pages internal dist verifier passed、`python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` exit 0。
 
 ## Provider configuration update (2026-08-13)
