@@ -94,7 +94,7 @@
 - [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
 - [x] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（<https://yamopeng0918.github.io/AI-Summary/>）。
 - [x] 執行部署前建置與追蹤檔案、`site/dist` 敏感資料掃描。
-- [ ] 驗證部署失敗時保留本機資料與可重試狀態。
+- [x] 驗證部署失敗時保留本機資料與既有公開站；修正 Unicode 路徑 gate 後由 workflow run `31767893009` 成功重試部署。
 
 ## 選配後續工作（不列入核心 MVP）
 

@@ -25,12 +25,12 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 階段 | 狀態 | 進度摘要 |
 |---|---|---|
 | 企畫與需求收斂 | 已完成 | 核心三來源 MVP、非目標、架構邊界與驗收標準已納入核准規格 |
-| 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 133 項通過 |
+| 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
-| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；最終 commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1` 已由 workflow run `31674616177` 成功部署，公開網址與 demo detail 均通過 smoke 驗收 |
+| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -61,7 +61,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
-| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31674616177` 成功部署最終安全修正，並通過 workflow 內及獨立公開 smoke 驗收 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
@@ -69,6 +69,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ### 2026-08-14
 
+- 新摘要 commit `32a12d1` 觸發 workflow run `31766478611`，Python 測試通過，但部署驗證器將 `git ls-files` 的中文 quoted path 當成實際檔名，於 `--tracked` 掃描失敗；Astro build 與 deploy 因此被跳過，既有公開站與本機摘要 JSON 均保持不變。
+- 以 TDD 將 tracked-path 讀取改為 `git ls-files -z` binary output、NUL 分隔與 UTF-8 `surrogateescape` 解碼；新增中文檔名及 Git failure 回歸測試。完整 Python 135 項、Vitest 24 項、Astro 0 diagnostics、3 pages、combined tracked/dist verifier 與 `git diff --check` 均通過。
+- 修正 commit `b139f86` 的 workflow run [`31767893009`](https://github.com/yamopeng0918/AI-Summary/actions/runs/31767893009) 結論為 `success`；cache-bypass 公開首頁包含 `20260814-python爬蟲新手筆記-pala-tw-8ed66e81` 與標題，中文詳情頁回傳 HTTP 200。
 - 以 TDD 修正尾端斜線重新導向：canonical URL 仍為 `https://pala.tw/python-web-crawler`，HTTP transport 會保留伺服器 `Location` 提供的 `/`；回歸測試先重現 `TOO_MANY_REDIRECTS`，修正後完整 Python suite 133 項通過。
 - Gemini API 對新使用者拒絕原預設 `gemini-2.5-flash`；依官方穩定模型文件與使用者核准，以 TDD 將預設更新為固定版本 `gemini-3.6-flash`，保留 `GEMINI_MODEL` override 且不加入自動 fallback。
 - 使用核准文章 `https://pala.tw/python-web-crawler/` 執行預設 Gemini live acceptance，所有階段 `input`、`extract`、`summarize`、`classify`、`validate`、`save`、`complete` 均成功，record ID 為 `20260814-python爬蟲新手筆記-pala-tw-8ed66e81`。
