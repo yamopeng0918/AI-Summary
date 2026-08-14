@@ -245,7 +245,7 @@ def test_commit_and_push_stages_only_one_utf8_summary_and_returns_head_sha() -> 
     commit_sha = "a" * 40
     runner = RecordingRunner(
         [
-            result(returncode=1),
+            result(returncode=128),
             result(),
             result(relative_path.encode("utf-8") + b"\0"),
             result(),

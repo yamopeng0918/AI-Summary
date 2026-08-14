@@ -87,6 +87,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - `git diff --check` exited `0` after the Task 5 documentation updates, with line-ending warnings only.
 - End-to-end acceptance for the creation path is still pending a newly supplied or explicitly approved public article URL. No new live provider call, Git push, GitHub Actions run, or public Pages verification was executed in this Task 5 local pass.
 - The first acceptance attempt for `https://henyahouse.com/python-learning-path/` stopped safely before saving because the CDN returned HTTP 403 to the extractor's sparse request headers. A controlled comparison confirmed the public page returns HTTP 200 when the existing project User-Agent includes a standard HTML `Accept` header; TDD added that content-negotiation header without browser impersonation or access-control bypass. The focused extractor suite passed `30` tests; live acceptance retry remains pending until this fix is committed and pushed.
+- The resumed acceptance then exposed a real Git return-code mismatch before staging: `git cat-file -e HEAD:<new-summary>` returns `128` when the JSON exists on disk but not in `HEAD`, while the mocked test had used `1`. The retained JSON was not staged or regenerated. TDD now covers the observed `128` result while preserving rejection of unexpected codes; the focused publishing suite passed `37` tests and acceptance remains safely resumable.
 
 ### 2026-08-13
 

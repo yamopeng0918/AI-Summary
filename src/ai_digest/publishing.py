@@ -174,7 +174,7 @@ class SummaryPublisher:
                 ["git", "push", "origin", "master"], self.config.repository_root
             )
             return commit
-        if existing.returncode != 1:
+        if existing.returncode not in {1, 128}:
             raise PublishError("deploy", "git command failed")
 
         self._run_deploy_checked(
