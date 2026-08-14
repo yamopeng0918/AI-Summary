@@ -9,6 +9,11 @@ import sys
 import time
 from urllib.request import Request, urlopen
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPOSITORY_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 from ai_digest import cli
 from ai_digest.domain import DigestError
 from ai_digest.publishing import CommandResult, PublishError, PublishingConfig, SummaryPublisher
@@ -55,7 +60,7 @@ def _fetch_text(url: str) -> tuple[int, str]:
 
 
 def _build_publisher() -> SummaryPublisher:
-    repository_root = Path(__file__).resolve().parents[1]
+    repository_root = REPOSITORY_ROOT
     summary_root = repository_root / "data" / "summaries"
 
     def add_summary(url: str):

@@ -2,6 +2,7 @@ import json
 import subprocess
 from datetime import datetime
 from pathlib import Path
+import sys
 from urllib.request import Request
 from zoneinfo import ZoneInfo
 
@@ -230,3 +231,19 @@ def test_build_publisher_uses_fixed_defaults_and_existing_cli_workflow(
         ("workflow", None),
         ("run", "https://example.com/article", datetime(2026, 8, 14, 12, 0, tzinfo=TAIPEI)),
     ]
+
+
+def test_script_starts_by_file_path_in_a_clean_subprocess_without_module_errors() -> None:
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "publish_url.py"
+
+    result = subprocess.run(
+        [sys.executable, "-I", str(script_path), "--help"],
+        cwd=script_path.parent.parent,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Publish one public article URL to AI Digest." in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
