@@ -3,10 +3,12 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
 from typer.testing import CliRunner
 
 from ai_digest import cli
 from ai_digest.cli import create_app
+from ai_digest.classifiers.evaluation import CategoryCounts, CategoryMetrics, EvaluationResult
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 from ai_digest.storage import SummaryRepository
 
@@ -69,6 +71,59 @@ def make_app(tmp_path: Path, workflow: FakeWorkflow):
     return create_app(workflow_factory, lambda: repository, lambda: NOW), repository
 
 
+def make_evaluation_result() -> EvaluationResult:
+    category_counts = tuple(CategoryCounts(category, train=24, test=6) for category in sorted(VALID_CATEGORIES))
+    category_metrics = tuple(
+        CategoryMetrics(category, precision=0.8, recall=0.8, f1=0.8, support=6)
+        for category in sorted(VALID_CATEGORIES)
+    )
+    return EvaluationResult(
+        dataset_sha256="a" * 64,
+        split_sha256="b" * 64,
+        seed=42,
+        train_samples=144,
+        test_samples=36,
+        category_counts=category_counts,
+        accuracy=0.8,
+        macro_f1=0.79,
+        category_metrics=category_metrics,
+        confusion_matrix=tuple(tuple(int(row == column) * 6 for column in range(6)) for row in range(6)),
+        majority_baseline_accuracy=1 / 6,
+        beats_baseline=True,
+        evaluated_at=NOW.isoformat(),
+        evaluation_pipeline=object(),
+    )
+
+
+class FakeEvaluationService:
+    def __init__(self, result: EvaluationResult | None = None, error: DigestError | None = None) -> None:
+        self.result = result
+        self.error = error
+        self.run_calls = 0
+
+    def run(self) -> EvaluationResult:
+        self.run_calls += 1
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+    def cli_payload(self, result: EvaluationResult) -> dict[str, object]:
+        assert result is self.result
+        return {
+            "accuracy": result.accuracy,
+            "macroF1": result.macro_f1,
+            "majorityBaselineAccuracy": result.majority_baseline_accuracy,
+            "beatsBaseline": result.beats_baseline,
+            "datasetPath": "data/classifier/training.csv",
+            "categoryPath": "data/categories.json",
+            "splitPath": "data/classifier/split.json",
+            "reportPath": "data/classifier/evaluation.json",
+            "modelPath": "models/classifier.joblib",
+            "manifestPath": "models/classifier-manifest.json",
+        }
+
+
 def test_add_reports_all_pipeline_stages_and_saved_location(tmp_path) -> None:
     app, _ = make_app(tmp_path, FakeWorkflow(make_record()))
 
@@ -104,6 +159,66 @@ def test_add_reports_public_domain_errors_to_stderr(tmp_path) -> None:
     assert result.exit_code == 1
     assert "URL must be public" in result.stderr
     assert "not-a-url" not in result.stderr
+
+
+def test_evaluate_classifier_emits_metrics_and_artifact_paths(tmp_path: Path) -> None:
+    repository = SummaryRepository(tmp_path)
+    evaluation_service = FakeEvaluationService(result=make_evaluation_result())
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 0
+    assert evaluation_service.run_calls == 1
+    assert json.loads(result.stdout) == {
+        "accuracy": 0.8,
+        "macroF1": 0.79,
+        "majorityBaselineAccuracy": 1 / 6,
+        "beatsBaseline": True,
+        "datasetPath": "data/classifier/training.csv",
+        "categoryPath": "data/categories.json",
+        "splitPath": "data/classifier/split.json",
+        "reportPath": "data/classifier/evaluation.json",
+        "modelPath": "models/classifier.joblib",
+        "manifestPath": "models/classifier-manifest.json",
+    }
+
+
+@pytest.mark.parametrize(
+    "error",
+    (
+        DigestError(
+            "classify",
+            "EVALUATION_BELOW_BASELINE",
+            "Classifier evaluation did not beat the majority baseline",
+            False,
+        ),
+        DigestError("classify", "INVALID_DATASET", "Classifier dataset is invalid", False),
+    ),
+)
+def test_evaluate_classifier_reports_domain_failures_as_json_on_stderr(
+    tmp_path: Path,
+    error: DigestError,
+) -> None:
+    repository = SummaryRepository(tmp_path)
+    evaluation_service = FakeEvaluationService(error=error)
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == error.as_dict()
 
 
 def test_list_prints_id_title_category_and_status(tmp_path) -> None:
@@ -181,6 +296,32 @@ def test_production_app_keeps_local_commands_available_without_a_provider_key(tm
         "message": "GEMINI_API_KEY is required for add",
         "retryable": False,
     }
+
+
+def test_production_evaluate_classifier_is_key_free_and_does_not_construct_provider_clients(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    evaluation_service = FakeEvaluationService(result=make_evaluation_result())
+    captured: dict[str, object] = {}
+
+    def service_factory(*, clock):
+        captured["clock"] = clock
+        return evaluation_service
+
+    def unexpected_provider(*args, **kwargs):
+        raise AssertionError("evaluate-classifier must not construct a provider client")
+
+    monkeypatch.setattr(cli, "ClassifierEvaluationService", service_factory)
+    monkeypatch.setattr(cli, "OpenAI", unexpected_provider)
+    monkeypatch.setattr(cli.genai, "Client", unexpected_provider)
+
+    result = CliRunner().invoke(cli.app, ["evaluate-classifier"])
+
+    assert result.exit_code == 0
+    assert captured["clock"] is cli._now
+    assert evaluation_service.run_calls == 1
 
 
 def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatch) -> None:

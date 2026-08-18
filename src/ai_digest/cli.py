@@ -13,6 +13,7 @@ from google import genai
 from openai import OpenAI
 
 from ai_digest.classifiers.fixed import FixedClassifier
+from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.storage import SummaryRepository
@@ -64,6 +65,10 @@ def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWor
     )
 
 
+def _evaluation_service() -> ClassifierEvaluationService:
+    return ClassifierEvaluationService(clock=_now)
+
+
 def _emit(payload: dict[str, object], *, err: bool = False) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False), err=err)
 
@@ -72,9 +77,11 @@ def create_app(
     workflow_factory: Callable[[Callable[[str], None]], AddArticleWorkflow],
     repository_factory: Callable[[], SummaryRepository],
     clock: Callable[[], datetime],
+    evaluation_service_factory: Callable[[], ClassifierEvaluationService] | None = None,
 ) -> typer.Typer:
     """Create the CLI with dependencies supplied by the caller."""
     application = typer.Typer(no_args_is_help=True)
+    evaluation_factory = evaluation_service_factory or _evaluation_service
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)
@@ -124,6 +131,16 @@ def create_app(
     def publish(record_id: str) -> None:
         """Publish one previously archived summary."""
         set_status(record_id, "published")
+
+    @application.command("evaluate-classifier")
+    def evaluate_classifier() -> None:
+        """Evaluate reviewed classifier data and promote an accepted model."""
+        try:
+            service = evaluation_factory()
+            result = service.run()
+            _emit(service.cli_payload(result))
+        except DigestError as error:
+            report_error(error)
 
     return application
 
