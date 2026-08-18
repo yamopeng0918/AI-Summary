@@ -208,6 +208,37 @@ def test_approved_cohort_rejects_more_than_the_expected_per_category() -> None:
     assert (raised.value.stage, raised.value.code) == ("classify", "UNAPPROVED_DATA")
 
 
+def test_rejected_history_is_loadable_but_excluded_from_cohort_and_hash(tmp_path: Path) -> None:
+    path = tmp_path / "with-rejected-history.csv"
+    approved_rows = [
+        valid_row(
+            id=f"approved-{index}",
+            label=category,
+            sourceUrl=f"https://example.com/approved-{index}",
+        )
+        for index, category in enumerate(CATEGORIES, start=1)
+    ]
+    write_dataset(
+        path,
+        [
+            *approved_rows,
+            valid_row(
+                id="rejected-history",
+                label=CATEGORIES[0],
+                sourceUrl="https://example.com/rejected-history",
+                reviewStatus="rejected",
+            ),
+        ],
+    )
+
+    examples = load_dataset(path, CATEGORIES)
+    cohort = approved_cohort(examples, CATEGORIES, expected_per_category=1)
+
+    assert examples[-1].review_status == "rejected"
+    assert [example.id for example in cohort] == [row["id"] for row in approved_rows]
+    assert dataset_sha256(examples) == dataset_sha256(cohort)
+
+
 def test_dataset_sha256_is_order_independent_and_changes_with_content() -> None:
     examples = load_dataset(FIXTURE_ROOT / "training-small.csv", CATEGORIES)
 
