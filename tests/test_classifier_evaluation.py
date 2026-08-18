@@ -160,6 +160,28 @@ def test_create_split_rejects_missing_duplicate_or_foreign_examples(
     assert (raised.value.stage, raised.value.code) == ("classify", "INVALID_DATASET")
 
 
+def test_public_category_apis_reject_a_noncanonical_category_order() -> None:
+    examples = [example(category, index) for category in CATEGORIES for index in range(2)]
+    noncanonical_categories = (*CATEGORIES[1:], CATEGORIES[0])
+    split = create_split(examples, CATEGORIES, seed=42, test_per_category=1)
+
+    with pytest.raises(DigestError) as split_error:
+        create_split(examples, noncanonical_categories, seed=42, test_per_category=1)
+    with pytest.raises(DigestError) as evaluation_error:
+        evaluation.evaluate_split(
+            examples,
+            split,
+            noncanonical_categories,
+            evaluated_at=datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc),
+        )
+
+    assert (split_error.value.stage, split_error.value.code) == ("classify", "CATEGORY_MISMATCH")
+    assert (evaluation_error.value.stage, evaluation_error.value.code) == (
+        "classify",
+        "CATEGORY_MISMATCH",
+    )
+
+
 class MajorityPredictions(FixedPredictions):
     def predict(self, texts: list[str]) -> list[str]:
         return [CATEGORIES[0] for _ in texts]

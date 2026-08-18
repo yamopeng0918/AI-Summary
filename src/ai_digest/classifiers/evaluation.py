@@ -27,6 +27,15 @@ def _invalid_dataset() -> DigestError:
     return DigestError("classify", "INVALID_DATASET", "Classifier dataset is invalid", False)
 
 
+def _category_mismatch() -> DigestError:
+    return DigestError(
+        "classify",
+        "CATEGORY_MISMATCH",
+        "Classifier categories do not match configuration",
+        False,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CategoryCounts:
     """Train and test counts for one configured category."""
@@ -144,6 +153,18 @@ def _validate_categories(categories: Sequence[str]) -> tuple[str, ...]:
         raise _invalid_dataset()
     if len(set(ordered_categories)) != len(ordered_categories):
         raise _invalid_dataset()
+    try:
+        configured_categories = tuple(
+            json.loads(
+                (Path(__file__).resolve().parents[3] / "data" / "categories.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        )
+    except (OSError, TypeError, ValueError):
+        raise _category_mismatch() from None
+    if ordered_categories != configured_categories:
+        raise _category_mismatch()
     return ordered_categories
 
 
