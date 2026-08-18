@@ -1,0 +1,7 @@
+id,batch,text,label,sourceUrl,sourceTitle,rationale,reviewStatus,reviewNote
+example-1,1,  人工智慧模型的應用  ,人工智慧, https://example.com/ai ,  AI 文章  ,  屬於人工智慧主題  ,approved,
+example-2,1,  Python 測試技巧  ,程式開發, https://example.com/code ,  程式文章  ,  屬於程式開發主題  ,approved,
+example-3,2,  科技公司市場分析  ,科技產業, https://example.com/industry ,  產業文章  ,  屬於科技產業主題  ,approved,
+example-4,2,  團隊管理方法  ,商業與職場, https://example.com/work ,  職場文章  ,  屬於商業與職場主題  ,approved,
+example-5,3,  使用者體驗設計  ,設計與創意, https://example.com/design ,  設計文章  ,  屬於設計與創意主題  ,approved,
+example-6,3,  自主學習規劃  ,生活與學習, https://example.com/life ,  學習文章  ,  屬於生活與學習主題  ,approved,
