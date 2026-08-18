@@ -177,12 +177,24 @@ def _temporary_path(path: Path, purpose: str) -> Path:
         os.close(descriptor)
 
 
-def _backup(path: Path, owned_paths: list[Path]) -> Path | None:
+def _backup_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.rollback-backup")
+
+
+def _backup(path: Path) -> Path | None:
     if not path.exists():
         return None
-    backup_path = _temporary_path(path, "backup")
-    owned_paths.append(backup_path)
-    shutil.copyfile(path, backup_path)
+    backup_path = _backup_path(path)
+    created = False
+    try:
+        with backup_path.open("xb") as backup_file:
+            created = True
+            with path.open("rb") as artifact_file:
+                shutil.copyfileobj(artifact_file, backup_file)
+    except Exception:
+        if created:
+            backup_path.unlink(missing_ok=True)
+        raise
     return backup_path
 
 
@@ -190,7 +202,16 @@ def _restore(path: Path, backup_path: Path | None) -> None:
     if backup_path is None:
         path.unlink(missing_ok=True)
     else:
-        backup_path.replace(path)
+        shutil.copyfile(backup_path, path)
+
+
+def _matches_backup(path: Path, backup_path: Path | None) -> bool:
+    if backup_path is None:
+        return not path.exists()
+    try:
+        return path.read_bytes() == backup_path.read_bytes()
+    except OSError:
+        return False
 
 
 def _restore_pair(
@@ -198,6 +219,7 @@ def _restore_pair(
     manifest_path: Path,
     model_backup: Path | None,
     manifest_backup: Path | None,
+    categories: Sequence[str],
 ) -> None:
     restoration_error: OSError | None = None
     for path, backup_path in (
@@ -210,6 +232,20 @@ def _restore_pair(
             restoration_error = restoration_error or error
     if restoration_error is not None:
         raise restoration_error
+    if not _matches_backup(model_path, model_backup) or not _matches_backup(
+        manifest_path, manifest_backup
+    ):
+        raise OSError("artifact restoration could not be verified")
+    if model_backup is not None and manifest_backup is not None:
+        TrainedClassifier(model_path, manifest_path, categories)
+
+
+def _discard_backups(backup_paths: Sequence[Path]) -> None:
+    for backup_path in backup_paths:
+        try:
+            backup_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def save_accepted_model(
@@ -240,7 +276,8 @@ def save_accepted_model(
 
     model_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    owned_paths: list[Path] = []
+    staged_paths: list[Path] = []
+    created_backups: list[Path] = []
     model_backup: Path | None = None
     manifest_backup: Path | None = None
     promotion_started = False
@@ -252,9 +289,9 @@ def save_accepted_model(
         )
 
         staged_model = _temporary_path(model_path, "stage")
-        owned_paths.append(staged_model)
+        staged_paths.append(staged_model)
         staged_manifest = _temporary_path(manifest_path, "stage")
-        owned_paths.append(staged_manifest)
+        staged_paths.append(staged_manifest)
         joblib.dump(pipeline, staged_model)
         manifest = {
             "schemaVersion": 1,
@@ -273,12 +310,17 @@ def save_accepted_model(
 
         # Validation happens while both production artifacts are still untouched.
         TrainedClassifier(staged_model, staged_manifest, ordered_categories)
-        model_backup = _backup(model_path, owned_paths)
-        manifest_backup = _backup(manifest_path, owned_paths)
+        model_backup = _backup(model_path)
+        if model_backup is not None:
+            created_backups.append(model_backup)
+        manifest_backup = _backup(manifest_path)
+        if manifest_backup is not None:
+            created_backups.append(manifest_backup)
 
         promotion_started = True
         staged_model.replace(model_path)
         staged_manifest.replace(manifest_path)
+        TrainedClassifier(model_path, manifest_path, ordered_categories)
     except Exception:
         if promotion_started:
             try:
@@ -287,12 +329,19 @@ def save_accepted_model(
                     manifest_path,
                     model_backup,
                     manifest_backup,
+                    ordered_categories,
                 )
-            except OSError:
+            except Exception:
                 pass
+            else:
+                _discard_backups(created_backups)
+        else:
+            _discard_backups(created_backups)
         raise _save_failed() from None
+    else:
+        _discard_backups(created_backups)
     finally:
-        for owned_path in owned_paths:
+        for owned_path in staged_paths:
             try:
                 owned_path.unlink(missing_ok=True)
             except OSError:

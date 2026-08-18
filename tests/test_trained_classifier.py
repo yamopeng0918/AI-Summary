@@ -382,5 +382,64 @@ def test_save_accepted_model_restores_both_old_artifacts_when_pair_promotion_fai
     assert TrainedClassifier(model_path, manifest_path, CATEGORIES).predict(
         "Python 測試與除錯實務"
     ) == "程式開發"
+    assert not (tmp_path / ".classifier.joblib.rollback-backup").exists()
+    assert not (tmp_path / ".classifier-manifest.json.rollback-backup").exists()
     assert not list(tmp_path.glob(".*.stage-*.tmp"))
     assert not list(tmp_path.glob(".*.backup-*.tmp"))
+
+
+def test_save_accepted_model_retains_deterministic_backups_when_rollback_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    model_path = tmp_path / "classifier.joblib"
+    manifest_path = tmp_path / "classifier-manifest.json"
+    model_backup = tmp_path / ".classifier.joblib.rollback-backup"
+    manifest_backup = tmp_path / ".classifier-manifest.json.rollback-backup"
+    write_artifacts(model_path, manifest_path)
+    old_model = model_path.read_bytes()
+    old_manifest = manifest_path.read_bytes()
+    examples = training_examples()
+    original_replace = Path.replace
+    original_copyfile = trained.shutil.copyfile
+    promotion_failed = False
+    rollback_failed = False
+
+    def fail_manifest_promotion_and_model_restore(self: Path, target: Path) -> Path:
+        nonlocal promotion_failed, rollback_failed
+        if not promotion_failed and target == manifest_path and ".stage-" in self.name:
+            promotion_failed = True
+            raise OSError("secret simulated promotion failure")
+        if promotion_failed and target == model_path and "backup" in self.name:
+            rollback_failed = True
+            raise OSError("secret simulated rollback failure")
+        return original_replace(self, target)
+
+    def fail_copied_model_restore(source: Path, target: Path) -> str:
+        nonlocal rollback_failed
+        if Path(source) == model_backup and Path(target) == model_path:
+            rollback_failed = True
+            raise OSError("secret simulated rollback failure")
+        return original_copyfile(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_manifest_promotion_and_model_restore)
+    monkeypatch.setattr(trained.shutil, "copyfile", fail_copied_model_restore)
+
+    with pytest.raises(DigestError) as raised:
+        save_accepted_model(
+            examples,
+            accepted_evaluation(examples),
+            CATEGORIES,
+            model_path,
+            manifest_path,
+            TRAINED_AT,
+        )
+
+    assert promotion_failed is True
+    assert rollback_failed is True
+    assert_safe_error(raised.value, "PREDICTION_FAILED", "Classifier model could not be saved")
+    assert "secret" not in str(raised.value)
+    assert model_path.read_bytes() != old_model
+    assert manifest_path.read_bytes() == old_manifest
+    assert model_backup.read_bytes() == old_model
+    assert manifest_backup.read_bytes() == old_manifest
+    assert not list(tmp_path.glob(".*.stage-*.tmp"))
