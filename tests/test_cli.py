@@ -490,6 +490,7 @@ def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatc
             captured["summarizer_model"] = model
 
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_classifier", lambda: "trained-classifier")
     monkeypatch.setattr(cli, "genai", type("FakeGenAI", (), {"Client": FakeGeminiClient}), raising=False)
     monkeypatch.setattr(cli, "GeminiSummarizer", FakeGeminiSummarizer, raising=False)
 
@@ -500,6 +501,7 @@ def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatc
     assert extractor._client_factory is cli._web_client_factory
     assert captured["gemini_api_key"] == "test-key"
     assert captured["summarizer_model"] == "gemini-3.6-flash"
+    assert captured["classifier"] == "trained-classifier"
 
 
 def test_production_can_select_openai(monkeypatch) -> None:
@@ -518,6 +520,7 @@ def test_production_can_select_openai(monkeypatch) -> None:
             captured["summarizer_model"] = model
 
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_classifier", lambda: "trained-classifier")
     monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: captured.update(openai_api_key=api_key))
     monkeypatch.setattr(cli, "OpenAISummarizer", FakeOpenAISummarizer)
 
@@ -525,6 +528,60 @@ def test_production_can_select_openai(monkeypatch) -> None:
 
     assert captured["openai_api_key"] == "test-key"
     assert captured["summarizer_model"] == "gpt-5-mini"
+    assert captured["classifier"] == "trained-classifier"
+
+
+def test_production_classifier_uses_only_repository_controlled_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeTrainedClassifier:
+        def __init__(self, model_path: Path, manifest_path: Path, categories: tuple[str, ...]) -> None:
+            captured["model_path"] = model_path
+            captured["manifest_path"] = manifest_path
+            captured["categories"] = categories
+
+    monkeypatch.setattr(cli, "TrainedClassifier", FakeTrainedClassifier)
+
+    classifier = cli._classifier()
+
+    assert isinstance(classifier, FakeTrainedClassifier)
+    assert captured == {
+        "model_path": Path("models/classifier.joblib"),
+        "manifest_path": Path("models/classifier-manifest.json"),
+        "categories": tuple(json.loads(Path("data/categories.json").read_text(encoding="utf-8"))),
+    }
+
+
+def test_production_add_reports_missing_model_before_workflow_runs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    workflow_started = False
+
+    class FakeWorkflow:
+        def __init__(self, **_dependencies: object) -> None:
+            nonlocal workflow_started
+            workflow_started = True
+
+    monkeypatch.setattr(cli, "TrainedClassifier", lambda *_args: (_ for _ in ()).throw(
+        DigestError("classify", "MODEL_NOT_FOUND", "Classifier model artifacts were not found", False)
+    ))
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    app = create_app(cli._workflow, lambda: SummaryRepository(tmp_path), lambda: NOW)
+
+    result = CliRunner().invoke(app, ["add", "https://example.com/article"])
+
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == {
+        "stage": "classify",
+        "code": "MODEL_NOT_FOUND",
+        "message": "Classifier model artifacts were not found",
+        "retryable": False,
+    }
+    assert workflow_started is False
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_unknown_provider_is_rejected_without_creating_a_client(monkeypatch) -> None:

@@ -70,7 +70,7 @@ def _build_publisher() -> SummaryPublisher:
         return cli.AddArticleWorkflow(
             extractor=cli.WebExtractor(client_factory=cli._web_client_factory),
             summarizer=cli._summarizer(),
-            classifier=cli.FixedClassifier(sorted(cli.VALID_CATEGORIES)[0]),
+            classifier=cli._classifier(),
             repository=repository,
         ).run(url, cli._now())
 

@@ -12,9 +12,10 @@ import typer
 from google import genai
 from openai import OpenAI
 
-from ai_digest.classifiers.fixed import FixedClassifier
+from ai_digest.classifiers.base import Classifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
-from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
+from ai_digest.classifiers.trained import TrainedClassifier
+from ai_digest.domain import DigestError, SummaryRecord
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
@@ -38,6 +39,14 @@ def _web_client_factory() -> httpx.Client:
     return httpx.Client()
 
 
+def _classifier() -> Classifier:
+    return TrainedClassifier(
+        Path("models/classifier.joblib"),
+        Path("models/classifier-manifest.json"),
+        tuple(json.loads(Path("data/categories.json").read_text(encoding="utf-8"))),
+    )
+
+
 def _summarizer() -> Summarizer:
     provider = os.environ.get("AI_DIGEST_PROVIDER", "gemini").strip().lower()
     if provider == "gemini":
@@ -59,7 +68,7 @@ def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWor
     return AddArticleWorkflow(
         extractor=WebExtractor(client_factory=_web_client_factory),
         summarizer=_summarizer(),
-        classifier=FixedClassifier(sorted(VALID_CATEGORIES)[0]),
+        classifier=_classifier(),
         repository=_repository(),
         on_progress=on_progress,
     )

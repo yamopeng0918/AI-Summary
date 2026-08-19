@@ -62,7 +62,28 @@ ai-digest archive '<summary-id>'
 ai-digest publish '<summary-id>'
 ```
 
-`add` 只處理可直接讀取的公開 HTML 文章，遇到登入、付費牆、私有位址或其他不可讀來源會明確失敗。目前 CLI 使用 `FixedClassifier` 只是開發期串接邊界，不是已完成的分類模型。正式分類器必須以可重現評估記錄 Accuracy、Macro F1、混淆矩陣與最大類基準，而且測試 Accuracy 必須嚴格高於該基準。
+`add` 只處理可直接讀取的公開 HTML 文章，遇到登入、付費牆、私有位址或其他不可讀來源會明確失敗。
+
+## 分類模型評估與啟用
+
+先依下列方式安裝含分類器的開發依賴，再執行評估：
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+ai-digest evaluate-classifier
+```
+
+評估只使用 `data/classifier/training.csv` 中 `reviewStatus=approved` 的資料。正式評估前必須有六個既有分類各 30 筆、共 180 筆已審查資料；`pending` 與 `rejected` 資料保留為審查紀錄，但不得進入訓練或評估。評估會記錄 Accuracy、Macro F1、混淆矩陣與最大類基準；只有測試 Accuracy 嚴格高於該基準時，才會產生可供正式分類使用的模型。
+
+評估報告與受 repository 控制的正式 artifact 路徑固定如下：
+
+- `data/classifier/evaluation.json`
+- `models/classifier.joblib`
+- `models/classifier-manifest.json`
+- `data/categories.json`
+
+生產 `add` 和 `scripts/publish_url.py` 僅載入這組固定 artifact，沒有環境變數、CLI 參數或靜默回退可改用其他模型。模型尚未通過評估或 artifact 不存在時，在已完成摘要 provider 設定後，建立摘要工作流程會回報結構化 `classify`／`MODEL_NOT_FOUND` 錯誤；不會開始擷取或摘要，也不會寫入摘要 JSON。`FixedClassifier` 僅保留給測試與明確的本機開發組裝，不能作為生產回退。
 
 ## One-command publishing script
 
