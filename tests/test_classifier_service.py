@@ -66,6 +66,7 @@ def make_service(
     events: list[str],
     *,
     result: EvaluationResult | None = None,
+    persistence_failure: str | None = None,
 ) -> tuple[ClassifierEvaluationService, SplitAssignment]:
     split = make_split()
     split_path = tmp_path / "data" / "classifier" / "split.json"
@@ -112,10 +113,14 @@ def make_service(
         if path == tmp_path / "data" / "classifier" / "evaluation.json":
             events.append("report")
             assert payload is evaluation_result
+            if persistence_failure == "report":
+                raise OSError(f"RAW_REPORT_MARKER: {path.resolve()}")
         else:
             events.append("split-write")
             assert path == split_path
             assert payload is split
+            if persistence_failure == "split":
+                raise OSError(f"RAW_SPLIT_MARKER: {path.resolve()}")
 
     def model_saver(approved, evaluation, categories, model_path, manifest_path, trained_at):
         events.append("model")
@@ -168,6 +173,43 @@ def test_service_persists_failed_report_and_does_not_replace_model(tmp_path: Pat
         "message": "Classifier evaluation did not beat the majority baseline",
         "retryable": False,
     }
+    assert events == ["load", "cohort", "split", "evaluate", "report"]
+
+
+def test_service_converts_split_persistence_oserror_to_safe_domain_error(tmp_path: Path) -> None:
+    events: list[str] = []
+    service, _ = make_service(tmp_path, events, persistence_failure="split")
+    service.split_path.unlink()
+
+    with pytest.raises(DigestError) as raised:
+        service.run()
+
+    assert raised.value.as_dict() == {
+        "stage": "classify",
+        "code": "INVALID_DATASET",
+        "message": "Classifier evaluation artifacts could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_SPLIT_MARKER" not in str(raised.value)
+    assert str(service.split_path.resolve()) not in str(raised.value)
+    assert events == ["load", "cohort", "split", "split-write"]
+
+
+def test_service_converts_report_persistence_oserror_to_safe_domain_error(tmp_path: Path) -> None:
+    events: list[str] = []
+    service, _ = make_service(tmp_path, events, persistence_failure="report")
+
+    with pytest.raises(DigestError) as raised:
+        service.run()
+
+    assert raised.value.as_dict() == {
+        "stage": "classify",
+        "code": "INVALID_DATASET",
+        "message": "Classifier evaluation artifacts could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_REPORT_MARKER" not in str(raised.value)
+    assert str(service.report_path.resolve()) not in str(raised.value)
     assert events == ["load", "cohort", "split", "evaluate", "report"]
 
 

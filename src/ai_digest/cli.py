@@ -81,7 +81,9 @@ def create_app(
 ) -> typer.Typer:
     """Create the CLI with dependencies supplied by the caller."""
     application = typer.Typer(no_args_is_help=True)
-    evaluation_factory = evaluation_service_factory or _evaluation_service
+    evaluation_factory = evaluation_service_factory
+    if evaluation_factory is None:
+        evaluation_factory = lambda: ClassifierEvaluationService(clock=clock)
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)

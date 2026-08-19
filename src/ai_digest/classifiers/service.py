@@ -56,6 +56,29 @@ def _persisted_split_matches(path: Path, expected: SplitAssignment) -> bool:
     return _canonical_json(payload) == _canonical_json(expected.as_dict())
 
 
+def _artifact_persistence_error() -> DigestError:
+    return DigestError(
+        "classify",
+        "INVALID_DATASET",
+        "Classifier evaluation artifacts could not be saved",
+        False,
+    )
+
+
+def _write_evaluation_artifact(
+    path: Path,
+    payload: Mapping[str, Any] | SplitAssignment | EvaluationResult,
+    writer: Callable[
+        [Path, Mapping[str, Any] | SplitAssignment | EvaluationResult], None
+    ],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        writer(path, payload)
+    except OSError:
+        raise _artifact_persistence_error() from None
+
+
 class ClassifierEvaluationService:
     """Validate data, evaluate one split, persist its report, and promote accepted models."""
 
@@ -102,13 +125,11 @@ class ClassifierEvaluationService:
         cohort = self._cohort_selector(examples, categories, 30)
         split = self._split_creator(cohort, categories, seed=42, test_per_category=6)
         if not _persisted_split_matches(self.split_path, split):
-            self.split_path.parent.mkdir(parents=True, exist_ok=True)
-            self._json_writer(self.split_path, split)
+            _write_evaluation_artifact(self.split_path, split, self._json_writer)
 
         now = self.clock()
         result = self._evaluator(cohort, split, categories, evaluated_at=now)
-        self.report_path.parent.mkdir(parents=True, exist_ok=True)
-        self._json_writer(self.report_path, result)
+        _write_evaluation_artifact(self.report_path, result, self._json_writer)
         if (
             not result.beats_baseline
             or result.accuracy <= result.majority_baseline_accuracy

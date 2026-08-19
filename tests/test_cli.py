@@ -8,7 +8,13 @@ from typer.testing import CliRunner
 
 from ai_digest import cli
 from ai_digest.cli import create_app
-from ai_digest.classifiers.evaluation import CategoryCounts, CategoryMetrics, EvaluationResult
+from ai_digest.classifiers.evaluation import (
+    CategoryCounts,
+    CategoryMetrics,
+    EvaluationResult,
+    SplitAssignment,
+)
+from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 from ai_digest.storage import SummaryRepository
 
@@ -221,6 +227,60 @@ def test_evaluate_classifier_reports_domain_failures_as_json_on_stderr(
     assert json.loads(result.stderr) == error.as_dict()
 
 
+def test_evaluate_classifier_hides_evaluation_artifact_persistence_details(
+    tmp_path: Path,
+) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    categories = tuple(sorted(VALID_CATEGORIES))
+    split = SplitAssignment(
+        seed=42,
+        dataset_sha256="a" * 64,
+        train_ids=("train",),
+        test_ids=("test",),
+        category_counts=tuple(CategoryCounts(category, train=1, test=1) for category in categories),
+    )
+    split_path = tmp_path / "classifier" / "split.json"
+    split_path.parent.mkdir(parents=True)
+    split_path.write_text(json.dumps(split.as_dict()), encoding="utf-8")
+    report_path = tmp_path / "private" / "evaluation.json"
+
+    def persistence_failure(path: Path, payload: object) -> None:
+        assert path == report_path
+        raise OSError(f"RAW_PERSISTENCE_MARKER: {path.resolve()}")
+
+    evaluation_service = ClassifierEvaluationService(
+        clock=lambda: NOW,
+        split_path=split_path,
+        report_path=report_path,
+        category_loader=lambda path: categories,
+        dataset_loader=lambda path, configured: [object()],
+        cohort_selector=lambda examples, configured, count: [object()],
+        split_creator=lambda examples, configured, **options: split,
+        evaluator=lambda examples, assignment, configured, **options: make_evaluation_result(),
+        json_writer=persistence_failure,
+        model_saver=lambda *args: None,
+    )
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "stage": "classify",
+        "code": "INVALID_DATASET",
+        "message": "Classifier evaluation artifacts could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_PERSISTENCE_MARKER" not in result.stderr
+    assert str(report_path.resolve()) not in result.stderr
+
+
 def test_list_prints_id_title_category_and_status(tmp_path) -> None:
     app, repository = make_app(tmp_path, FakeWorkflow(make_record()))
     repository.save(make_record())
@@ -322,6 +382,30 @@ def test_production_evaluate_classifier_is_key_free_and_does_not_construct_provi
     assert result.exit_code == 0
     assert captured["clock"] is cli._now
     assert evaluation_service.run_calls == 1
+
+
+def test_create_app_default_evaluation_service_uses_its_injected_clock(monkeypatch) -> None:
+    evaluation_service = FakeEvaluationService(result=make_evaluation_result())
+    captured: dict[str, object] = {}
+
+    def injected_clock() -> datetime:
+        return NOW
+
+    def service_factory(*, clock):
+        captured["clock"] = clock
+        return evaluation_service
+
+    monkeypatch.setattr(cli, "ClassifierEvaluationService", service_factory)
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(Path("unused")),
+        injected_clock,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 0
+    assert captured["clock"] is injected_clock
 
 
 def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatch) -> None:
