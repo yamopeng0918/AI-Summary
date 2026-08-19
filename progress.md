@@ -67,6 +67,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
+### 分類器審核批次一（2026-08-19）
+
+- 完成人工研究與逐頁檢查 60 個公開單篇來源，依既定順序在 `人工智慧`、`程式開發`、`科技產業`、`商業與職場`、`設計與創意`、`生活與學習` 各建立 10 筆批次一候選資料；所有列均維持 `pending`，尚未核准或投入訓練。
+- 可讀性檢查逐一開啟每個 HTTP(S) 頁面，確認能直接取得文章標題與足以判斷主題的正文，且不是登入牆、付費牆、反爬蟲畫面、分類／清單頁或重複 canonical URL；繁中 `text` 均為依正文撰寫的摘要性轉述，不保存頁面 dump 或大段原文。
+- 初次獨立審查發現科技產業候選全數來自 Apple，且一筆職場候選的產品公告屬性造成分類歧義；修訂後科技產業改由 Apple、NVIDIA 與 Google 三個來源組成，職場候選則改為可直接判斷的團隊管理文章。批次一在人工智慧與生活與學習類別仍有較高出版者集中度，後續批次應優先增加來源多樣性，並在訓練前檢查出版者語彙造成的捷徑學習風險。
+- 淘汰候選：MDN `javascript-console-methods` 與 Canva `tints-and-shades` 在個別開啟檢查時回傳內部錯誤，未納入資料；分別改用可直接讀取的 web.dev `Rendering performance` 與 NN/g `Design Thinking 101`。Atlassian `strategy/goal-alignment` 重新導向至 `innovation/goal-alignment`，CSV 使用最終網址。
+- 新增 `docs/classifier-review.md`，規定既有列只修改 `reviewStatus`／`reviewNote`，退件修訂必須保留歷史並以新 ID 新增替代列。正式分類器資料集項目仍保持未完成，等待使用者逐列審核及後續兩個批次。
+
 ### 2026-08-14
 
 - 新摘要 commit `32a12d1` 觸發 workflow run `31766478611`，Python 測試通過，但部署驗證器將 `git ls-files` 的中文 quoted path 當成實際檔名，於 `--tracked` 掃描失敗；Astro build 與 deploy 因此被跳過，既有公開站與本機摘要 JSON 均保持不變。
