@@ -65,6 +65,15 @@ def _artifact_persistence_error() -> DigestError:
     )
 
 
+def _model_persistence_error() -> DigestError:
+    return DigestError(
+        "classify",
+        "PREDICTION_FAILED",
+        "Classifier model could not be saved",
+        False,
+    )
+
+
 def _write_evaluation_artifact(
     path: Path,
     payload: Mapping[str, Any] | SplitAssignment | EvaluationResult,
@@ -141,14 +150,17 @@ class ClassifierEvaluationService:
                 False,
             )
 
-        self._model_saver(
-            cohort,
-            result,
-            categories,
-            self.model_path,
-            self.manifest_path,
-            now,
-        )
+        try:
+            self._model_saver(
+                cohort,
+                result,
+                categories,
+                self.model_path,
+                self.manifest_path,
+                now,
+            )
+        except OSError:
+            raise _model_persistence_error() from None
         return result
 
     def cli_payload(self, result: EvaluationResult) -> dict[str, object]:

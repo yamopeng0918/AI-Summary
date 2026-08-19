@@ -130,6 +130,8 @@ def make_service(
         assert model_path == tmp_path / "models" / "classifier.joblib"
         assert manifest_path == tmp_path / "models" / "classifier-manifest.json"
         assert trained_at == NOW
+        if persistence_failure == "model":
+            raise OSError(f"RAW_MODEL_MARKER: {model_path.resolve()}")
 
     service = ClassifierEvaluationService(
         clock=lambda: NOW,
@@ -211,6 +213,24 @@ def test_service_converts_report_persistence_oserror_to_safe_domain_error(tmp_pa
     assert "RAW_REPORT_MARKER" not in str(raised.value)
     assert str(service.report_path.resolve()) not in str(raised.value)
     assert events == ["load", "cohort", "split", "evaluate", "report"]
+
+
+def test_service_converts_model_persistence_oserror_to_safe_domain_error(tmp_path: Path) -> None:
+    events: list[str] = []
+    service, _ = make_service(tmp_path, events, persistence_failure="model")
+
+    with pytest.raises(DigestError) as raised:
+        service.run()
+
+    assert raised.value.as_dict() == {
+        "stage": "classify",
+        "code": "PREDICTION_FAILED",
+        "message": "Classifier model could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_MODEL_MARKER" not in str(raised.value)
+    assert str(service.model_path.resolve()) not in str(raised.value)
+    assert events == ["load", "cohort", "split", "evaluate", "report", "model"]
 
 
 def _tamper_split(payload: dict[str, object], mismatch: str) -> None:

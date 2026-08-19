@@ -281,6 +281,67 @@ def test_evaluate_classifier_hides_evaluation_artifact_persistence_details(
     assert str(report_path.resolve()) not in result.stderr
 
 
+def test_evaluate_classifier_hides_model_persistence_details(tmp_path: Path) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    categories = tuple(sorted(VALID_CATEGORIES))
+    split = SplitAssignment(
+        seed=42,
+        dataset_sha256="a" * 64,
+        train_ids=("train",),
+        test_ids=("test",),
+        category_counts=tuple(CategoryCounts(category, train=1, test=1) for category in categories),
+    )
+    split_path = tmp_path / "classifier" / "split.json"
+    split_path.parent.mkdir(parents=True)
+    split_path.write_text(json.dumps(split.as_dict()), encoding="utf-8")
+    model_path = tmp_path / "private" / "classifier.joblib"
+
+    def model_persistence_failure(
+        examples,
+        evaluation,
+        configured,
+        configured_model_path: Path,
+        manifest_path: Path,
+        trained_at: datetime,
+    ) -> None:
+        assert configured_model_path == model_path
+        raise OSError(f"RAW_MODEL_PERSISTENCE_MARKER: {configured_model_path.resolve()}")
+
+    evaluation_service = ClassifierEvaluationService(
+        clock=lambda: NOW,
+        split_path=split_path,
+        report_path=tmp_path / "classifier" / "evaluation.json",
+        model_path=model_path,
+        manifest_path=tmp_path / "private" / "classifier-manifest.json",
+        category_loader=lambda path: categories,
+        dataset_loader=lambda path, configured: [object()],
+        cohort_selector=lambda examples, configured, count: [object()],
+        split_creator=lambda examples, configured, **options: split,
+        evaluator=lambda examples, assignment, configured, **options: make_evaluation_result(),
+        json_writer=lambda path, payload: None,
+        model_saver=model_persistence_failure,
+    )
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "stage": "classify",
+        "code": "PREDICTION_FAILED",
+        "message": "Classifier model could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_MODEL_PERSISTENCE_MARKER" not in result.stderr
+    assert str(model_path.resolve()) not in result.stderr
+
+
 def test_list_prints_id_title_category_and_status(tmp_path) -> None:
     app, repository = make_app(tmp_path, FakeWorkflow(make_record()))
     repository.save(make_record())
