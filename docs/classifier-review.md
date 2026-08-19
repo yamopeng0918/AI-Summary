@@ -6,7 +6,7 @@
 
 每一列都應依序核對公開來源頁面、`sourceTitle`、繁體中文 `text`、`label` 與 `rationale`。審核結果遵循以下規則：
 
-approved：來源可直接讀取、內容轉述正確、主分類明確。
+approved：只有在使用者或審核者明確逐列同意後，才能將 `reviewStatus` 改為 `approved`；不得依推測、批次操作或未明示的同意核准。來源可直接讀取、內容轉述正確、主分類明確。
 rejected：保留原列並在 reviewNote 說明原因，不進入訓練。
 修訂：保留退件列，另以新 id 新增 pending 替代列。
 
