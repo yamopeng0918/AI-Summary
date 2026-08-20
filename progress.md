@@ -174,3 +174,10 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - Applied the explicit user approval to the 60 batch-2 rows in `data/classifier/training.csv`: `b2-ai-001..010`, `b2-dev-001..010`, `b2-tech-001..010`, `b2-business-001..010`, `b2-design-001..010`, and `b2-life-001..010`. All are now `approved`; no rows were rejected or replaced.
 - Validated 120 total approved rows: 20 per category and 60 in each of batches 1 and 2. There are no `pending` or `rejected` rows, the rejected-history count is zero, and all IDs and source URLs remain stable.
 - Batch 3 research and review have not started. The final 180-row cohort, its content hash, classifier training, and formal evaluation remain incomplete.
+
+### Task 7 classifier review batch 3 final approval (2026-08-20)
+
+- Applied explicit approval to exactly 60 batch-3 rows (`b3-ai/dev/tech/business/design/life-001..010`); no other fields or rows changed.
+- Final reviewed cohort: 180 rows, 30 per category, 60 per batch; 180 approved, no pending/rejected, unique IDs and canonical URLs.
+- Dataset SHA-256: `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`.
+- Classifier training/evaluation and model artifacts remain incomplete.
