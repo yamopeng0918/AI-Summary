@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-14
+> 最後同步：2026-08-20
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -69,6 +69,8 @@
 - [x] 建立分類資料審核指南與離線列數／狀態／分類計數命令。
 - [x] Batch 1: applied explicit user approval to 60 rows (ten per category); no rejected or replacement rows.
 - [x] Batch 2: applied explicit user approval to 60 rows (ten per category); no rejected or replacement rows.
+- [x] Batch 3: researched and individually opened 60 directly readable public-source candidates (ten per category); all remain `pending` with blank review notes.
+- [ ] Batch 3: complete row-by-row review and apply only explicit approval, rejection, or replacement decisions.
 - [ ] 建立 4～6 個互斥主分類的人工標註資料集與版本／內容雜湊。
 - [ ] 以固定 random seed 訓練 TF-IDF 與 Logistic Regression 分類器。
 - [ ] 儲存訓練／測試筆數、各類樣本數、Accuracy、Macro F1、混淆矩陣與標籤順序。
