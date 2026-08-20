@@ -67,7 +67,7 @@
 
 - [x] 完成審核批次一的 60 個公開來源候選（六類各 10 筆），逐頁確認可直接讀取並全部維持 `pending`。
 - [x] 建立分類資料審核指南與離線列數／狀態／分類計數命令。
-- [ ] 取得使用者對批次一逐列 `approved`／`rejected` 決定，並以新 ID 補足所有退件替代列。
+- [x] Batch 1: applied explicit user approval to 60 rows (ten per category); no rejected or replacement rows.
 - [ ] 建立 4～6 個互斥主分類的人工標註資料集與版本／內容雜湊。
 - [ ] 以固定 random seed 訓練 TF-IDF 與 Logistic Regression 分類器。
 - [ ] 儲存訓練／測試筆數、各類樣本數、Accuracy、Macro F1、混淆矩陣與標籤順序。

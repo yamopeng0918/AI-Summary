@@ -151,3 +151,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - Provider-aware CLI composition is complete and automated tests cover the Gemini default, explicit OpenAI selection, invalid providers, selected-key validation, and key-free local commands.
 - Gemini is the default (`GEMINI_API_KEY`, default model migrated to `gemini-3.6-flash` on 2026-08-14); OpenAI is selected explicitly (`OPENAI_API_KEY`, default model `gpt-5-mini`). There is no automatic fallback.
 - Full Python automation passed: 133 tests. Gemini live acceptance completed on 2026-08-14 with the user-approved public article and a temporary repository.
+### Task 7 classifier review batch 1 (2026-08-20)
+
+- Applied the explicit user approval to the 60 batch-1 rows in `data/classifier/training.csv`: `b1-ai-001..010`, `b1-dev-001..010`, `b1-tech-001..010`, `b1-business-001..010`, `b1-design-001..010`, and `b1-life-001..010`. All are now `approved`; no rows were rejected or replaced.
+- Validated the dataset loader and review counts: 60 approved batch-1 rows, ten per category, with unique IDs and source URLs. The remaining 120 examples, final 180-row cohort, and formal classifier training/evaluation remain incomplete.
