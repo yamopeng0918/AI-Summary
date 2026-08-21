@@ -232,7 +232,8 @@ def test_build_publisher_uses_fixed_defaults_and_existing_cli_components(
 
     monkeypatch.setattr(publish_url.cli, "AddArticleWorkflow", FakeWorkflow)
     monkeypatch.setattr(publish_url.cli, "WebExtractor", lambda client_factory: ("extractor", client_factory))
-    monkeypatch.setattr(publish_url.cli, "FixedClassifier", lambda category: ("classifier", category))
+    monkeypatch.delattr(publish_url.cli, "FixedClassifier", raising=False)
+    monkeypatch.setattr(publish_url.cli, "_classifier", lambda: "trained-classifier")
     monkeypatch.setattr(publish_url.cli, "_summarizer", lambda: "summarizer")
     monkeypatch.setattr(
         publish_url.cli,
@@ -252,6 +253,7 @@ def test_build_publisher_uses_fixed_defaults_and_existing_cli_components(
     assert publisher.config.workflow_name == "Deploy to GitHub Pages"
     assert captured["repository"] is publisher.repository
     assert captured["summarizer"] == "summarizer"
+    assert captured["classifier"] == "trained-classifier"
     assert captured["run"] == (
         "https://example.com/article",
         datetime(2026, 8, 14, 12, 0, tzinfo=TAIPEI),
@@ -294,7 +296,8 @@ def test_build_publisher_uses_one_script_owned_repository_for_workflow_save_and_
     monkeypatch.setattr(publish_url, "SummaryRepository", lambda path: fake_repository)
     monkeypatch.setattr(publish_url.cli, "AddArticleWorkflow", FakeWorkflow)
     monkeypatch.setattr(publish_url.cli, "WebExtractor", lambda client_factory: ("extractor", client_factory))
-    monkeypatch.setattr(publish_url.cli, "FixedClassifier", lambda category: ("classifier", category))
+    monkeypatch.delattr(publish_url.cli, "FixedClassifier", raising=False)
+    monkeypatch.setattr(publish_url.cli, "_classifier", lambda: "trained-classifier")
     monkeypatch.setattr(publish_url.cli, "_summarizer", lambda: "summarizer")
     monkeypatch.setattr(
         publish_url.cli,
@@ -308,6 +311,7 @@ def test_build_publisher_uses_one_script_owned_repository_for_workflow_save_and_
     assert created == record
     assert publisher.repository is fake_repository
     assert captured["repository"] is fake_repository
+    assert captured["classifier"] == "trained-classifier"
     assert publisher.repository.root == script_repository_root
     assert publisher.repository.root != env_repository_root
     assert publisher.repository.list() == [record]

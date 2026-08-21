@@ -1,0 +1,29 @@
+{
+  "categories": [
+    "人工智慧",
+    "程式開發",
+    "科技產業",
+    "商業與職場",
+    "設計與創意",
+    "生活與學習"
+  ],
+  "datasetSha256": "1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c",
+  "modelParameters": {
+    "classifier": {
+      "maxIter": 2000,
+      "randomState": 42
+    },
+    "tfidf": {
+      "analyzer": "char_wb",
+      "ngramRange": [
+        2,
+        5
+      ]
+    }
+  },
+  "schemaVersion": 1,
+  "scikitLearnVersion": "1.9.0",
+  "seed": 42,
+  "trainedAt": "2026-08-20T22:48:58.386705+08:00",
+  "trainingExamples": 180
+}

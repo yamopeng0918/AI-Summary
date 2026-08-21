@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：GitHub Pages 與 Gemini 真實公開網頁來源驗收已完成；下一核心里程碑為正式分類模型
+> 目前階段：正式分類器已通過固定測試集評估並產生 production artifacts；下一核心來源里程碑為 YouTube
 >
-> 下次續作：依分類器實作計畫執行 Task 2，建立 deterministic stratified split 與可重現 evaluation report
+> 下次續作：合併並發布正式分類器里程碑後，設計 YouTube 有字幕與無字幕的獨立來源流程
 
 ## 專案目標
 
@@ -27,7 +27,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 企畫與需求收斂 | 已完成 | 核心三來源 MVP、非目標、架構邊界與驗收標準已納入核准規格 |
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
-| 分類模型與評估 | 實作中 | 已完成訓練 CSV Schema、離線驗證、核准 cohort 規則與穩定內容雜湊；模型、180 筆審核資料及正式評估仍未完成 |
+| 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
@@ -57,7 +57,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 |---|---|
 | 公開來源受付費牆、登入或反爬蟲限制 | 不嘗試繞過，回報明確的結構化錯誤 |
 | 真實網頁與 Gemini 驗收 | 已以核准文章與預設 `gemini-3.6-flash` 通過；SDK 仍輸出 Models API 的 AFC 建議警告，但不影響 structured-output 結果 |
-| 開發用固定分類器 | 只用於管線串接，不視為分類模型完成 |
+| 正式分類器 artifact | 生產流程只載入 repository 控制的 joblib 與 manifest；缺檔、版本或分類順序不符時 fail closed，沒有 `FixedClassifier` fallback |
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
@@ -67,14 +67,34 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
-### 2026-08-21
+### Task 8 正式分類器驗收（2026-08-21）
 
-- 依 `2026-08-18-classifier-dataset-model.md` 完成 Task 1：加入 scikit-learn/joblib 相依宣告，以及 immutable `TrainingExample`、UTF-8 CSV loader、精確欄位與安全錯誤驗證。
-- dataset loader 會拒絕空白必填值、非法 batch／review state、未知分類、非 HTTP(S) URL、重複 ID 與 canonical source URL；錯誤不包含列內容或 URL。
-- 完成 approved-only cohort 驗證與 deterministic SHA-256；正式 180 筆人工審核資料、資料切分、模型訓練與效能評估仍未開始，因此未勾選正式分類模型完成項目。
-- Task 1 focused suite 為 22 passed；完整 Python suite 為 205 passed、1 個既有 Google SDK 棄用警告；獨立唯讀程式審查未發現剩餘 Critical、Important 或 Minor 問題。
-- Task 1 commit `ddf4563` 已 fast-forward 合併至 `master` 並推送至 GitHub；本機 `HEAD` 與 `origin/master` 均為 `ddf4563de80b776f98a6c7bee0afa309210cbc1a`。合併後重跑完整 Python suite，結果仍為 205 passed、1 個既有 Google SDK 棄用警告。
-- `feature/classifier-dataset` 分支及 Git worktree 註冊已移除；OneDrive 權限仍阻止刪除未註冊的 `.worktrees/classifier-dataset` 殘留目錄。該目錄不影響 Git 狀態或正式程式，但後續可在檔案鎖解除後清理。
+- 最終 cohort 共 180 筆 approved 資料，六類各 30 筆；dataset SHA-256 為 `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`，固定 seed `42` 的 split SHA-256 為 `0c0c6cd136656b06c543cad61641a568a0268cd015a6f67c90e5cf482d85497e`。
+- 評估使用 144 筆訓練、36 筆 held-out 測試，每類 24/6。Accuracy 為 `0.9166666666666666`，Macro F1 為 `0.917915417915418`，最大類基準 Accuracy 為 `0.16666666666666666`；`beatsBaseline=true`、`accepted=true`。
+- 依 `人工智慧`、`程式開發`、`科技產業`、`商業與職場`、`設計與創意`、`生活與學習` 順序，混淆矩陣為 `[[5,0,0,0,0,1],[0,6,0,0,0,0],[0,0,6,0,0,0],[0,0,0,5,0,1],[0,0,1,0,5,0],[0,0,0,0,0,6]]`。
+- 使用 scikit-learn `1.9.0` 產生並獨立驗證 `data/classifier/split.json`、`data/classifier/evaluation.json`、`models/classifier.joblib` 與 `models/classifier-manifest.json`；六個代表文字均預測為對應配置分類。
+- 完整 gates：Python `266 passed`、1 個既有 Google SDK 棄用警告；Vitest `24 passed`；Astro `0 errors / 0 warnings / 0 hints`；Pages build `5 pages`；tracked/dist deployment verifier exit `0`。
+
+### 分類器審核批次三來源修正（2026-08-20）
+
+- 依審查發現逐一重新開啟 `b3-ai-006`、原 `b3-ai-008`、`b3-design-006` 與 `b3-design-008` 的來源頁面；Cohere 頁面缺少足以支撐原列的可讀正文，因此將 `b3-ai-008` 改為可直接讀取的 Mistral AI 文章 `Au Large`，其餘三列依可見正文收斂文字或修正標題。
+- `b3-ai-006` 移除來源摘要未支持的「能力限制」；`b3-design-006` 的 `sourceTitle` 改為可見 H1 `Design systems with Penpot`；`b3-design-008` 移除無障礙宣稱，改為來源直接列出的可靠透明介面與低認知負荷。
+- 四列仍維持 `pending` 且 `reviewNote` 留白。替換後 180 筆 ID 與 canonical URL 皆唯一，批次三人工智慧類仍有 8 個 registrable domains、10 筆新網域來源；最終 cohort、內容雜湊、模型訓練與正式評估仍未執行。
+
+### 分類器審核批次三研究（2026-08-20）
+
+- 新增批次三 60 筆候選資料：`人工智慧`、`程式開發`、`科技產業`、`商業與職場`、`設計與創意`、`生活與學習` 各 10 筆；ID 為 `b3-<category>-001..010`，全部維持 `pending` 且 `reviewNote` 留白。
+- 逐一開啟每個最終採用的公開單篇來源，確認能直接讀取標題與足以支持繁體中文轉述的正文。Spotify 設計頁會重新導向播放器、兩篇 Harvard 文章直接存取回傳 403，均未納入；Cornell 的既有批次二 URL 也因重複而改用另一篇文章。
+- 批次三每類使用 8～10 個 registrable domains，單一網域每類最多 2 筆；相較批次一、二，每類有 6～10 筆來自該類別未使用過的網域。已避開 DeepMind、Edutopia、Canva、web.dev 與 Apple。
+- 目前資料集為 180 筆：批次一、二共 120 筆 `approved`，批次三 60 筆 `pending`；最終 cohort、內容雜湊、模型訓練與正式評估仍未完成，也未執行。
+
+### 分類器審核批次一（2026-08-19）
+
+- 完成人工研究與逐頁檢查 60 個公開單篇來源，依既定順序在 `人工智慧`、`程式開發`、`科技產業`、`商業與職場`、`設計與創意`、`生活與學習` 各建立 10 筆批次一候選資料；所有列均維持 `pending`，尚未核准或投入訓練。
+- 可讀性檢查逐一開啟每個 HTTP(S) 頁面，確認能直接取得文章標題與足以判斷主題的正文，且不是登入牆、付費牆、反爬蟲畫面、分類／清單頁或重複 canonical URL；繁中 `text` 均為依正文撰寫的摘要性轉述，不保存頁面 dump 或大段原文。
+- 初次獨立審查發現科技產業候選全數來自 Apple，且一筆職場候選的產品公告屬性造成分類歧義；修訂後科技產業改由 Apple、NVIDIA 與 Google 三個來源組成，職場候選則改為可直接判斷的團隊管理文章。批次一在人工智慧與生活與學習類別仍有較高出版者集中度，後續批次應優先增加來源多樣性，並在訓練前檢查出版者語彙造成的捷徑學習風險。
+- 淘汰候選：MDN `javascript-console-methods` 與 Canva `tints-and-shades` 在個別開啟檢查時回傳內部錯誤，未納入資料；分別改用可直接讀取的 web.dev `Rendering performance` 與 NN/g `Design Thinking 101`。Atlassian `strategy/goal-alignment` 重新導向至 `innovation/goal-alignment`，CSV 使用最終網址。
+- 新增 `docs/classifier-review.md`，規定既有列只修改 `reviewStatus`／`reviewNote`，退件修訂必須保留歷史並以新 ID 新增替代列。正式分類器資料集項目仍保持未完成，等待使用者逐列審核及後續兩個批次。
 
 ### 2026-08-14
 
@@ -139,9 +159,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 依分類器實作計畫執行 Task 2：建立 deterministic stratified split、TF-IDF／Logistic Regression evaluation pipeline 與原子 evaluation JSON 輸出。
-2. 完成 runtime model artifact、`evaluate-classifier` CLI 與正式分類器 composition 後，再提交三批各 60 筆來源資料供人工審核。
-3. 180 筆資料全部核准且模型測試 Accuracy 嚴格高於最大類基準後，再進入 YouTube 與公開社群里程碑。
+1. 將正式分類器分支合併至 `master`，並在合併結果上重跑完整 gates；未經明確要求不 push 或部署。
+2. 依核准 MVP 規格設計並實作獨立 YouTube 來源解析器，先處理有字幕公開影片，再處理無可用字幕流程。
+3. YouTube 有字幕與無字幕各以一個使用者核准的真實公開案例驗收後，再進入公開社群單篇貼文里程碑。
 
 ## 更新規則
 
@@ -152,3 +172,20 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - Provider-aware CLI composition is complete and automated tests cover the Gemini default, explicit OpenAI selection, invalid providers, selected-key validation, and key-free local commands.
 - Gemini is the default (`GEMINI_API_KEY`, default model migrated to `gemini-3.6-flash` on 2026-08-14); OpenAI is selected explicitly (`OPENAI_API_KEY`, default model `gpt-5-mini`). There is no automatic fallback.
 - Full Python automation passed: 133 tests. Gemini live acceptance completed on 2026-08-14 with the user-approved public article and a temporary repository.
+### Task 7 classifier review batch 1 (2026-08-20)
+
+- Applied the explicit user approval to the 60 batch-1 rows in `data/classifier/training.csv`: `b1-ai-001..010`, `b1-dev-001..010`, `b1-tech-001..010`, `b1-business-001..010`, `b1-design-001..010`, and `b1-life-001..010`. All are now `approved`; no rows were rejected or replaced.
+- Validated the dataset loader and review counts: 60 approved batch-1 rows, ten per category, with unique IDs and source URLs. The remaining 120 examples, final 180-row cohort, and formal classifier training/evaluation remain incomplete.
+
+### Task 7 classifier review batch 2 (2026-08-20)
+
+- Applied the explicit user approval to the 60 batch-2 rows in `data/classifier/training.csv`: `b2-ai-001..010`, `b2-dev-001..010`, `b2-tech-001..010`, `b2-business-001..010`, `b2-design-001..010`, and `b2-life-001..010`. All are now `approved`; no rows were rejected or replaced.
+- Validated 120 total approved rows: 20 per category and 60 in each of batches 1 and 2. There are no `pending` or `rejected` rows, the rejected-history count is zero, and all IDs and source URLs remain stable.
+- Batch 3 research and review have not started. The final 180-row cohort, its content hash, classifier training, and formal evaluation remain incomplete.
+
+### Task 7 classifier review batch 3 final approval (2026-08-20)
+
+- Applied explicit approval to exactly 60 batch-3 rows (`b3-ai/dev/tech/business/design/life-001..010`); no other fields or rows changed.
+- Final reviewed cohort: 180 rows, 30 per category, 60 per batch; 180 approved, no pending/rejected, unique IDs and canonical URLs.
+- Dataset SHA-256: `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`.
+- Classifier training/evaluation and model artifacts remain incomplete.

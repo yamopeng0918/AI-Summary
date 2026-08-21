@@ -12,8 +12,10 @@ import typer
 from google import genai
 from openai import OpenAI
 
-from ai_digest.classifiers.fixed import FixedClassifier
-from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
+from ai_digest.classifiers.base import Classifier
+from ai_digest.classifiers.service import ClassifierEvaluationService
+from ai_digest.classifiers.trained import TrainedClassifier
+from ai_digest.domain import DigestError, SummaryRecord
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
@@ -37,6 +39,14 @@ def _web_client_factory() -> httpx.Client:
     return httpx.Client()
 
 
+def _classifier() -> Classifier:
+    return TrainedClassifier(
+        Path("models/classifier.joblib"),
+        Path("models/classifier-manifest.json"),
+        tuple(json.loads(Path("data/categories.json").read_text(encoding="utf-8"))),
+    )
+
+
 def _summarizer() -> Summarizer:
     provider = os.environ.get("AI_DIGEST_PROVIDER", "gemini").strip().lower()
     if provider == "gemini":
@@ -58,10 +68,14 @@ def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWor
     return AddArticleWorkflow(
         extractor=WebExtractor(client_factory=_web_client_factory),
         summarizer=_summarizer(),
-        classifier=FixedClassifier(sorted(VALID_CATEGORIES)[0]),
+        classifier=_classifier(),
         repository=_repository(),
         on_progress=on_progress,
     )
+
+
+def _evaluation_service() -> ClassifierEvaluationService:
+    return ClassifierEvaluationService(clock=_now)
 
 
 def _emit(payload: dict[str, object], *, err: bool = False) -> None:
@@ -72,9 +86,13 @@ def create_app(
     workflow_factory: Callable[[Callable[[str], None]], AddArticleWorkflow],
     repository_factory: Callable[[], SummaryRepository],
     clock: Callable[[], datetime],
+    evaluation_service_factory: Callable[[], ClassifierEvaluationService] | None = None,
 ) -> typer.Typer:
     """Create the CLI with dependencies supplied by the caller."""
     application = typer.Typer(no_args_is_help=True)
+    evaluation_factory = evaluation_service_factory
+    if evaluation_factory is None:
+        evaluation_factory = lambda: ClassifierEvaluationService(clock=clock)
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)
@@ -124,6 +142,16 @@ def create_app(
     def publish(record_id: str) -> None:
         """Publish one previously archived summary."""
         set_status(record_id, "published")
+
+    @application.command("evaluate-classifier")
+    def evaluate_classifier() -> None:
+        """Evaluate reviewed classifier data and promote an accepted model."""
+        try:
+            service = evaluation_factory()
+            result = service.run()
+            _emit(service.cli_payload(result))
+        except DigestError as error:
+            report_error(error)
 
     return application
 

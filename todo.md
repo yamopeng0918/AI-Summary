@@ -65,11 +65,16 @@
 
 ### 正式分類模型
 
-- [x] 完成訓練 CSV Schema、離線資料驗證、approved cohort 規則與穩定內容雜湊基礎。
-- [ ] 建立 4～6 個互斥主分類的人工標註資料集與版本／內容雜湊。
-- [ ] 以固定 random seed 訓練 TF-IDF 與 Logistic Regression 分類器。
-- [ ] 儲存訓練／測試筆數、各類樣本數、Accuracy、Macro F1、混淆矩陣與標籤順序。
-- [ ] 計算最大類基準 Accuracy，並驗證測試 Accuracy **嚴格高於**該基準後才標記分類模型完成。
+- [x] 完成審核批次一的 60 個公開來源候選（六類各 10 筆），逐頁確認可直接讀取並全部維持 `pending`。
+- [x] 建立分類資料審核指南與離線列數／狀態／分類計數命令。
+- [x] Batch 1: applied explicit user approval to 60 rows (ten per category); no rejected or replacement rows.
+- [x] Batch 2: applied explicit user approval to 60 rows (ten per category); no rejected or replacement rows.
+- [x] Batch 3: researched and individually opened 60 directly readable public-source candidates (ten per category); all approved after explicit user review.
+- [x] Batch 3: complete row-by-row review and apply only explicit approval, rejection, or replacement decisions.
+- [x] 建立 4～6 個互斥主分類的人工標註資料集與版本／內容雜湊。
+- [x] 以固定 random seed 訓練 TF-IDF 與 Logistic Regression 分類器。
+- [x] 儲存訓練／測試筆數、各類樣本數、Accuracy、Macro F1、混淆矩陣與標籤順序。
+- [x] 計算最大類基準 Accuracy，並驗證測試 Accuracy **嚴格高於**該基準後才標記分類模型完成。
 
 ### YouTube 公開影片
 
@@ -90,7 +95,8 @@
 
 - [ ] 支援本機編輯與重新產生摘要。
 - [x] 支援下架與重新發布，並保留建立與更新時間。
-- [ ] 實作 `evaluate-classifier`、`build-site` 與稍後獨立的 `deploy` 指令。
+- [x] 實作 `evaluate-classifier` 指令。
+- [ ] 實作 `build-site` 與稍後獨立的 `deploy` 指令。
 - [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
 - [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
 - [x] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（<https://yamopeng0918.github.io/AI-Summary/>）。

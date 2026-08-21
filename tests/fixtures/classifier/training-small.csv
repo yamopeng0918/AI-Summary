@@ -1,7 +1,7 @@
 id,batch,text,label,sourceUrl,sourceTitle,rationale,reviewStatus,reviewNote
-example-1,1,生成式人工智慧模型的治理與應用,人工智慧,https://example.com/ai,人工智慧治理,主題聚焦人工智慧技術,approved,
-example-2,1,Python 程式測試與除錯實務,程式開發,https://example.com/programming,Python 測試實務,主題聚焦軟體開發,approved,
-example-3,1,晶片公司市場與科技政策分析,科技產業,https://example.com/industry,晶片產業分析,主題聚焦科技產業,approved,
-example-4,1,面試管理與職場策略,商業與職場,https://example.com/workplace,職場面試策略,主題聚焦職涯發展,approved,
-example-5,1,使用者體驗與視覺設計方法,設計與創意,https://example.com/design,體驗設計方法,主題聚焦設計實務,approved,
-example-6,1,自主學習與生活成長指南,生活與學習,https://example.com/learning,自主學習指南,主題聚焦個人成長,approved,
+example-1,1,  人工智慧模型的應用  ,人工智慧, https://example.com/ai ,  AI 文章  ,  屬於人工智慧主題  ,approved,
+example-2,1,  Python 測試技巧  ,程式開發, https://example.com/code ,  程式文章  ,  屬於程式開發主題  ,approved,
+example-3,2,  科技公司市場分析  ,科技產業, https://example.com/industry ,  產業文章  ,  屬於科技產業主題  ,approved,
+example-4,2,  團隊管理方法  ,商業與職場, https://example.com/work ,  職場文章  ,  屬於商業與職場主題  ,approved,
+example-5,3,  使用者體驗設計  ,設計與創意, https://example.com/design ,  設計文章  ,  屬於設計與創意主題  ,approved,
+example-6,3,  自主學習規劃  ,生活與學習, https://example.com/life ,  學習文章  ,  屬於生活與學習主題  ,approved,

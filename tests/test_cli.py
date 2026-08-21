@@ -3,10 +3,18 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
 from typer.testing import CliRunner
 
 from ai_digest import cli
 from ai_digest.cli import create_app
+from ai_digest.classifiers.evaluation import (
+    CategoryCounts,
+    CategoryMetrics,
+    EvaluationResult,
+    SplitAssignment,
+)
+from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
 from ai_digest.storage import SummaryRepository
 
@@ -69,6 +77,59 @@ def make_app(tmp_path: Path, workflow: FakeWorkflow):
     return create_app(workflow_factory, lambda: repository, lambda: NOW), repository
 
 
+def make_evaluation_result() -> EvaluationResult:
+    category_counts = tuple(CategoryCounts(category, train=24, test=6) for category in sorted(VALID_CATEGORIES))
+    category_metrics = tuple(
+        CategoryMetrics(category, precision=0.8, recall=0.8, f1=0.8, support=6)
+        for category in sorted(VALID_CATEGORIES)
+    )
+    return EvaluationResult(
+        dataset_sha256="a" * 64,
+        split_sha256="b" * 64,
+        seed=42,
+        train_samples=144,
+        test_samples=36,
+        category_counts=category_counts,
+        accuracy=0.8,
+        macro_f1=0.79,
+        category_metrics=category_metrics,
+        confusion_matrix=tuple(tuple(int(row == column) * 6 for column in range(6)) for row in range(6)),
+        majority_baseline_accuracy=1 / 6,
+        beats_baseline=True,
+        evaluated_at=NOW.isoformat(),
+        evaluation_pipeline=object(),
+    )
+
+
+class FakeEvaluationService:
+    def __init__(self, result: EvaluationResult | None = None, error: DigestError | None = None) -> None:
+        self.result = result
+        self.error = error
+        self.run_calls = 0
+
+    def run(self) -> EvaluationResult:
+        self.run_calls += 1
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+    def cli_payload(self, result: EvaluationResult) -> dict[str, object]:
+        assert result is self.result
+        return {
+            "accuracy": result.accuracy,
+            "macroF1": result.macro_f1,
+            "majorityBaselineAccuracy": result.majority_baseline_accuracy,
+            "beatsBaseline": result.beats_baseline,
+            "datasetPath": "data/classifier/training.csv",
+            "categoryPath": "data/categories.json",
+            "splitPath": "data/classifier/split.json",
+            "reportPath": "data/classifier/evaluation.json",
+            "modelPath": "models/classifier.joblib",
+            "manifestPath": "models/classifier-manifest.json",
+        }
+
+
 def test_add_reports_all_pipeline_stages_and_saved_location(tmp_path) -> None:
     app, _ = make_app(tmp_path, FakeWorkflow(make_record()))
 
@@ -104,6 +165,181 @@ def test_add_reports_public_domain_errors_to_stderr(tmp_path) -> None:
     assert result.exit_code == 1
     assert "URL must be public" in result.stderr
     assert "not-a-url" not in result.stderr
+
+
+def test_evaluate_classifier_emits_metrics_and_artifact_paths(tmp_path: Path) -> None:
+    repository = SummaryRepository(tmp_path)
+    evaluation_service = FakeEvaluationService(result=make_evaluation_result())
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 0
+    assert evaluation_service.run_calls == 1
+    assert json.loads(result.stdout) == {
+        "accuracy": 0.8,
+        "macroF1": 0.79,
+        "majorityBaselineAccuracy": 1 / 6,
+        "beatsBaseline": True,
+        "datasetPath": "data/classifier/training.csv",
+        "categoryPath": "data/categories.json",
+        "splitPath": "data/classifier/split.json",
+        "reportPath": "data/classifier/evaluation.json",
+        "modelPath": "models/classifier.joblib",
+        "manifestPath": "models/classifier-manifest.json",
+    }
+
+
+@pytest.mark.parametrize(
+    "error",
+    (
+        DigestError(
+            "classify",
+            "EVALUATION_BELOW_BASELINE",
+            "Classifier evaluation did not beat the majority baseline",
+            False,
+        ),
+        DigestError("classify", "INVALID_DATASET", "Classifier dataset is invalid", False),
+    ),
+)
+def test_evaluate_classifier_reports_domain_failures_as_json_on_stderr(
+    tmp_path: Path,
+    error: DigestError,
+) -> None:
+    repository = SummaryRepository(tmp_path)
+    evaluation_service = FakeEvaluationService(error=error)
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == error.as_dict()
+
+
+def test_evaluate_classifier_hides_evaluation_artifact_persistence_details(
+    tmp_path: Path,
+) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    categories = tuple(sorted(VALID_CATEGORIES))
+    split = SplitAssignment(
+        seed=42,
+        dataset_sha256="a" * 64,
+        train_ids=("train",),
+        test_ids=("test",),
+        category_counts=tuple(CategoryCounts(category, train=1, test=1) for category in categories),
+    )
+    split_path = tmp_path / "classifier" / "split.json"
+    split_path.parent.mkdir(parents=True)
+    split_path.write_text(json.dumps(split.as_dict()), encoding="utf-8")
+    report_path = tmp_path / "private" / "evaluation.json"
+
+    def persistence_failure(path: Path, payload: object) -> None:
+        assert path == report_path
+        raise OSError(f"RAW_PERSISTENCE_MARKER: {path.resolve()}")
+
+    evaluation_service = ClassifierEvaluationService(
+        clock=lambda: NOW,
+        split_path=split_path,
+        report_path=report_path,
+        category_loader=lambda path: categories,
+        dataset_loader=lambda path, configured: [object()],
+        cohort_selector=lambda examples, configured, count: [object()],
+        split_creator=lambda examples, configured, **options: split,
+        evaluator=lambda examples, assignment, configured, **options: make_evaluation_result(),
+        json_writer=persistence_failure,
+        model_saver=lambda *args: None,
+    )
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "stage": "classify",
+        "code": "INVALID_DATASET",
+        "message": "Classifier evaluation artifacts could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_PERSISTENCE_MARKER" not in result.stderr
+    assert str(report_path.resolve()) not in result.stderr
+
+
+def test_evaluate_classifier_hides_model_persistence_details(tmp_path: Path) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    categories = tuple(sorted(VALID_CATEGORIES))
+    split = SplitAssignment(
+        seed=42,
+        dataset_sha256="a" * 64,
+        train_ids=("train",),
+        test_ids=("test",),
+        category_counts=tuple(CategoryCounts(category, train=1, test=1) for category in categories),
+    )
+    split_path = tmp_path / "classifier" / "split.json"
+    split_path.parent.mkdir(parents=True)
+    split_path.write_text(json.dumps(split.as_dict()), encoding="utf-8")
+    model_path = tmp_path / "private" / "classifier.joblib"
+
+    def model_persistence_failure(
+        examples,
+        evaluation,
+        configured,
+        configured_model_path: Path,
+        manifest_path: Path,
+        trained_at: datetime,
+    ) -> None:
+        assert configured_model_path == model_path
+        raise OSError(f"RAW_MODEL_PERSISTENCE_MARKER: {configured_model_path.resolve()}")
+
+    evaluation_service = ClassifierEvaluationService(
+        clock=lambda: NOW,
+        split_path=split_path,
+        report_path=tmp_path / "classifier" / "evaluation.json",
+        model_path=model_path,
+        manifest_path=tmp_path / "private" / "classifier-manifest.json",
+        category_loader=lambda path: categories,
+        dataset_loader=lambda path, configured: [object()],
+        cohort_selector=lambda examples, configured, count: [object()],
+        split_creator=lambda examples, configured, **options: split,
+        evaluator=lambda examples, assignment, configured, **options: make_evaluation_result(),
+        json_writer=lambda path, payload: None,
+        model_saver=model_persistence_failure,
+    )
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        evaluation_service_factory=lambda: evaluation_service,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == {
+        "stage": "classify",
+        "code": "PREDICTION_FAILED",
+        "message": "Classifier model could not be saved",
+        "retryable": False,
+    }
+    assert "RAW_MODEL_PERSISTENCE_MARKER" not in result.stderr
+    assert str(model_path.resolve()) not in result.stderr
 
 
 def test_list_prints_id_title_category_and_status(tmp_path) -> None:
@@ -183,6 +419,56 @@ def test_production_app_keeps_local_commands_available_without_a_provider_key(tm
     }
 
 
+def test_production_evaluate_classifier_is_key_free_and_does_not_construct_provider_clients(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    evaluation_service = FakeEvaluationService(result=make_evaluation_result())
+    captured: dict[str, object] = {}
+
+    def service_factory(*, clock):
+        captured["clock"] = clock
+        return evaluation_service
+
+    def unexpected_provider(*args, **kwargs):
+        raise AssertionError("evaluate-classifier must not construct a provider client")
+
+    monkeypatch.setattr(cli, "ClassifierEvaluationService", service_factory)
+    monkeypatch.setattr(cli, "OpenAI", unexpected_provider)
+    monkeypatch.setattr(cli.genai, "Client", unexpected_provider)
+
+    result = CliRunner().invoke(cli.app, ["evaluate-classifier"])
+
+    assert result.exit_code == 0
+    assert captured["clock"] is cli._now
+    assert evaluation_service.run_calls == 1
+
+
+def test_create_app_default_evaluation_service_uses_its_injected_clock(monkeypatch) -> None:
+    evaluation_service = FakeEvaluationService(result=make_evaluation_result())
+    captured: dict[str, object] = {}
+
+    def injected_clock() -> datetime:
+        return NOW
+
+    def service_factory(*, clock):
+        captured["clock"] = clock
+        return evaluation_service
+
+    monkeypatch.setattr(cli, "ClassifierEvaluationService", service_factory)
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(Path("unused")),
+        injected_clock,
+    )
+
+    result = CliRunner().invoke(app, ["evaluate-classifier"])
+
+    assert result.exit_code == 0
+    assert captured["clock"] is injected_clock
+
+
 def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatch) -> None:
     assert cli._repository().root == Path("data/summaries")
     monkeypatch.delenv("AI_DIGEST_PROVIDER", raising=False)
@@ -204,6 +490,7 @@ def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatc
             captured["summarizer_model"] = model
 
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_classifier", lambda: "trained-classifier")
     monkeypatch.setattr(cli, "genai", type("FakeGenAI", (), {"Client": FakeGeminiClient}), raising=False)
     monkeypatch.setattr(cli, "GeminiSummarizer", FakeGeminiSummarizer, raising=False)
 
@@ -214,6 +501,7 @@ def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatc
     assert extractor._client_factory is cli._web_client_factory
     assert captured["gemini_api_key"] == "test-key"
     assert captured["summarizer_model"] == "gemini-3.6-flash"
+    assert captured["classifier"] == "trained-classifier"
 
 
 def test_production_can_select_openai(monkeypatch) -> None:
@@ -232,6 +520,7 @@ def test_production_can_select_openai(monkeypatch) -> None:
             captured["summarizer_model"] = model
 
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_classifier", lambda: "trained-classifier")
     monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: captured.update(openai_api_key=api_key))
     monkeypatch.setattr(cli, "OpenAISummarizer", FakeOpenAISummarizer)
 
@@ -239,6 +528,60 @@ def test_production_can_select_openai(monkeypatch) -> None:
 
     assert captured["openai_api_key"] == "test-key"
     assert captured["summarizer_model"] == "gpt-5-mini"
+    assert captured["classifier"] == "trained-classifier"
+
+
+def test_production_classifier_uses_only_repository_controlled_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeTrainedClassifier:
+        def __init__(self, model_path: Path, manifest_path: Path, categories: tuple[str, ...]) -> None:
+            captured["model_path"] = model_path
+            captured["manifest_path"] = manifest_path
+            captured["categories"] = categories
+
+    monkeypatch.setattr(cli, "TrainedClassifier", FakeTrainedClassifier)
+
+    classifier = cli._classifier()
+
+    assert isinstance(classifier, FakeTrainedClassifier)
+    assert captured == {
+        "model_path": Path("models/classifier.joblib"),
+        "manifest_path": Path("models/classifier-manifest.json"),
+        "categories": tuple(json.loads(Path("data/categories.json").read_text(encoding="utf-8"))),
+    }
+
+
+def test_production_add_reports_missing_model_before_workflow_runs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    workflow_started = False
+
+    class FakeWorkflow:
+        def __init__(self, **_dependencies: object) -> None:
+            nonlocal workflow_started
+            workflow_started = True
+
+    monkeypatch.setattr(cli, "TrainedClassifier", lambda *_args: (_ for _ in ()).throw(
+        DigestError("classify", "MODEL_NOT_FOUND", "Classifier model artifacts were not found", False)
+    ))
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    app = create_app(cli._workflow, lambda: SummaryRepository(tmp_path), lambda: NOW)
+
+    result = CliRunner().invoke(app, ["add", "https://example.com/article"])
+
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == {
+        "stage": "classify",
+        "code": "MODEL_NOT_FOUND",
+        "message": "Classifier model artifacts were not found",
+        "retryable": False,
+    }
+    assert workflow_started is False
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_unknown_provider_is_rejected_without_creating_a_client(monkeypatch) -> None:
