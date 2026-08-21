@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-14
+> 最後更新：2026-08-21
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
 > 目前階段：GitHub Pages 與 Gemini 真實公開網頁來源驗收已完成；下一核心里程碑為正式分類模型
 >
-> 下次續作：建立人工標註分類資料集，訓練並可重現評估優於最大類基準的分類模型
+> 下次續作：依分類器實作計畫執行 Task 2，建立 deterministic stratified split 與可重現 evaluation report
 
 ## 專案目標
 
@@ -73,6 +73,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - dataset loader 會拒絕空白必填值、非法 batch／review state、未知分類、非 HTTP(S) URL、重複 ID 與 canonical source URL；錯誤不包含列內容或 URL。
 - 完成 approved-only cohort 驗證與 deterministic SHA-256；正式 180 筆人工審核資料、資料切分、模型訓練與效能評估仍未開始，因此未勾選正式分類模型完成項目。
 - Task 1 focused suite 為 22 passed；完整 Python suite 為 205 passed、1 個既有 Google SDK 棄用警告；獨立唯讀程式審查未發現剩餘 Critical、Important 或 Minor 問題。
+- Task 1 commit `ddf4563` 已 fast-forward 合併至 `master` 並推送至 GitHub；本機 `HEAD` 與 `origin/master` 均為 `ddf4563de80b776f98a6c7bee0afa309210cbc1a`。合併後重跑完整 Python suite，結果仍為 205 passed、1 個既有 Google SDK 棄用警告。
+- `feature/classifier-dataset` 分支及 Git worktree 註冊已移除；OneDrive 權限仍阻止刪除未註冊的 `.worktrees/classifier-dataset` 殘留目錄。該目錄不影響 Git 狀態或正式程式，但後續可在檔案鎖解除後清理。
 
 ### 2026-08-14
 
@@ -137,9 +139,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 建立 4～6 個互斥主分類的人工標註資料集與版本／內容雜湊。
-2. 以固定 random seed 訓練 TF-IDF 與 Logistic Regression，記錄 Accuracy、Macro F1、混淆矩陣與最大類基準。
-3. 模型測試 Accuracy 嚴格高於最大類基準後，再進入 YouTube 與公開社群里程碑。
+1. 依分類器實作計畫執行 Task 2：建立 deterministic stratified split、TF-IDF／Logistic Regression evaluation pipeline 與原子 evaluation JSON 輸出。
+2. 完成 runtime model artifact、`evaluate-classifier` CLI 與正式分類器 composition 後，再提交三批各 60 筆來源資料供人工審核。
+3. 180 筆資料全部核准且模型測試 Accuracy 嚴格高於最大類基準後，再進入 YouTube 與公開社群里程碑。
 
 ## 更新規則
 
