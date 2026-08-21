@@ -11,10 +11,10 @@ from pydantic import ValidationError
 
 from ai_digest.classifiers.base import Classifier
 from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
-from ai_digest.extractors.web import WebExtractor
+from ai_digest.extractors.base import Extractor
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
-from ai_digest.url_normalizer import normalize_public_url
+from ai_digest.source_urls import canonicalize_source_url
 
 
 _TAIPEI = ZoneInfo("Asia/Taipei")
@@ -37,7 +37,7 @@ class AddArticleWorkflow:
 
     def __init__(
         self,
-        extractor: WebExtractor,
+        extractor: Extractor,
         summarizer: Summarizer,
         classifier: Classifier,
         repository: SummaryRepository,
@@ -52,7 +52,7 @@ class AddArticleWorkflow:
     def run(self, raw_url: str, now: datetime) -> SummaryRecord:
         """Create and atomically save a published summary record."""
         self._on_progress("input")
-        canonical_url = normalize_public_url(raw_url)
+        canonical_url = canonicalize_source_url(raw_url)
         if any(str(record.canonical_url) == canonical_url for record in self._repository.list()):
             raise DigestError("input", "DUPLICATE_URL", "A summary already exists for this URL", False)
 
@@ -72,7 +72,7 @@ class AddArticleWorkflow:
                 schemaVersion=1,
                 id=_record_id(article.title, str(article.canonical_url), now),
                 canonicalUrl=article.canonical_url,
-                sourceType="web",
+                sourceType=article.source_type,
                 title=article.title,
                 author=article.author,
                 sourcePublishedAt=article.published_at,
