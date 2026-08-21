@@ -27,7 +27,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 企畫與需求收斂 | 已完成 | 核心三來源 MVP、非目標、架構邊界與驗收標準已納入核准規格 |
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
-| 分類模型與評估 | 尚未開始 | 現有 `FixedClassifier` 僅供開發串接；正式模型必須嚴格優於最大類基準 |
+| 分類模型與評估 | 實作中 | 已完成訓練 CSV Schema、離線驗證、核准 cohort 規則與穩定內容雜湊；模型、180 筆審核資料及正式評估仍未完成 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
@@ -66,6 +66,13 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-21
+
+- 依 `2026-08-18-classifier-dataset-model.md` 完成 Task 1：加入 scikit-learn/joblib 相依宣告，以及 immutable `TrainingExample`、UTF-8 CSV loader、精確欄位與安全錯誤驗證。
+- dataset loader 會拒絕空白必填值、非法 batch／review state、未知分類、非 HTTP(S) URL、重複 ID 與 canonical source URL；錯誤不包含列內容或 URL。
+- 完成 approved-only cohort 驗證與 deterministic SHA-256；正式 180 筆人工審核資料、資料切分、模型訓練與效能評估仍未開始，因此未勾選正式分類模型完成項目。
+- Task 1 focused suite 為 22 passed；完整 Python suite 為 205 passed、1 個既有 Google SDK 棄用警告；獨立唯讀程式審查未發現剩餘 Critical、Important 或 Minor 問題。
 
 ### 2026-08-14
 

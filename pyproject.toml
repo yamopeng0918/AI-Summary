@@ -13,6 +13,8 @@ dependencies = [
     "trafilatura>=2,<3",
     "openai>=1.99,<3",
     "google-genai>=2.7,<3",
+    "scikit-learn>=1.9,<2",
+    "joblib>=1.5,<2",
 ]
 
 [project.optional-dependencies]
