@@ -151,6 +151,8 @@ class YouTubeExtractor:
 
     def _validate_availability(self, metadata: dict[str, Any]) -> None:
         availability = metadata.get("availability")
+        if availability is not None and not isinstance(availability, str):
+            raise _error("INVALID_METADATA", "YouTube metadata is invalid", False)
         if availability in {"needs_auth", "needs_subscription"}:
             raise _error(
                 "LOGIN_REQUIRED", "YouTube source requires login", False
@@ -159,7 +161,10 @@ class YouTubeExtractor:
             raise _error(
                 "CONTENT_UNAVAILABLE", "YouTube source is unavailable", False
             )
-        if metadata.get("live_status") in {"is_live", "is_upcoming"}:
+        live_status = metadata.get("live_status")
+        if live_status is not None and not isinstance(live_status, str):
+            raise _error("INVALID_METADATA", "YouTube metadata is invalid", False)
+        if live_status in {"is_live", "is_upcoming"}:
             raise _error(
                 "LIVE_STREAM_UNSUPPORTED",
                 "Live YouTube sources are unsupported",

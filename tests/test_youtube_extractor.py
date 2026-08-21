@@ -190,6 +190,44 @@ def test_rejects_restricted_live_and_long_videos_before_content_access(
     assert "公開影片" not in raised.value.message
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("availability", ["SECRET_AVAILABILITY_ARRAY"]),
+        ("availability", {"SECRET_AVAILABILITY_OBJECT": True}),
+        ("live_status", ["SECRET_LIVE_ARRAY"]),
+        ("live_status", {"SECRET_LIVE_OBJECT": True}),
+    ],
+)
+def test_rejects_unhashable_access_metadata_safely_before_content_access(
+    field: str, value: object
+) -> None:
+    def forbidden(*args: object):
+        pytest.fail("content stage must not run")
+
+    extractor = YouTubeExtractor(
+        lambda url: public_metadata(**{field: value}),
+        forbidden,
+        forbidden,
+        forbidden,
+        7200,
+        600,
+    )
+
+    with pytest.raises(DigestError) as raised:
+        extractor.extract(VIDEO_URL)
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "INVALID_METADATA",
+        "message": "YouTube metadata is invalid",
+        "retryable": False,
+    }
+    assert "SECRET" not in rendered_exception(raised.value)
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None
+
+
 def test_preserves_safe_probe_access_restriction_error_unchanged() -> None:
     restriction = DigestError(
         "extract", "LOGIN_REQUIRED", "Public media requires authentication", False
