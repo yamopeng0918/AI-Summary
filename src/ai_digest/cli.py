@@ -16,11 +16,19 @@ from ai_digest.classifiers.base import Classifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.classifiers.trained import TrainedClassifier
 from ai_digest.domain import DigestError, SummaryRecord
+from ai_digest.extractors.router import ExtractorRouter
 from ai_digest.extractors.web import WebExtractor
+from ai_digest.extractors.youtube import (
+    YouTubeCaptionClient,
+    YouTubeExtractor,
+    YtDlpMetadataProbe,
+)
+from ai_digest.extractors.youtube_media import CommandRunner, YouTubeMediaPipeline
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
 from ai_digest.summarizers.gemini import GeminiSummarizer
 from ai_digest.summarizers.openai import OpenAISummarizer
+from ai_digest.transcribers.openai import lazy_openai_transcriber
 from ai_digest.workflow import AddArticleWorkflow
 
 
@@ -64,9 +72,50 @@ def _summarizer() -> Summarizer:
     raise DigestError("input", "INVALID_PROVIDER", "AI_DIGEST_PROVIDER must be gemini or openai", False)
 
 
+def _positive_int_setting(name: str, default: int) -> int:
+    raw = os.environ.get(name, str(default))
+    try:
+        value = int(raw)
+    except ValueError:
+        raise DigestError(
+            "input",
+            "INVALID_CONFIG",
+            f"{name} must be a positive integer",
+            False,
+        ) from None
+    if value <= 0:
+        raise DigestError(
+            "input",
+            "INVALID_CONFIG",
+            f"{name} must be a positive integer",
+            False,
+        )
+    return value
+
+
 def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWorkflow:
+    runner = CommandRunner()
+    media = YouTubeMediaPipeline(runner)
+    model = os.environ.get("AI_DIGEST_TRANSCRIPTION_MODEL", "gpt-transcribe")
+    chunk_seconds = _positive_int_setting(
+        "AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", 600
+    )
+    youtube = YouTubeExtractor(
+        probe=YtDlpMetadataProbe(runner),
+        caption_client=YouTubeCaptionClient(client_factory=_web_client_factory),
+        media=media.audio_chunks,
+        transcriber_factory=lambda: lazy_openai_transcriber(
+            os.environ.get("OPENAI_API_KEY"), model
+        ),
+        max_duration_seconds=_positive_int_setting(
+            "AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", 7200
+        ),
+        chunk_seconds=chunk_seconds,
+    )
     return AddArticleWorkflow(
-        extractor=WebExtractor(client_factory=_web_client_factory),
+        extractor=ExtractorRouter(
+            WebExtractor(client_factory=_web_client_factory), youtube
+        ),
         summarizer=_summarizer(),
         classifier=_classifier(),
         repository=_repository(),
