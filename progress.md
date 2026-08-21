@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-20
+> 最後更新：2026-08-21
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：正式分類器資料集批次一、二已核准；批次三 60 筆待審
+> 目前階段：正式分類器已通過固定測試集評估並產生 production artifacts；下一核心來源里程碑為 YouTube
 >
-> 下次續作：逐列審核批次三；取得明確核准後才建立最終 cohort、內容雜湊並訓練評估模型
+> 下次續作：合併並發布正式分類器里程碑後，設計 YouTube 有字幕與無字幕的獨立來源流程
 
 ## 專案目標
 
@@ -27,7 +27,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 企畫與需求收斂 | 已完成 | 核心三來源 MVP、非目標、架構邊界與驗收標準已納入核准規格 |
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
-| 分類模型與評估 | 進行中 | 批次一、二共 120 筆已核准；批次三 60 筆待審，最終 cohort、內容雜湊、訓練與正式評估均未執行 |
+| 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
@@ -57,7 +57,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 |---|---|
 | 公開來源受付費牆、登入或反爬蟲限制 | 不嘗試繞過，回報明確的結構化錯誤 |
 | 真實網頁與 Gemini 驗收 | 已以核准文章與預設 `gemini-3.6-flash` 通過；SDK 仍輸出 Models API 的 AFC 建議警告，但不影響 structured-output 結果 |
-| 開發用固定分類器 | 只用於管線串接，不視為分類模型完成 |
+| 正式分類器 artifact | 生產流程只載入 repository 控制的 joblib 與 manifest；缺檔、版本或分類順序不符時 fail closed，沒有 `FixedClassifier` fallback |
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
@@ -66,6 +66,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### Task 8 正式分類器驗收（2026-08-21）
+
+- 最終 cohort 共 180 筆 approved 資料，六類各 30 筆；dataset SHA-256 為 `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`，固定 seed `42` 的 split SHA-256 為 `0c0c6cd136656b06c543cad61641a568a0268cd015a6f67c90e5cf482d85497e`。
+- 評估使用 144 筆訓練、36 筆 held-out 測試，每類 24/6。Accuracy 為 `0.9166666666666666`，Macro F1 為 `0.917915417915418`，最大類基準 Accuracy 為 `0.16666666666666666`；`beatsBaseline=true`、`accepted=true`。
+- 依 `人工智慧`、`程式開發`、`科技產業`、`商業與職場`、`設計與創意`、`生活與學習` 順序，混淆矩陣為 `[[5,0,0,0,0,1],[0,6,0,0,0,0],[0,0,6,0,0,0],[0,0,0,5,0,1],[0,0,1,0,5,0],[0,0,0,0,0,6]]`。
+- 使用 scikit-learn `1.9.0` 產生並獨立驗證 `data/classifier/split.json`、`data/classifier/evaluation.json`、`models/classifier.joblib` 與 `models/classifier-manifest.json`；六個代表文字均預測為對應配置分類。
+- 完整 gates：Python `266 passed`、1 個既有 Google SDK 棄用警告；Vitest `24 passed`；Astro `0 errors / 0 warnings / 0 hints`；Pages build `5 pages`；tracked/dist deployment verifier exit `0`。
 
 ### 分類器審核批次三來源修正（2026-08-20）
 
@@ -151,9 +159,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 逐列審核批次三 60 筆候選資料，只有取得明確決定的列才能修改 `reviewStatus`／`reviewNote`。
-2. 三個批次全部核准後，建立 180 筆最終 cohort 的版本與內容雜湊。
-3. 以固定 random seed 訓練 TF-IDF 與 Logistic Regression，記錄 Accuracy、Macro F1、混淆矩陣與最大類基準；測試 Accuracy 嚴格高於基準後，再進入後續核心來源里程碑。
+1. 將正式分類器分支合併至 `master`，並在合併結果上重跑完整 gates；未經明確要求不 push 或部署。
+2. 依核准 MVP 規格設計並實作獨立 YouTube 來源解析器，先處理有字幕公開影片，再處理無可用字幕流程。
+3. YouTube 有字幕與無字幕各以一個使用者核准的真實公開案例驗收後，再進入公開社群單篇貼文里程碑。
 
 ## 更新規則
 

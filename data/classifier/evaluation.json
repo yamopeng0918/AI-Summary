@@ -1,0 +1,142 @@
+{
+  "accepted": true,
+  "accuracy": 0.9166666666666666,
+  "beatsBaseline": true,
+  "confusionMatrix": [
+    [
+      5,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    [
+      0,
+      6,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      6,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      5,
+      0,
+      1
+    ],
+    [
+      0,
+      0,
+      1,
+      0,
+      5,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      6
+    ]
+  ],
+  "datasetSha256": "1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c",
+  "evaluatedAt": "2026-08-20T22:48:58.386705+08:00",
+  "macroF1": 0.917915417915418,
+  "majorityBaselineAccuracy": 0.16666666666666666,
+  "modelParameters": {
+    "classifier": {
+      "maxIter": 2000,
+      "randomState": 42
+    },
+    "tfidf": {
+      "analyzer": "char_wb",
+      "ngramRange": [
+        2,
+        5
+      ]
+    }
+  },
+  "perCategoryCounts": {
+    "人工智慧": {
+      "test": 6,
+      "train": 24
+    },
+    "商業與職場": {
+      "test": 6,
+      "train": 24
+    },
+    "生活與學習": {
+      "test": 6,
+      "train": 24
+    },
+    "科技產業": {
+      "test": 6,
+      "train": 24
+    },
+    "程式開發": {
+      "test": 6,
+      "train": 24
+    },
+    "設計與創意": {
+      "test": 6,
+      "train": 24
+    }
+  },
+  "perCategoryMetrics": {
+    "人工智慧": {
+      "f1": 0.9090909090909091,
+      "precision": 1.0,
+      "recall": 0.8333333333333334,
+      "support": 6
+    },
+    "商業與職場": {
+      "f1": 0.9090909090909091,
+      "precision": 1.0,
+      "recall": 0.8333333333333334,
+      "support": 6
+    },
+    "生活與學習": {
+      "f1": 0.8571428571428571,
+      "precision": 0.75,
+      "recall": 1.0,
+      "support": 6
+    },
+    "科技產業": {
+      "f1": 0.9230769230769231,
+      "precision": 0.8571428571428571,
+      "recall": 1.0,
+      "support": 6
+    },
+    "程式開發": {
+      "f1": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "support": 6
+    },
+    "設計與創意": {
+      "f1": 0.9090909090909091,
+      "precision": 1.0,
+      "recall": 0.8333333333333334,
+      "support": 6
+    }
+  },
+  "pythonVersion": "3.14.6",
+  "scikitLearnVersion": "1.9.0",
+  "seed": 42,
+  "splitSha256": "0c0c6cd136656b06c543cad61641a568a0268cd015a6f67c90e5cf482d85497e",
+  "testSamples": 36,
+  "trainingSamples": 144
+}

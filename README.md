@@ -83,6 +83,8 @@ ai-digest evaluate-classifier
 - `models/classifier-manifest.json`
 - `data/categories.json`
 
+目前已接受的固定評估使用 180 筆 approved 資料與 seed `42`，其中 144 筆訓練、36 筆 held-out 測試。Accuracy 為 `0.9166666666666666`、Macro F1 為 `0.917915417915418`，嚴格高於最大類基準 Accuracy `0.16666666666666666`；完整可重現證據位於 `data/classifier/evaluation.json`，資料集內容雜湊為 `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`。
+
 生產 `add` 和 `scripts/publish_url.py` 僅載入這組固定 artifact，沒有環境變數、CLI 參數或靜默回退可改用其他模型。模型尚未通過評估或 artifact 不存在時，在已完成摘要 provider 設定後，建立摘要工作流程會回報結構化 `classify`／`MODEL_NOT_FOUND` 錯誤；不會開始擷取或摘要，也不會寫入摘要 JSON。`FixedClassifier` 僅保留給測試與明確的本機開發組裝，不能作為生產回退。
 
 ## One-command publishing script
