@@ -75,6 +75,7 @@
 - [x] 以固定 random seed 訓練 TF-IDF 與 Logistic Regression 分類器。
 - [x] 儲存訓練／測試筆數、各類樣本數、Accuracy、Macro F1、混淆矩陣與標籤順序。
 - [x] 計算最大類基準 Accuracy，並驗證測試 Accuracy **嚴格高於**該基準後才標記分類模型完成。
+- [x] 將正式分類器、180 筆已審核資料與可重現 artifacts 合併至 `master`，完成合併後 gates 並推送 GitHub（merge commit `f9977de`）。
 
 ### YouTube 公開影片
 

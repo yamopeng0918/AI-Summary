@@ -6,7 +6,7 @@
 >
 > 目前階段：正式分類器已通過固定測試集評估並產生 production artifacts；下一核心來源里程碑為 YouTube
 >
-> 下次續作：合併並發布正式分類器里程碑後，設計 YouTube 有字幕與無字幕的獨立來源流程
+> 下次續作：設計 YouTube 有字幕與無可用字幕的獨立來源流程，取得架構核准後依 TDD 實作
 
 ## 專案目標
 
@@ -74,6 +74,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 依 `人工智慧`、`程式開發`、`科技產業`、`商業與職場`、`設計與創意`、`生活與學習` 順序，混淆矩陣為 `[[5,0,0,0,0,1],[0,6,0,0,0,0],[0,0,6,0,0,0],[0,0,0,5,0,1],[0,0,1,0,5,0],[0,0,0,0,0,6]]`。
 - 使用 scikit-learn `1.9.0` 產生並獨立驗證 `data/classifier/split.json`、`data/classifier/evaluation.json`、`models/classifier.joblib` 與 `models/classifier-manifest.json`；六個代表文字均預測為對應配置分類。
 - 完整 gates：Python `266 passed`、1 個既有 Google SDK 棄用警告；Vitest `24 passed`；Astro `0 errors / 0 warnings / 0 hints`；Pages build `5 pages`；tracked/dist deployment verifier exit `0`。
+- 正式分類器分支已合併至 `master`，merge commit `f9977de` 已推送至 GitHub。合併結果重新通過 Python `266 passed`、Vitest `24 passed`、Astro `0 diagnostics`、Pages `5 pages`、tracked/dist deployment verifier 與 `git diff --check`。
 
 ### 分類器審核批次三來源修正（2026-08-20）
 
@@ -159,9 +160,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 將正式分類器分支合併至 `master`，並在合併結果上重跑完整 gates；未經明確要求不 push 或部署。
-2. 依核准 MVP 規格設計並實作獨立 YouTube 來源解析器，先處理有字幕公開影片，再處理無可用字幕流程。
-3. YouTube 有字幕與無字幕各以一個使用者核准的真實公開案例驗收後，再進入公開社群單篇貼文里程碑。
+1. 依核准 MVP 規格提出 YouTube 來源設計，維持與一般網頁解析器隔離，並分別定義有字幕與無可用字幕的處理邊界及安全錯誤。
+2. 設計取得核准後依 TDD 實作，日常測試使用本地 fixture／替身，不依賴 YouTube 網路狀態。
+3. YouTube 有字幕與無可用字幕各以一個使用者核准的真實公開案例驗收後，再進入公開社群單篇貼文里程碑。
 
 ## 更新規則
 
