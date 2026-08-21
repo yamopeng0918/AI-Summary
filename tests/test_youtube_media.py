@@ -16,6 +16,17 @@ from ai_digest.extractors.youtube_media import (
 VIDEO_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
+def _metadata_argv(executable: str = "yt-dlp") -> list[str]:
+    return [
+        executable,
+        "--ignore-config",
+        "--dump-single-json",
+        "--skip-download",
+        "--no-playlist",
+        VIDEO_URL,
+    ]
+
+
 def _formatted_exception(error: BaseException) -> str:
     return "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
@@ -53,6 +64,134 @@ def test_command_runner_rejects_command_strings(
 
 
 @pytest.mark.parametrize(
+    "unsupported_argv",
+    [
+        ["yt-dlp", "--ignore-config", "--alias", "probe", "--version"],
+        ["yt-dlp", "--ignore-config", "--exec", "echo SECRET", VIDEO_URL],
+        ["yt-dlp", "--dump-single-json", "--skip-download", "--no-playlist", VIDEO_URL],
+        ["yt-dlp.cmd", "--version"],
+        ["python", "-m", "yt_dlp", "--version"],
+        ["custom-downloader", "--version"],
+        [
+            "yt-dlp",
+            "--ignore-config",
+            "--dump-single-json",
+            "--skip-download",
+            "--no-playlist",
+            "--write-info-json",
+            VIDEO_URL,
+        ],
+        ["yt-dlp", "--ignore-config", "--downloader=custom", VIDEO_URL],
+        ["yt-dlp", "--ignore-config", "--downloader-args=SECRET", VIDEO_URL],
+        ["yt-dlp", "--ignore-config", "--postprocessor-args=SECRET", VIDEO_URL],
+        ["yt-dlp", "--ignore-config", "--use-postprocessor=SECRET", VIDEO_URL],
+        [
+            "yt-dlp",
+            "--ignore-config",
+            "--dump-single-json",
+            "--skip-download",
+            "--no-playlist",
+            VIDEO_URL,
+            "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+        ],
+        [
+            "yt-dlp",
+            "--ignore-config",
+            "--dump-single-json",
+            "--skip-download",
+            "--no-playlist",
+            "not-a-url",
+        ],
+        ["ffmpeg", "-loglevel", "quiet", "-version"],
+    ],
+)
+def test_command_runner_rejects_unsupported_command_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+    unsupported_argv: list[str],
+) -> None:
+    def unexpected_run(*args: object, **kwargs: object) -> None:
+        pytest.fail("unsupported command profile must not reach subprocess.run")
+
+    monkeypatch.setattr(subprocess, "run", unexpected_run)
+
+    with pytest.raises(ValueError, match="Unsupported media tool command") as raised:
+        CommandRunner().run(unsupported_argv)
+
+    assert VIDEO_URL not in str(raised.value)
+    assert "SECRET" not in str(raised.value)
+
+
+def test_command_runner_accepts_task6_metadata_profile_with_native_full_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    executable = str(tmp_path / "yt-dlp.exe")
+    argv = _metadata_argv(executable)
+    observed: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="{}", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    CommandRunner().run(argv)
+
+    assert observed == [argv]
+
+
+def test_command_runner_accepts_only_current_download_and_conversion_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.webm"
+    output = tmp_path / "chunk-%04d.mp3"
+    commands = [
+        [
+            "yt-dlp",
+            "--ignore-config",
+            "--no-playlist",
+            "-f",
+            "bestaudio",
+            "-P",
+            str(tmp_path),
+            "-o",
+            "source.%(ext)s",
+            VIDEO_URL,
+        ],
+        [
+            "ffmpeg.exe",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-f",
+            "segment",
+            "-segment_time",
+            "600",
+            str(output),
+        ],
+    ]
+    observed: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    for command in commands:
+        CommandRunner().run(command)
+
+    assert observed == commands
+
+
+@pytest.mark.parametrize(
     "unsafe_argv",
     [
         ["yt-dlp", "--cookies", "cookies.txt", VIDEO_URL],
@@ -82,7 +221,7 @@ def test_command_runner_rejects_credentials_proxies_and_bypass_flags(
 
     monkeypatch.setattr(subprocess, "run", unexpected_run)
 
-    with pytest.raises(ValueError, match="Unsafe media tool arguments") as raised:
+    with pytest.raises(ValueError, match="Unsupported media tool command") as raised:
         CommandRunner().run(unsafe_argv)
 
     assert VIDEO_URL not in str(raised.value)
@@ -122,7 +261,7 @@ def test_command_runner_maps_timeout_without_leaking_tool_details(
     monkeypatch.setattr(subprocess, "run", timeout)
 
     with pytest.raises(DigestError) as raised:
-        CommandRunner().run(["yt-dlp", VIDEO_URL])
+        CommandRunner().run(_metadata_argv())
 
     assert raised.value.code == "MEDIA_DOWNLOAD_FAILED"
     assert raised.value.retryable is True
@@ -149,7 +288,7 @@ def test_command_runner_maps_transient_nonzero_exit_without_leaking_tool_details
     monkeypatch.setattr(subprocess, "run", failed)
 
     with pytest.raises(DigestError) as raised:
-        CommandRunner().run(["yt-dlp", VIDEO_URL])
+        CommandRunner().run(_metadata_argv())
 
     assert raised.value.code == "MEDIA_DOWNLOAD_FAILED"
     assert raised.value.retryable is True
@@ -185,7 +324,7 @@ def test_command_runner_sanitizes_os_and_decode_failures(
     monkeypatch.setattr(subprocess, "run", failed)
 
     with pytest.raises(DigestError) as raised:
-        CommandRunner().run(["yt-dlp", VIDEO_URL])
+        CommandRunner().run(_metadata_argv())
 
     assert raised.value.code == "MEDIA_DOWNLOAD_FAILED"
     assert raised.value.retryable is True
@@ -231,7 +370,7 @@ def test_command_runner_returns_safe_access_failure_classification(
     monkeypatch.setattr(subprocess, "run", restricted)
 
     with pytest.raises(DigestError) as raised:
-        CommandRunner().run(["yt-dlp", VIDEO_URL])
+        CommandRunner().run(_metadata_argv())
 
     assert raised.value.stage == "extract"
     assert raised.value.code == expected_code

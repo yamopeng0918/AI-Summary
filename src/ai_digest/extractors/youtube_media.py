@@ -4,50 +4,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 import shutil
 import subprocess
 import tempfile
 
 from ai_digest.domain import DigestError
 
-
-_YT_DLP_PROHIBITED_OPTIONS = frozenset(
-    {
-        "-2",
-        "-n",
-        "-p",
-        "-u",
-        "--add-header",
-        "--add-headers",
-        "--ap-mso",
-        "--ap-password",
-        "--ap-username",
-        "--client-certificate",
-        "--client-certificate-key",
-        "--client-certificate-password",
-        "--config-locations",
-        "--cookies",
-        "--cookies-from-browser",
-        "--geo-bypass",
-        "--geo-bypass-country",
-        "--geo-bypass-ip-block",
-        "--geo-verification-proxy",
-        "--http-header",
-        "--http-headers",
-        "--impersonate",
-        "--netrc",
-        "--netrc-cmd",
-        "--netrc-location",
-        "--password",
-        "--proxy",
-        "--twofactor",
-        "--username",
-        "--video-password",
-        "--xff",
-    }
-)
-_YT_DLP_ATTACHED_VALUE_OPTIONS = ("-2", "-p", "-u")
-_FFMPEG_PROHIBITED_OPTIONS = frozenset({"-cookies", "-headers", "-http_proxy"})
 
 _LOGIN_REQUIRED_MARKERS = (
     "confirm your age",
@@ -90,28 +53,78 @@ def _access_failure_code(
     return None
 
 
+def _is_public_url(value: str) -> bool:
+    if any(character.isspace() for character in value):
+        return False
+    try:
+        parsed = urlsplit(value)
+        _ = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.casefold() == "https"
+        and parsed.hostname is not None
+        and parsed.username is None
+        and parsed.password is None
+    )
+
+
+def _is_yt_dlp_profile(arguments: list[str]) -> bool:
+    if arguments == ["--version"]:
+        return True
+    if len(arguments) == 5:
+        return arguments[:4] == [
+            "--ignore-config",
+            "--dump-single-json",
+            "--skip-download",
+            "--no-playlist",
+        ] and _is_public_url(arguments[4])
+    if len(arguments) == 9:
+        return (
+            arguments[:5]
+            == ["--ignore-config", "--no-playlist", "-f", "bestaudio", "-P"]
+            and Path(arguments[5]).is_absolute()
+            and arguments[6:8] == ["-o", "source.%(ext)s"]
+            and _is_public_url(arguments[8])
+        )
+    return False
+
+
+def _is_ffmpeg_profile(arguments: list[str]) -> bool:
+    if arguments in (["--version"], ["-version"]):
+        return True
+    if len(arguments) != 14:
+        return False
+    source = Path(arguments[3])
+    output = Path(arguments[13])
+    return (
+        arguments[:3] == ["-nostdin", "-y", "-i"]
+        and arguments[4:12]
+        == ["-vn", "-ac", "1", "-ar", "16000", "-f", "segment", "-segment_time"]
+        and arguments[12].isdigit()
+        and int(arguments[12]) > 0
+        and source.is_absolute()
+        and source.name.startswith("source.")
+        and output.is_absolute()
+        and output.parent == source.parent
+        and output.name == "chunk-%04d.mp3"
+    )
+
+
 def _validate_argv(argv: list[str]) -> None:
     if not isinstance(argv, list) or not argv or any(
         not isinstance(value, str) for value in argv
     ):
         raise TypeError("Media commands require a non-empty argument list")
-    tool = Path(argv[0]).name.casefold().removesuffix(".exe")
-    options = {
-        value.partition("=")[0].casefold()
-        for value in argv[1:]
-        if value.startswith("-")
-    }
-    unsafe = False
-    if tool == "yt-dlp":
-        unsafe = bool(options & _YT_DLP_PROHIBITED_OPTIONS) or any(
-            value.casefold().startswith(prefix) and value.casefold() != prefix
-            for value in argv[1:]
-            for prefix in _YT_DLP_ATTACHED_VALUE_OPTIONS
-        )
-    elif tool == "ffmpeg":
-        unsafe = bool(options & _FFMPEG_PROHIBITED_OPTIONS)
-    if unsafe:
-        raise ValueError("Unsafe media tool arguments are not allowed")
+    executable = Path(argv[0]).name.casefold()
+    if executable in {"yt-dlp", "yt-dlp.exe"}:
+        supported = _is_yt_dlp_profile(argv[1:])
+    elif executable in {"ffmpeg", "ffmpeg.exe"}:
+        supported = _is_ffmpeg_profile(argv[1:])
+    else:
+        supported = False
+    if not supported:
+        raise ValueError("Unsupported media tool command")
 
 
 def _create_workspace(temp_root: Path | None) -> Path:
