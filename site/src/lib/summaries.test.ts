@@ -90,6 +90,20 @@ describe('summary data', () => {
     expect(getPublishedSummaries(records).map((record) => record.id)).toEqual(['newer']);
   });
 
+  it('loads a published YouTube summary', () => {
+    const record = parseSummaryRecord({
+      ...newerRecord,
+      canonicalUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      sourceType: 'youtube',
+      title: '公開影片',
+    });
+
+    const loaded = getPublishedSummaries([record]);
+
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].sourceType).toBe('youtube');
+  });
+
   it('sorts newest records first', () => {
     const records = [parseSummaryRecord(olderRecord), parseSummaryRecord(newerRecord)];
 

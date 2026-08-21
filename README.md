@@ -1,8 +1,8 @@
 # AI Digest
 
-AI Digest 是一套在本機執行的公開內容摘要工具。目前的第一個可交付里程碑支援「可直接讀取的公開網頁 → 繁體中文結構化摘要 → 本機 JSON → Astro 靜態網站」。
+AI Digest 是一套在本機執行的公開內容摘要工具。目前支援可直接讀取的公開網頁與公開 YouTube 單支影片，經繁體中文結構化摘要、分類與 Schema 驗證後儲存為本機 JSON，再由 Astro 建置靜態網站。
 
-完整 MVP 仍要加入 YouTube 公開影片、無須登入的公開社群單篇貼文與可量化的分類模型。GitHub Pages 的真實遠端部署、公開 smoke acceptance，以及使用 Gemini 與使用者核准公開文章的端到端驗收均已完成。PDF／論文、OCR 與標籤篩選是核心 MVP 穩定後才評估的選配項目。
+完整 MVP 仍要加入無須登入的公開社群單篇貼文。分類模型已通過固定評估；YouTube 字幕與音訊轉錄路徑已有自動化覆蓋，但真實有字幕與無字幕影片驗收狀態以 `progress.md` 為準。PDF／論文、OCR 與標籤篩選是核心 MVP 穩定後才評估的選配項目。
 
 ## 環境需求
 
@@ -10,6 +10,7 @@ AI Digest 是一套在本機執行的公開內容摘要工具。目前的第一�
 - Python 3.12 以上
 - Node.js 22.12.0 以上與 npm
 - 只有執行真實 `add` 時才需要所選摘要 provider 的 API 金鑰
+- 處理 YouTube 時需要 `yt-dlp` 在 `PATH`；無可用字幕時另需 FFmpeg 在 `PATH`
 
 ## Python 安裝
 
@@ -62,7 +63,28 @@ ai-digest archive '<summary-id>'
 ai-digest publish '<summary-id>'
 ```
 
-`add` 只處理可直接讀取的公開 HTML 文章，遇到登入、付費牆、私有位址或其他不可讀來源會明確失敗。
+`add` 處理可直接讀取的公開 HTML 文章與受支援的公開 YouTube 單支影片；遇到登入、付費牆、私有位址或其他不可讀來源會明確失敗。
+
+## YouTube 公開影片
+
+先以你使用的系統套件管理器或官方發行方式安裝 `yt-dlp` 與 FFmpeg，確認兩個可執行檔都在系統 `PATH`：
+
+```powershell
+yt-dlp --version
+ffmpeg -version
+```
+
+YouTube 擷取採字幕優先：人工字幕優先於自動字幕，只有完全沒有可用字幕時，才會下載公開音訊、由 FFmpeg 分段，並送至 OpenAI 語音轉文字 API。預設影片上限為兩小時（`7200` 秒），超過上限時會在下載音訊前停止。可在本機調整以下設定：
+
+```powershell
+$env:AI_DIGEST_TRANSCRIPTION_MODEL = 'gpt-transcribe'
+$env:AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS = '600'
+$env:AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS = '7200'
+```
+
+`OPENAI_API_KEY` 只在影片確實需要音訊轉錄時才延遲檢查；有可用字幕且摘要 provider 為 Gemini 時不需要 OpenAI 金鑰。無字幕而缺少該金鑰時，系統會在下載音訊前以 `MISSING_API_KEY` 失敗。
+
+只支援公開、無須登入且已完成的單支影片。頻道頁、播放清單頁與無影片 ID 的 URL 會回報 `UNSUPPORTED_YOUTUBE_URL`；私人、會員限定、刪除或地區限制影片會回報 `CONTENT_UNAVAILABLE`；需要登入或年齡驗證、直播中或尚未開始、以及超時長內容也會明確失敗。本專案不支援 Cookie、登入資料、代理伺服器或任何存取繞過參數。
 
 ## 分類模型評估與啟用
 
@@ -167,11 +189,10 @@ python scripts/smoke_pages.py
 
 ## 目前範圍與後續
 
-本里程碑已建立公開網頁擷取、Gemini 與 OpenAI 結構化摘要邊界、provider-aware CLI、JSON Schema 驗證與儲存，以及 Astro 列表、詳情、搜尋、分類篩選與日期排序。
+本里程碑已建立公開網頁與 YouTube 來源擷取、Gemini 與 OpenAI 結構化摘要邊界、provider-aware CLI、JSON Schema 驗證與儲存，以及 Astro 列表、詳情、搜尋、分類篩選與日期排序。
 
 以下是後續里程碑：
 
-- 訓練並驗收優於最大類基準的分類模型。
-- YouTube 有字幕與無可用字幕流程。
+- 以真實公開有字幕與無字幕 YouTube 影片完成手動整合驗收。
 - 無須登入的公開社群單篇貼文。
 - 核心 MVP 穩定後才評估 PDF／論文、OCR 與標籤篩選。
