@@ -3,7 +3,14 @@
 from pathlib import Path
 from typing import Any
 
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
+from openai import (
+    APIConnectionError,
+    APIResponseValidationError,
+    APIStatusError,
+    APITimeoutError,
+    OpenAI,
+    RateLimitError,
+)
 
 from ai_digest.domain import DigestError
 
@@ -51,6 +58,13 @@ class OpenAIAudioTranscriber:
         except APIConnectionError:
             return None, DigestError(
                 "extract", "TRANSCRIPTION_FAILED", "Audio transcription request failed", True
+            )
+        except APIResponseValidationError:
+            return None, DigestError(
+                "extract",
+                "TRANSCRIPTION_FAILED",
+                "Audio transcription response is invalid",
+                False,
             )
         except APIStatusError as error:
             return None, DigestError(

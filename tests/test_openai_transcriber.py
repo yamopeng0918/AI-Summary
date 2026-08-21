@@ -6,7 +6,13 @@ import traceback
 
 import httpx
 import pytest
-from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
+from openai import (
+    APIConnectionError,
+    APIResponseValidationError,
+    APIStatusError,
+    APITimeoutError,
+    RateLimitError,
+)
 
 from ai_digest.domain import DigestError
 from ai_digest.transcribers import openai as openai_transcriber
@@ -17,9 +23,11 @@ class FakeTranscriptions:
     def __init__(self, outcomes: list[object]) -> None:
         self._outcomes = outcomes
         self.names: list[str] = []
+        self.models: list[str] = []
 
     def create(self, *, model: str, file: object) -> object:
         self.names.append(Path(file.name).name)
+        self.models.append(model)
         outcome = self._outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -49,6 +57,7 @@ def test_transcribes_chunks_in_order_and_merges_only_complete_result(tmp_path: P
     result = OpenAIAudioTranscriber(client, "test-model").transcribe(chunks)
 
     assert transcriptions.names == ["chunk-0000.mp3", "chunk-0001.mp3"]
+    assert transcriptions.models == ["test-model", "test-model"]
     assert result == "text:chunk-0000.mp3\ntext:chunk-0001.mp3"
 
 
@@ -144,6 +153,27 @@ def test_rejects_blank_transcription(tmp_path: Path) -> None:
         OpenAIAudioTranscriber(client, "test-model").transcribe([chunk])
 
     assert (raised.value.code, raised.value.retryable) == ("TRANSCRIPTION_FAILED", False)
+    assert raised.value.__cause__ is None
+
+
+def test_maps_response_validation_error_without_leaking_sdk_details(tmp_path: Path) -> None:
+    chunk = make_chunk(tmp_path, "SECRET-chunk.mp3")
+    request = httpx.Request("POST", "https://api.openai.com/SECRET_PATH")
+    response = httpx.Response(200, request=request)
+    validation_error = APIResponseValidationError(response, {"SECRET_BODY": "invalid"})
+    client, _ = client_with([validation_error])
+
+    with pytest.raises(DigestError) as raised:
+        OpenAIAudioTranscriber(client, "test-model").transcribe([chunk])
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "TRANSCRIPTION_FAILED",
+        "message": "Audio transcription response is invalid",
+        "retryable": False,
+    }
+    assert "SECRET" not in rendered_exception(raised.value)
+    assert raised.value.__context__ is None
     assert raised.value.__cause__ is None
 
 
