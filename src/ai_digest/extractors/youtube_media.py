@@ -11,10 +11,17 @@ import tempfile
 from ai_digest.domain import DigestError
 
 
-_PROHIBITED_OPTIONS = frozenset(
+_YT_DLP_PROHIBITED_OPTIONS = frozenset(
     {
+        "-2",
+        "-n",
         "-p",
         "-u",
+        "--add-header",
+        "--add-headers",
+        "--ap-mso",
+        "--ap-password",
+        "--ap-username",
         "--client-certificate",
         "--client-certificate-key",
         "--client-certificate-password",
@@ -25,6 +32,9 @@ _PROHIBITED_OPTIONS = frozenset(
         "--geo-bypass-country",
         "--geo-bypass-ip-block",
         "--geo-verification-proxy",
+        "--http-header",
+        "--http-headers",
+        "--impersonate",
         "--netrc",
         "--netrc-cmd",
         "--netrc-location",
@@ -36,6 +46,8 @@ _PROHIBITED_OPTIONS = frozenset(
         "--xff",
     }
 )
+_YT_DLP_ATTACHED_VALUE_OPTIONS = ("-2", "-p", "-u")
+_FFMPEG_PROHIBITED_OPTIONS = frozenset({"-cookies", "-headers", "-http_proxy"})
 
 _LOGIN_REQUIRED_MARKERS = (
     "confirm your age",
@@ -44,26 +56,19 @@ _LOGIN_REQUIRED_MARKERS = (
     "log in to",
     "sign in",
 )
-_CONTENT_UNAVAILABLE_MARKERS = (
+_DEFINITIVE_CONTENT_UNAVAILABLE_MARKERS = (
     "has been removed",
     "members-only",
     "not made this video available in your country",
     "not available in your country",
+    "private video",
     "this video is private",
+)
+_GENERIC_CONTENT_UNAVAILABLE_MARKERS = (
+    "this video is unavailable",
+    "video is unavailable",
     "video unavailable",
 )
-
-
-class _MediaToolFailure(Exception):
-    """Sanitized internal classification for non-retryable tool failures."""
-
-    def __init__(
-        self,
-        code: Literal["LOGIN_REQUIRED", "CONTENT_UNAVAILABLE"],
-    ) -> None:
-        super().__init__("Media access is restricted")
-        self.code = code
-        self.retryable = False
 
 
 def _access_failure_code(
@@ -72,9 +77,15 @@ def _access_failure_code(
     if isinstance(stderr, bytes):
         stderr = stderr.decode("utf-8", errors="ignore")
     normalized = (stderr or "").casefold()
+    if any(
+        marker in normalized for marker in _DEFINITIVE_CONTENT_UNAVAILABLE_MARKERS
+    ):
+        return "CONTENT_UNAVAILABLE"
     if any(marker in normalized for marker in _LOGIN_REQUIRED_MARKERS):
         return "LOGIN_REQUIRED"
-    if any(marker in normalized for marker in _CONTENT_UNAVAILABLE_MARKERS):
+    if any(
+        marker in normalized for marker in _GENERIC_CONTENT_UNAVAILABLE_MARKERS
+    ):
         return "CONTENT_UNAVAILABLE"
     return None
 
@@ -84,8 +95,22 @@ def _validate_argv(argv: list[str]) -> None:
         not isinstance(value, str) for value in argv
     ):
         raise TypeError("Media commands require a non-empty argument list")
-    options = {value.partition("=")[0].casefold() for value in argv if value.startswith("-")}
-    if options & _PROHIBITED_OPTIONS:
+    tool = Path(argv[0]).name.casefold().removesuffix(".exe")
+    options = {
+        value.partition("=")[0].casefold()
+        for value in argv[1:]
+        if value.startswith("-")
+    }
+    unsafe = False
+    if tool == "yt-dlp":
+        unsafe = bool(options & _YT_DLP_PROHIBITED_OPTIONS) or any(
+            value.casefold().startswith(prefix) and value.casefold() != prefix
+            for value in argv[1:]
+            for prefix in _YT_DLP_ATTACHED_VALUE_OPTIONS
+        )
+    elif tool == "ffmpeg":
+        unsafe = bool(options & _FFMPEG_PROHIBITED_OPTIONS)
+    if unsafe:
         raise ValueError("Unsafe media tool arguments are not allowed")
 
 
@@ -102,12 +127,30 @@ def _create_workspace(temp_root: Path | None) -> Path:
     raise failure from None
 
 
+def _cleanup_workspace(directory: Path) -> DigestError | None:
+    failure: DigestError | None = None
+    for _ in range(2):
+        try:
+            shutil.rmtree(directory)
+            return None
+        except FileNotFoundError:
+            return None
+        except OSError:
+            failure = DigestError(
+                "extract",
+                "MEDIA_DOWNLOAD_FAILED",
+                "Media workspace cleanup failed",
+                True,
+            )
+    return failure
+
+
 class CommandRunner:
     """Run a media tool with a fixed, shell-free subprocess policy."""
 
     def run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
         _validate_argv(argv)
-        failure: DigestError | _MediaToolFailure
+        failure: DigestError
         try:
             return subprocess.run(
                 argv,
@@ -131,10 +174,29 @@ class CommandRunner:
                 "Media tool timed out",
                 True,
             )
+        except OSError:
+            failure = DigestError(
+                "extract",
+                "MEDIA_DOWNLOAD_FAILED",
+                "Media tool could not be started",
+                True,
+            )
+        except UnicodeError:
+            failure = DigestError(
+                "extract",
+                "MEDIA_DOWNLOAD_FAILED",
+                "Media tool output could not be read",
+                True,
+            )
         except subprocess.CalledProcessError as error:
             access_code = _access_failure_code(error.stderr)
             if access_code is not None:
-                failure = _MediaToolFailure(access_code)
+                message = (
+                    "Public media requires authentication"
+                    if access_code == "LOGIN_REQUIRED"
+                    else "Public media is unavailable"
+                )
+                failure = DigestError("extract", access_code, message, False)
             else:
                 failure = DigestError(
                     "extract",
@@ -155,6 +217,7 @@ class YouTubeMediaPipeline:
     @contextmanager
     def audio_chunks(self, url: str, chunk_seconds: int) -> Iterator[list[Path]]:
         directory = _create_workspace(self._temp_root)
+        primary_failure: BaseException | None = None
         try:
             self._runner.run(
                 [
@@ -208,5 +271,10 @@ class YouTubeMediaPipeline:
                     True,
                 )
             yield chunks
+        except BaseException as error:
+            primary_failure = error
+            raise
         finally:
-            shutil.rmtree(directory, ignore_errors=True)
+            cleanup_failure = _cleanup_workspace(directory)
+            if cleanup_failure is not None and primary_failure is None:
+                raise cleanup_failure from None

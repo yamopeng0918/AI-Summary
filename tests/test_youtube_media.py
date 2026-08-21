@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import tempfile
 import traceback
@@ -9,7 +10,6 @@ from ai_digest.domain import DigestError
 from ai_digest.extractors.youtube_media import (
     CommandRunner,
     YouTubeMediaPipeline,
-    _MediaToolFailure,
 )
 
 
@@ -60,7 +60,17 @@ def test_command_runner_rejects_command_strings(
         ["yt-dlp", "--proxy", "http://proxy.invalid", VIDEO_URL],
         ["yt-dlp", "--geo-bypass", VIDEO_URL],
         ["yt-dlp", "--username=user", "--password=secret", VIDEO_URL],
+        ["yt-dlp", "-uUSER", "-pPASS", VIDEO_URL],
+        ["yt-dlp", "-2CODE", VIDEO_URL],
+        ["yt-dlp", "-n", VIDEO_URL],
+        ["yt-dlp", "--ap-username=USER", "--ap-password=PASS", VIDEO_URL],
+        ["yt-dlp", "--add-headers=Authorization: Bearer SECRET", VIDEO_URL],
+        ["yt-dlp", "--add-header", "Cookie: session=SECRET", VIDEO_URL],
+        ["yt-dlp", "--impersonate=chrome", VIDEO_URL],
         ["yt-dlp", "--config-locations", "unsafe.conf", VIDEO_URL],
+        ["ffmpeg", "-cookies=session=SECRET", "-i", "input"],
+        ["ffmpeg", "-headers", "Authorization: Bearer SECRET", "-i", "input"],
+        ["ffmpeg", "-http_proxy=http://proxy.invalid", "-i", "input"],
     ],
 )
 def test_command_runner_rejects_credentials_proxies_and_bypass_flags(
@@ -153,6 +163,42 @@ def test_command_runner_maps_transient_nonzero_exit_without_leaking_tool_details
 
 
 @pytest.mark.parametrize(
+    "failure",
+    [
+        PermissionError("C:\\SECRET_PATH"),
+        UnicodeDecodeError(
+            "utf-8",
+            b"\xffSECRET_OUTPUT",
+            0,
+            1,
+            "SECRET_DECODE_REASON",
+        ),
+    ],
+)
+def test_command_runner_sanitizes_os_and_decode_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+) -> None:
+    def failed(*args: object, **kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(subprocess, "run", failed)
+
+    with pytest.raises(DigestError) as raised:
+        CommandRunner().run(["yt-dlp", VIDEO_URL])
+
+    assert raised.value.code == "MEDIA_DOWNLOAD_FAILED"
+    assert raised.value.retryable is True
+    rendered = _formatted_exception(raised.value)
+    assert VIDEO_URL not in rendered
+    assert "SECRET_PATH" not in rendered
+    assert "SECRET_OUTPUT" not in rendered
+    assert "SECRET_DECODE_REASON" not in rendered
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None
+
+
+@pytest.mark.parametrize(
     ("stderr", "expected_code"),
     [
         ("Sign in to confirm your age. SECRET_STDERR", "LOGIN_REQUIRED"),
@@ -161,9 +207,15 @@ def test_command_runner_maps_transient_nonzero_exit_without_leaking_tool_details
             "The uploader has not made this video available in your country. SECRET_STDERR",
             "CONTENT_UNAVAILABLE",
         ),
+        (
+            "This video is private. Sign in if you've been granted access.",
+            "CONTENT_UNAVAILABLE",
+        ),
+        ("Video unavailable. Sign in to confirm your age.", "LOGIN_REQUIRED"),
+        ("This video is unavailable. SECRET_STDERR", "CONTENT_UNAVAILABLE"),
     ],
 )
-def test_command_runner_preserves_only_safe_access_failure_classification(
+def test_command_runner_returns_safe_access_failure_classification(
     monkeypatch: pytest.MonkeyPatch,
     stderr: str,
     expected_code: str,
@@ -178,15 +230,12 @@ def test_command_runner_preserves_only_safe_access_failure_classification(
 
     monkeypatch.setattr(subprocess, "run", restricted)
 
-    with pytest.raises(_MediaToolFailure) as raised:
+    with pytest.raises(DigestError) as raised:
         CommandRunner().run(["yt-dlp", VIDEO_URL])
 
+    assert raised.value.stage == "extract"
     assert raised.value.code == expected_code
     assert raised.value.retryable is False
-    assert raised.value.__dict__ == {
-        "code": expected_code,
-        "retryable": False,
-    }
     rendered = _formatted_exception(raised.value)
     assert VIDEO_URL not in rendered
     assert "SECRET_PATH" not in rendered
@@ -358,6 +407,132 @@ def test_audio_chunks_maps_missing_conversion_output_and_cleans_up(
     assert raised.value.retryable is True
     assert VIDEO_URL not in raised.value.message
     assert list(tmp_path.iterdir()) == []
+
+
+def test_audio_chunks_cleans_up_after_conversion_runner_failure(
+    tmp_path: Path,
+) -> None:
+    created: list[Path] = []
+
+    class ConversionFailingRunner:
+        def run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
+            if argv[0] == "yt-dlp":
+                directory = Path(argv[argv.index("-P") + 1])
+                created.append(directory)
+                (directory / "source.webm").write_bytes(b"source")
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+            raise DigestError(
+                "extract",
+                "MEDIA_DOWNLOAD_FAILED",
+                "Media conversion failed",
+                True,
+            )
+
+    pipeline = YouTubeMediaPipeline(ConversionFailingRunner(), temp_root=tmp_path)
+
+    with pytest.raises(DigestError) as raised:
+        with pipeline.audio_chunks(VIDEO_URL, 600):
+            pass
+
+    assert raised.value.code == "MEDIA_DOWNLOAD_FAILED"
+    assert len(created) == 1
+    assert not created[0].exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_audio_chunks_retries_cleanup_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    real_rmtree = shutil.rmtree
+    attempts: list[Path] = []
+
+    def flaky_rmtree(path: Path) -> None:
+        attempts.append(Path(path))
+        if len(attempts) == 1:
+            raise PermissionError("C:\\SECRET_PATH")
+        real_rmtree(path)
+
+    monkeypatch.setattr(shutil, "rmtree", flaky_rmtree)
+    pipeline = YouTubeMediaPipeline(CreatingRunner(), temp_root=tmp_path)
+
+    with pipeline.audio_chunks(VIDEO_URL, 600):
+        pass
+
+    assert len(attempts) == 2
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_audio_chunks_reports_sanitized_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    real_rmtree = shutil.rmtree
+    attempts: list[Path] = []
+
+    def failed_rmtree(path: Path) -> None:
+        attempts.append(Path(path))
+        raise PermissionError("C:\\SECRET_PATH")
+
+    monkeypatch.setattr(shutil, "rmtree", failed_rmtree)
+    pipeline = YouTubeMediaPipeline(CreatingRunner(), temp_root=tmp_path)
+    directory: Path | None = None
+
+    try:
+        with pytest.raises(DigestError) as raised:
+            with pipeline.audio_chunks(VIDEO_URL, 600) as chunks:
+                directory = chunks[0].parent
+
+        assert raised.value.code == "MEDIA_DOWNLOAD_FAILED"
+        assert raised.value.retryable is True
+        assert "SECRET_PATH" not in raised.value.message
+        assert "SECRET_PATH" not in _formatted_exception(raised.value)
+        assert raised.value.__context__ is None
+        assert raised.value.__cause__ is None
+        assert len(attempts) == 2
+    finally:
+        monkeypatch.setattr(shutil, "rmtree", real_rmtree)
+        if directory is not None and directory.exists():
+            real_rmtree(directory)
+
+
+def test_audio_chunks_preserves_primary_failure_when_cleanup_also_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    real_rmtree = shutil.rmtree
+    attempts: list[Path] = []
+    primary = DigestError(
+        "extract",
+        "MEDIA_DOWNLOAD_FAILED",
+        "Primary safe failure",
+        True,
+    )
+
+    class PrimaryFailingRunner:
+        def run(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
+            raise primary
+
+    def failed_rmtree(path: Path) -> None:
+        attempts.append(Path(path))
+        raise PermissionError("C:\\SECRET_PATH")
+
+    monkeypatch.setattr(shutil, "rmtree", failed_rmtree)
+    pipeline = YouTubeMediaPipeline(PrimaryFailingRunner(), temp_root=tmp_path)
+
+    try:
+        with pytest.raises(DigestError) as raised:
+            with pipeline.audio_chunks(VIDEO_URL, 600):
+                pass
+
+        assert raised.value is primary
+        assert raised.value.message == "Primary safe failure"
+        assert "SECRET_PATH" not in _formatted_exception(raised.value)
+        assert len(attempts) == 2
+    finally:
+        monkeypatch.setattr(shutil, "rmtree", real_rmtree)
+        for directory in tmp_path.iterdir():
+            real_rmtree(directory)
 
 
 @pytest.mark.parametrize("failure", [RuntimeError("stop"), KeyboardInterrupt()])
