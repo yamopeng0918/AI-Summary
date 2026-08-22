@@ -201,3 +201,10 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - Final reviewed cohort: 180 rows, 30 per category, 60 per batch; 180 approved, no pending/rejected, unique IDs and canonical URLs.
 - Dataset SHA-256: `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`.
 - Classifier training/evaluation and model artifacts remain incomplete.
+
+### YouTube source final integration verification (2026-08-22)
+
+- Completed the approved public single-video YouTube ingestion scope: canonical URL handling, duplicate preflight, caption-first extraction, safe media fallback, OpenAI transcription, `sourceType: youtube` persistence, CLI routing, schema compatibility, and Astro rendering.
+- Final security review approved the implementation after adding a 24 MiB pre-upload audio-chunk limit, sanitizing unexpected transcription and filesystem failures, preserving temporary-workspace cleanup, and deferring YouTube-only configuration validation until the YouTube route is selected.
+- Fresh full verification passed: Python `416 passed` with one pre-existing google-genai/Python 3.14 deprecation warning; Vitest `25 passed`; Astro check reported 0 diagnostics and the production build generated 5 pages; `git diff --check` passed.
+- Real public-video smoke tests for both caption and no-caption paths remain **UNVERIFIED** because this environment does not have yt-dlp/FFmpeg or a transcription API key. The corresponding `todo.md` acceptance item remains unchecked.
