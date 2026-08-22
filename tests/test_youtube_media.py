@@ -706,6 +706,39 @@ def test_audio_chunks_rejects_oversized_output_and_cleans_up(tmp_path: Path) -> 
     assert list(tmp_path.iterdir()) == []
 
 
+def test_audio_chunks_sanitizes_chunk_inspection_failure_and_cleans_up(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    real_stat = Path.stat
+
+    def failed_chunk_stat(path: Path, *args: object, **kwargs: object):
+        if path.name.startswith("chunk-"):
+            raise OSError(f"SECRET_STAT_PATH:{path}")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", failed_chunk_stat)
+    pipeline = YouTubeMediaPipeline(CreatingRunner(), temp_root=tmp_path)
+
+    with pytest.raises(DigestError) as raised:
+        with pipeline.audio_chunks(VIDEO_URL, 600):
+            pytest.fail("uninspected chunks must not reach transcription")
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "MEDIA_DOWNLOAD_FAILED",
+        "message": "Audio segment could not be inspected",
+        "retryable": True,
+    }
+    rendered = _formatted_exception(raised.value)
+    assert "SECRET" not in rendered
+    assert str(tmp_path) not in rendered
+    assert "SECRET" not in str(raised.value)
+    assert "SECRET" not in repr(raised.value)
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_command_runner_accepts_ffmpeg_version_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     observed: list[list[str]] = []
 

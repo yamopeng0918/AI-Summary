@@ -289,7 +289,22 @@ class YouTubeMediaPipeline:
                     "Media conversion produced no audio",
                     True,
                 )
-            if any(chunk.stat().st_size > self._max_chunk_bytes for chunk in chunks):
+            inspection_failure: DigestError | None = None
+            try:
+                oversized = any(
+                    chunk.stat().st_size > self._max_chunk_bytes for chunk in chunks
+                )
+            except OSError:
+                oversized = False
+                inspection_failure = DigestError(
+                    "extract",
+                    "MEDIA_DOWNLOAD_FAILED",
+                    "Audio segment could not be inspected",
+                    True,
+                )
+            if inspection_failure is not None:
+                raise inspection_failure from None
+            if oversized:
                 raise DigestError(
                     "extract",
                     "MEDIA_CHUNK_TOO_LARGE",

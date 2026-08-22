@@ -85,6 +85,8 @@ $env:AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS = '7200'
 
 `OPENAI_API_KEY` 只在影片確實需要音訊轉錄時才延遲檢查；有可用字幕且摘要 provider 為 Gemini 時不需要 OpenAI 金鑰。無字幕而缺少該金鑰時，系統會在下載音訊前以 `MISSING_API_KEY` 失敗。
 
+音訊同時受分段秒數與 24 MiB 的預設檔案大小上限保護。分段超過上限時會以 `MEDIA_CHUNK_TOO_LARGE` 安全停止；若無法檢查分段檔案，則回報可重試的 `MEDIA_DOWNLOAD_FAILED`。這兩種錯誤都不會輸出暫存路徑或底層作業系統錯誤。
+
 只支援公開、無須登入且已完成的單支影片。頻道頁、播放清單頁與無影片 ID 的 URL 會回報 `UNSUPPORTED_YOUTUBE_URL`；私人、會員限定、刪除或地區限制影片會回報 `CONTENT_UNAVAILABLE`；需要登入或年齡驗證、直播中或尚未開始、以及超時長內容也會明確失敗。本專案不支援 Cookie、登入資料、代理伺服器或任何存取繞過參數。
 
 ## 分類模型評估與啟用

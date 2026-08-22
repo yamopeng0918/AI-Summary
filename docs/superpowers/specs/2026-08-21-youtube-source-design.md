@@ -101,6 +101,7 @@ OpenAI 官方文件說明 `gpt-transcribe` 支援已完成音訊檔及串流檔�
 - `AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS`：預設 `7200`。
 - `AI_DIGEST_TRANSCRIPTION_MODEL`：預設 `gpt-transcribe`。
 - `AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS`：使用安全預設值，並允許本機調整。
+- `AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES`：每段音訊的檔案大小上限，預設 `25165824`（24 MiB）；超過時不得送往轉錄 API。
 - `OPENAI_API_KEY`：只有影片確實需要音訊轉錄時才檢查。
 - `yt-dlp` 與 FFmpeg：預設從系統 `PATH` 尋找。
 
@@ -127,7 +128,8 @@ OpenAI 官方文件說明 `gpt-transcribe` 支援已完成音訊檔及串流檔�
 | `LIVE_STREAM_UNSUPPORTED` | 正在直播或尚未開始 | `false` |
 | `VIDEO_TOO_LONG` | 超過設定的影片長度上限 | `false` |
 | `MEDIA_TOOL_MISSING` | 找不到 `yt-dlp` 或 FFmpeg | `false` |
-| `MEDIA_DOWNLOAD_FAILED` | 暫時性媒體下載失敗 | `true` |
+| `MEDIA_DOWNLOAD_FAILED` | 暫時性媒體下載、轉換、清理或音訊分段檢查失敗 | `true` |
+| `MEDIA_CHUNK_TOO_LARGE` | 音訊分段超過設定的上傳大小上限 | `false` |
 | `TRANSCRIPTION_TIMEOUT` | OpenAI 轉錄逾時 | `true` |
 | `TRANSCRIPTION_RATE_LIMITED` | OpenAI 轉錄遭限流 | `true` |
 | `TRANSCRIPTION_FAILED` | 其他轉錄錯誤 | 依底層錯誤類型判斷 |
