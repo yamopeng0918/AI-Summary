@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -507,19 +508,31 @@ def test_production_defaults_to_gemini_and_wires_source_router(monkeypatch) -> N
     assert captured["classifier"] == "trained-classifier"
 
 
-def test_production_wires_youtube_defaults_and_lazy_transcriber(
+@pytest.mark.parametrize(
+    ("provider", "key_name", "model_name", "default_model"),
+    [
+        ("gemini", "GEMINI_API_KEY", "GEMINI_TRANSCRIPTION_MODEL", "gemini-3.6-flash"),
+        ("openai", "OPENAI_API_KEY", "OPENAI_TRANSCRIPTION_MODEL", "gpt-transcribe"),
+    ],
+)
+def test_production_wires_youtube_transcriber_for_selected_provider(
     monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    key_name: str,
+    model_name: str,
+    default_model: str,
 ) -> None:
-    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
-    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
-    monkeypatch.setenv("OPENAI_API_KEY", "transcription-key")
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", provider)
+    monkeypatch.setenv(key_name, f"{provider}-key")
     for name in (
         "AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS",
         "AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS",
-        "AI_DIGEST_TRANSCRIPTION_MODEL",
+        "GEMINI_TRANSCRIPTION_MODEL",
+        "OPENAI_TRANSCRIPTION_MODEL",
     ):
         monkeypatch.delenv(name, raising=False)
     captured: dict[str, object] = {}
+    factory_calls: list[tuple[str, str | None, str]] = []
 
     class FakeRunner:
         pass
@@ -554,20 +567,25 @@ def test_production_wires_youtube_defaults_and_lazy_transcriber(
     monkeypatch.setattr(cli, "YouTubeCaptionClient", FakeCaptionClient)
     monkeypatch.setattr(cli, "YouTubeExtractor", FakeYouTubeExtractor)
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
-    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", lambda selected: "summarizer")
     monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
     monkeypatch.setattr(cli, "_repository", lambda: "repository")
     monkeypatch.setattr(
         cli,
         "lazy_openai_transcriber",
-        lambda api_key, model: captured.update(
-            transcription_api_key=api_key, transcription_model=model
-        )
-        or "transcriber",
+        lambda api_key, model: factory_calls.append(("openai", api_key, model))
+        or "openai-transcriber",
+    )
+    monkeypatch.setattr(
+        cli,
+        "lazy_gemini_transcriber",
+        lambda api_key, model: factory_calls.append(("gemini", api_key, model))
+        or "gemini-transcriber",
+        raising=False,
     )
 
     cli._workflow(on_progress=lambda stage: None)
-    cli._youtube_extractor()
+    cli._youtube_extractor(provider)
 
     youtube = captured["youtube"]
     assert isinstance(youtube, dict)
@@ -576,15 +594,123 @@ def test_production_wires_youtube_defaults_and_lazy_transcriber(
     assert captured["max_chunk_bytes"] == 24 * 1024 * 1024
     assert captured["probe_runner"] is captured["media_runner"]
     assert captured["caption_factory"] is cli._web_client_factory
-    assert "transcription_api_key" not in captured
-    assert youtube["transcriber_factory"]() == "transcriber"
-    assert captured["transcription_api_key"] == "transcription-key"
-    assert captured["transcription_model"] == "gpt-transcribe"
+    assert factory_calls == []
+    assert youtube["transcriber_factory"]() == f"{provider}-transcriber"
+    assert factory_calls == [(provider, f"{provider}-key", default_model)]
     workflow = captured["workflow"]
     assert isinstance(workflow, dict)
     router = workflow["extractor"]
     assert isinstance(router, cli.ExtractorRouter)
     assert isinstance(router._youtube, cli.LazyExtractor)
+
+
+@pytest.mark.parametrize(
+    ("provider", "key_name", "other_key", "model_name", "custom_model"),
+    [
+        (
+            "gemini",
+            "GEMINI_API_KEY",
+            "OPENAI_API_KEY",
+            "GEMINI_TRANSCRIPTION_MODEL",
+            "gemini-custom",
+        ),
+        (
+            "openai",
+            "OPENAI_API_KEY",
+            "GEMINI_API_KEY",
+            "OPENAI_TRANSCRIPTION_MODEL",
+            "openai-custom",
+        ),
+    ],
+)
+def test_no_caption_workflow_uses_only_selected_provider_key_and_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    key_name: str,
+    other_key: str,
+    model_name: str,
+    custom_model: str,
+) -> None:
+    events: list[tuple[str, object]] = []
+    metadata = {
+        "id": "dQw4w9WgXcQ",
+        "title": "公開影片",
+        "channel": "公開頻道",
+        "upload_date": "20260820",
+        "duration": 120,
+        "live_status": "not_live",
+        "availability": "public",
+        "language": "zh-TW",
+        "subtitles": {},
+        "automatic_captions": {},
+    }
+
+    class FakeProbe:
+        def __init__(self, runner: object) -> None:
+            pass
+
+        def __call__(self, url: str) -> dict[str, object]:
+            return metadata
+
+    class UnusedCaptionClient:
+        def __init__(self, *, client_factory: object) -> None:
+            pass
+
+    class FakeMedia:
+        def __init__(self, runner: object, **kwargs: object) -> None:
+            pass
+
+        @contextmanager
+        def audio_chunks(self, url: str, chunk_seconds: int):
+            events.append(("download", chunk_seconds))
+            yield [tmp_path / "chunk.mp3"]
+
+    class FakeTranscriber:
+        def transcribe(self, chunks: list[Path]) -> str:
+            events.append(("transcribe", chunks))
+            return "完整逐字稿" * 80
+
+    class FakeSummarizer:
+        def __init__(self, client: object, model: str) -> None:
+            events.append(("summarizer", provider))
+
+    def selected_transcriber(api_key: str | None, model: str) -> FakeTranscriber:
+        events.append(("transcriber_factory", (provider, api_key, model)))
+        return FakeTranscriber()
+
+    def unselected_transcriber(*args: object) -> object:
+        raise AssertionError("unselected provider must not be used")
+
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", provider)
+    monkeypatch.setenv(key_name, f"{provider}-key")
+    monkeypatch.delenv(other_key, raising=False)
+    monkeypatch.setenv(model_name, custom_model)
+    monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_MODEL", "wrong-provider-model")
+    monkeypatch.setattr(cli, "YtDlpMetadataProbe", FakeProbe)
+    monkeypatch.setattr(cli, "YouTubeCaptionClient", UnusedCaptionClient)
+    monkeypatch.setattr(cli, "YouTubeMediaPipeline", FakeMedia)
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+    if provider == "gemini":
+        monkeypatch.setattr(cli.genai, "Client", lambda *, api_key: object())
+        monkeypatch.setattr(cli, "GeminiSummarizer", FakeSummarizer)
+        monkeypatch.setattr(cli, "lazy_gemini_transcriber", selected_transcriber)
+        monkeypatch.setattr(cli, "lazy_openai_transcriber", unselected_transcriber)
+    else:
+        monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: object())
+        monkeypatch.setattr(cli, "OpenAISummarizer", FakeSummarizer)
+        monkeypatch.setattr(cli, "lazy_openai_transcriber", selected_transcriber)
+        monkeypatch.setattr(cli, "lazy_gemini_transcriber", unselected_transcriber)
+
+    workflow = cli._workflow()
+    article = workflow._extractor.extract("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+    assert article.source_type == "youtube"
+    assert ("summarizer", provider) in events
+    assert ("transcriber_factory", (provider, f"{provider}-key", custom_model)) in events
+    assert ("download", 600) in events
+    assert "wrong-provider-model" not in repr(events)
 
 
 @pytest.mark.parametrize(
@@ -606,7 +732,7 @@ def test_production_rejects_non_positive_youtube_integer_settings(
     monkeypatch.setenv(name, value)
 
     with pytest.raises(DigestError) as raised:
-        cli._youtube_extractor()
+        cli._youtube_extractor("gemini")
 
     assert raised.value.as_dict() == {
         "stage": "input",
@@ -689,8 +815,18 @@ def test_captioned_gemini_youtube_workflow_needs_no_openai_key(
     assert len(list(tmp_path.glob("*.json"))) == 1
 
 
-def test_no_caption_missing_openai_key_stops_before_fake_media_download(
+@pytest.mark.parametrize(
+    ("provider", "key_name", "other_key"),
+    [
+        ("gemini", "GEMINI_API_KEY", "OPENAI_API_KEY"),
+        ("openai", "OPENAI_API_KEY", "GEMINI_API_KEY"),
+    ],
+)
+def test_no_caption_missing_selected_provider_key_stops_before_fake_media_download(
     monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    key_name: str,
+    other_key: str,
 ) -> None:
     events: list[str] = []
     metadata = {
@@ -726,15 +862,15 @@ def test_no_caption_missing_openai_key_stops_before_fake_media_download(
 
         def audio_chunks(self, url: str, chunk_seconds: int):
             events.append("download")
-            raise AssertionError("download must not begin without OpenAI key")
+            raise AssertionError("download must not begin without selected provider key")
 
-    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
-    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", provider)
+    monkeypatch.delenv(key_name, raising=False)
+    monkeypatch.setenv(other_key, "other-provider-key")
     monkeypatch.setattr(cli, "YtDlpMetadataProbe", FakeProbe)
     monkeypatch.setattr(cli, "YouTubeCaptionClient", UnusedCaptionClient)
     monkeypatch.setattr(cli, "YouTubeMediaPipeline", RecordingMedia)
-    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", lambda selected: "summarizer")
     monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
     monkeypatch.setattr(cli, "_repository", lambda: "repository")
 
@@ -747,7 +883,7 @@ def test_no_caption_missing_openai_key_stops_before_fake_media_download(
     assert raised.value.as_dict() == {
         "stage": "input",
         "code": "MISSING_API_KEY",
-        "message": "OPENAI_API_KEY is required for YouTube audio transcription",
+        "message": f"{key_name} is required for YouTube audio transcription",
         "retryable": False,
     }
     assert events == []
@@ -758,7 +894,7 @@ def test_invalid_youtube_settings_do_not_break_ordinary_web_workflow(
 ) -> None:
     monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "invalid")
     monkeypatch.setenv("AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", "invalid")
-    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
     monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
     monkeypatch.setattr(cli, "_repository", lambda: "repository")
 
@@ -779,7 +915,7 @@ def test_invalid_youtube_settings_fail_only_when_youtube_route_is_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "invalid")
-    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
     monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
     monkeypatch.setattr(cli, "_repository", lambda: "repository")
 
@@ -795,7 +931,7 @@ def test_youtube_chunk_byte_limit_is_validated_when_route_is_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES", "0")
-    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
     monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
     monkeypatch.setattr(cli, "_repository", lambda: "repository")
     workflow = cli._workflow()
@@ -868,7 +1004,7 @@ def test_production_add_reports_missing_model_before_workflow_runs(
     monkeypatch.setattr(cli, "TrainedClassifier", lambda *_args: (_ for _ in ()).throw(
         DigestError("classify", "MODEL_NOT_FOUND", "Classifier model artifacts were not found", False)
     ))
-    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
     monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
     app = create_app(cli._workflow, lambda: SummaryRepository(tmp_path), lambda: NOW)
 

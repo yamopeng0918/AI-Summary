@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -28,6 +29,8 @@ from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
 from ai_digest.summarizers.gemini import GeminiSummarizer
 from ai_digest.summarizers.openai import OpenAISummarizer
+from ai_digest.transcribers import AudioTranscriber
+from ai_digest.transcribers.gemini import lazy_gemini_transcriber
 from ai_digest.transcribers.openai import lazy_openai_transcriber
 from ai_digest.workflow import AddArticleWorkflow
 
@@ -55,8 +58,16 @@ def _classifier() -> Classifier:
     )
 
 
-def _summarizer() -> Summarizer:
+def _provider() -> Literal["gemini", "openai"]:
     provider = os.environ.get("AI_DIGEST_PROVIDER", "gemini").strip().lower()
+    if provider not in {"gemini", "openai"}:
+        raise DigestError(
+            "input", "INVALID_PROVIDER", "AI_DIGEST_PROVIDER must be gemini or openai", False
+        )
+    return provider
+
+
+def _summarizer(provider: Literal["gemini", "openai"]) -> Summarizer:
     if provider == "gemini":
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
@@ -64,12 +75,24 @@ def _summarizer() -> Summarizer:
         return GeminiSummarizer(
             genai.Client(api_key=api_key), os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
         )
-    if provider == "openai":
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise DigestError("input", "MISSING_API_KEY", "OPENAI_API_KEY is required for add", False)
-        return OpenAISummarizer(OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-5-mini"))
-    raise DigestError("input", "INVALID_PROVIDER", "AI_DIGEST_PROVIDER must be gemini or openai", False)
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise DigestError("input", "MISSING_API_KEY", "OPENAI_API_KEY is required for add", False)
+    return OpenAISummarizer(OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-5-mini"))
+
+
+def _transcriber_factory(
+    provider: Literal["gemini", "openai"],
+) -> Callable[[], AudioTranscriber]:
+    if provider == "gemini":
+        return lambda: lazy_gemini_transcriber(
+            os.environ.get("GEMINI_API_KEY"),
+            os.environ.get("GEMINI_TRANSCRIPTION_MODEL", "gemini-3.6-flash"),
+        )
+    return lambda: lazy_openai_transcriber(
+        os.environ.get("OPENAI_API_KEY"),
+        os.environ.get("OPENAI_TRANSCRIPTION_MODEL", "gpt-transcribe"),
+    )
 
 
 def _positive_int_setting(name: str, default: int) -> int:
@@ -93,7 +116,7 @@ def _positive_int_setting(name: str, default: int) -> int:
     return value
 
 
-def _youtube_extractor() -> YouTubeExtractor:
+def _youtube_extractor(provider: Literal["gemini", "openai"]) -> YouTubeExtractor:
     runner = CommandRunner()
     media = YouTubeMediaPipeline(
         runner,
@@ -101,7 +124,6 @@ def _youtube_extractor() -> YouTubeExtractor:
             "AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES", 24 * 1024 * 1024
         ),
     )
-    model = os.environ.get("AI_DIGEST_TRANSCRIPTION_MODEL", "gpt-transcribe")
     chunk_seconds = _positive_int_setting(
         "AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", 600
     )
@@ -109,9 +131,7 @@ def _youtube_extractor() -> YouTubeExtractor:
         probe=YtDlpMetadataProbe(runner),
         caption_client=YouTubeCaptionClient(client_factory=_web_client_factory),
         media=media.audio_chunks,
-        transcriber_factory=lambda: lazy_openai_transcriber(
-            os.environ.get("OPENAI_API_KEY"), model
-        ),
+        transcriber_factory=_transcriber_factory(provider),
         max_duration_seconds=_positive_int_setting(
             "AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", 7200
         ),
@@ -120,12 +140,13 @@ def _youtube_extractor() -> YouTubeExtractor:
 
 
 def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWorkflow:
+    provider = _provider()
     return AddArticleWorkflow(
         extractor=ExtractorRouter(
             WebExtractor(client_factory=_web_client_factory),
-            LazyExtractor(_youtube_extractor),
+            LazyExtractor(lambda: _youtube_extractor(provider)),
         ),
-        summarizer=_summarizer(),
+        summarizer=_summarizer(provider),
         classifier=_classifier(),
         repository=_repository(),
         on_progress=on_progress,
