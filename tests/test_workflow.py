@@ -15,9 +15,10 @@ NOW = datetime(2026, 8, 9, 14, 0, tzinfo=TAIPEI)
 CATEGORY = next(iter(VALID_CATEGORIES))
 
 
-def make_article(title: str = "可信賴的 AI 摘要") -> ExtractedArticle:
+def make_article(title: str = "可信賴的 AI 摘要", source_type: str = "web") -> ExtractedArticle:
     return ExtractedArticle(
         canonicalUrl="https://example.com/article",
+        sourceType=source_type,
         title=title,
         author="作者",
         publishedAt="2026-08-08T10:00:00+08:00",
@@ -135,7 +136,7 @@ def test_workflow_runs_normalize_preflight_extract_summarize_classify_and_save_i
         events.append(f"normalize:{raw_url}")
         return "https://example.com/article"
 
-    monkeypatch.setattr("ai_digest.workflow.normalize_public_url", normalize)
+    monkeypatch.setattr("ai_digest.workflow.canonicalize_source_url", normalize)
     result = workflow.run("HTTPS://EXAMPLE.COM/article?utm_source=test", NOW)
 
     assert events == [
@@ -192,7 +193,7 @@ def test_workflow_rejects_existing_canonical_url_before_any_remote_stage(monkeyp
         status="published",
     )
     workflow, repository, classifier = make_workflow(events, existing=[existing])
-    monkeypatch.setattr("ai_digest.workflow.normalize_public_url", lambda raw_url: events.append("normalize") or "https://example.com/article")
+    monkeypatch.setattr("ai_digest.workflow.canonicalize_source_url", lambda raw_url: events.append("normalize") or "https://example.com/article")
 
     with pytest.raises(DigestError) as raised:
         workflow.run("https://example.com/article", NOW)
@@ -250,4 +251,48 @@ def test_workflow_progress_stops_after_early_failure() -> None:
         workflow.run("https://example.com/article", NOW)
 
     assert progress == ["input", "extract", "summarize"]
+    assert repository.saved == []
+
+
+def test_workflow_persists_youtube_source_type_and_canonical_url() -> None:
+    events: list[str] = []
+    article = make_article(source_type="youtube").model_copy(
+        update={"canonical_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+    )
+    workflow, repository, _ = make_workflow(events, article=article)
+
+    result = workflow.run("https://youtu.be/dQw4w9WgXcQ?t=10", NOW)
+
+    assert str(result.canonical_url) == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    assert result.source_type == "youtube"
+    assert repository.saved == [result]
+
+
+def test_workflow_rejects_equivalent_youtube_url_before_extraction() -> None:
+    events: list[str] = []
+    existing = SummaryRecord(
+        schemaVersion=1,
+        id="existing-youtube",
+        canonicalUrl="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        sourceType="youtube",
+        title="Existing video",
+        author=None,
+        sourcePublishedAt=None,
+        createdAt=NOW,
+        updatedAt=NOW,
+        summary="Summary",
+        keyPoints=["One", "Two", "Three"],
+        category=CATEGORY,
+        tags=["YouTube"],
+        editorial="Editorial",
+        status="published",
+    )
+    workflow, repository, classifier = make_workflow(events, existing=[existing])
+
+    with pytest.raises(DigestError) as raised:
+        workflow.run("https://youtu.be/dQw4w9WgXcQ?t=10", NOW)
+
+    assert raised.value.code == "DUPLICATE_URL"
+    assert events == ["preflight"]
+    assert classifier.inputs == []
     assert repository.saved == []

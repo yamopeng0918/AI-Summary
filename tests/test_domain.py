@@ -45,6 +45,18 @@ def test_summary_record_accepts_the_approved_example() -> None:
     assert record.model_dump(mode="json", by_alias=True)["canonicalUrl"] == "https://example.com/article"
 
 
+def test_summary_and_extracted_article_accept_youtube_source_type() -> None:
+    article = ExtractedArticle(
+        canonicalUrl="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        sourceType="youtube",
+        title="YouTube video",
+        text="Enough transcript content",
+    )
+
+    assert article.source_type == "youtube"
+    assert valid_record(sourceType="youtube").source_type == "youtube"
+
+
 def test_summary_record_rejects_two_key_points() -> None:
     with pytest.raises(ValidationError):
         valid_record(keyPoints=["重點一", "重點二"])

@@ -40,7 +40,7 @@ export const SummaryRecordSchema: z.ZodType<SummaryRecord> = z.object({
   schemaVersion: z.literal(1),
   id: nonBlankString,
   canonicalUrl: z.string().url().max(2083).refine(isHttpUrl, 'canonicalUrl must use HTTP or HTTPS'),
-  sourceType: z.literal('web'),
+  sourceType: z.enum(['web', 'youtube']),
   title: nonBlankString,
   author: nonBlankString.nullable(),
   sourcePublishedAt: z.string().datetime({ offset: true }).nullable(),

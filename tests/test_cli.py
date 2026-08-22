@@ -14,8 +14,9 @@ from ai_digest.classifiers.evaluation import (
     EvaluationResult,
     SplitAssignment,
 )
+from ai_digest.classifiers.fixed import FixedClassifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
-from ai_digest.domain import DigestError, SummaryRecord, VALID_CATEGORIES
+from ai_digest.domain import DigestError, SummaryDraft, SummaryRecord, VALID_CATEGORIES
 from ai_digest.storage import SummaryRepository
 
 
@@ -469,7 +470,7 @@ def test_create_app_default_evaluation_service_uses_its_injected_clock(monkeypat
     assert captured["clock"] is injected_clock
 
 
-def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatch) -> None:
+def test_production_defaults_to_gemini_and_wires_source_router(monkeypatch) -> None:
     assert cli._repository().root == Path("data/summaries")
     monkeypatch.delenv("AI_DIGEST_PROVIDER", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -497,11 +498,311 @@ def test_production_defaults_to_gemini_and_keeps_web_extractor_wiring(monkeypatc
     cli._workflow()
 
     extractor = captured["extractor"]
-    assert isinstance(extractor, cli.WebExtractor)
-    assert extractor._client_factory is cli._web_client_factory
+    assert isinstance(extractor, cli.ExtractorRouter)
+    assert isinstance(extractor._web, cli.WebExtractor)
+    assert extractor._web._client_factory is cli._web_client_factory
+    assert isinstance(extractor._youtube, cli.LazyExtractor)
     assert captured["gemini_api_key"] == "test-key"
     assert captured["summarizer_model"] == "gemini-3.6-flash"
     assert captured["classifier"] == "trained-classifier"
+
+
+def test_production_wires_youtube_defaults_and_lazy_transcriber(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "transcription-key")
+    for name in (
+        "AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS",
+        "AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS",
+        "AI_DIGEST_TRANSCRIPTION_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    captured: dict[str, object] = {}
+
+    class FakeRunner:
+        pass
+
+    class FakeMedia:
+        def __init__(self, runner: object, *, max_chunk_bytes: int) -> None:
+            captured["media_runner"] = runner
+            captured["max_chunk_bytes"] = max_chunk_bytes
+
+        def audio_chunks(self, url: str, chunk_seconds: int):
+            raise AssertionError("media must remain lazy")
+
+    class FakeProbe:
+        def __init__(self, runner: object) -> None:
+            captured["probe_runner"] = runner
+
+    class FakeCaptionClient:
+        def __init__(self, *, client_factory: object) -> None:
+            captured["caption_factory"] = client_factory
+
+    class FakeYouTubeExtractor:
+        def __init__(self, **dependencies: object) -> None:
+            captured["youtube"] = dependencies
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured["workflow"] = dependencies
+
+    monkeypatch.setattr(cli, "CommandRunner", FakeRunner)
+    monkeypatch.setattr(cli, "YouTubeMediaPipeline", FakeMedia)
+    monkeypatch.setattr(cli, "YtDlpMetadataProbe", FakeProbe)
+    monkeypatch.setattr(cli, "YouTubeCaptionClient", FakeCaptionClient)
+    monkeypatch.setattr(cli, "YouTubeExtractor", FakeYouTubeExtractor)
+    monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+    monkeypatch.setattr(
+        cli,
+        "lazy_openai_transcriber",
+        lambda api_key, model: captured.update(
+            transcription_api_key=api_key, transcription_model=model
+        )
+        or "transcriber",
+    )
+
+    cli._workflow(on_progress=lambda stage: None)
+    cli._youtube_extractor()
+
+    youtube = captured["youtube"]
+    assert isinstance(youtube, dict)
+    assert youtube["max_duration_seconds"] == 7200
+    assert youtube["chunk_seconds"] == 600
+    assert captured["max_chunk_bytes"] == 24 * 1024 * 1024
+    assert captured["probe_runner"] is captured["media_runner"]
+    assert captured["caption_factory"] is cli._web_client_factory
+    assert "transcription_api_key" not in captured
+    assert youtube["transcriber_factory"]() == "transcriber"
+    assert captured["transcription_api_key"] == "transcription-key"
+    assert captured["transcription_model"] == "gpt-transcribe"
+    workflow = captured["workflow"]
+    assert isinstance(workflow, dict)
+    router = workflow["extractor"]
+    assert isinstance(router, cli.ExtractorRouter)
+    assert isinstance(router._youtube, cli.LazyExtractor)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", "0"),
+        ("AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", "-1"),
+        ("AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", "abc"),
+        ("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "0"),
+        ("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "-1"),
+        ("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "abc"),
+    ],
+)
+def test_production_rejects_non_positive_youtube_integer_settings(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(DigestError) as raised:
+        cli._youtube_extractor()
+
+    assert raised.value.as_dict() == {
+        "stage": "input",
+        "code": "INVALID_CONFIG",
+        "message": f"{name} must be a positive integer",
+        "retryable": False,
+    }
+
+
+def test_captioned_gemini_youtube_workflow_needs_no_openai_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    metadata = {
+        "id": "dQw4w9WgXcQ",
+        "title": "公開影片",
+        "channel": "公開頻道",
+        "upload_date": "20260820",
+        "duration": 120,
+        "live_status": "not_live",
+        "availability": "public",
+        "language": "zh-TW",
+        "subtitles": {
+            "zh-TW": [
+                {"url": "https://captions.example/manual.vtt", "ext": "vtt"}
+            ]
+        },
+        "automatic_captions": {},
+    }
+
+    class FakeProbe:
+        def __init__(self, runner: object, **kwargs: object) -> None:
+            pass
+
+        def __call__(self, url: str) -> dict[str, object]:
+            return metadata
+
+    class FakeCaptionClient:
+        def __init__(self, *, client_factory: object) -> None:
+            pass
+
+        def __call__(self, url: str) -> str:
+            return "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n" + "字幕內容" * 80
+
+    class ForbiddenMedia:
+        def __init__(self, runner: object, **kwargs: object) -> None:
+            pass
+
+        def audio_chunks(self, url: str, chunk_seconds: int):
+            raise AssertionError("captioned video must not download media")
+
+    class FakeGeminiSummarizer:
+        def __init__(self, client: object, model: str) -> None:
+            assert model == "gemini-3.6-flash"
+
+        def summarize(self, article: object) -> SummaryDraft:
+            return SummaryDraft(
+                summary="繁體中文摘要",
+                keyPoints=["重點一", "重點二", "重點三"],
+                tags=["YouTube"],
+                editorial="編輯觀點",
+            )
+
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", str(tmp_path))
+    monkeypatch.setattr(cli, "YtDlpMetadataProbe", FakeProbe)
+    monkeypatch.setattr(cli, "YouTubeCaptionClient", FakeCaptionClient)
+    monkeypatch.setattr(cli, "YouTubeMediaPipeline", ForbiddenMedia)
+    monkeypatch.setattr(cli.genai, "Client", lambda *, api_key: object())
+    monkeypatch.setattr(cli, "GeminiSummarizer", FakeGeminiSummarizer)
+    monkeypatch.setattr(cli, "_classifier", lambda: FixedClassifier(CATEGORY))
+
+    record = cli._workflow().run(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ", NOW
+    )
+
+    assert record.source_type == "youtube"
+    assert record.title == "公開影片"
+    assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+def test_no_caption_missing_openai_key_stops_before_fake_media_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    metadata = {
+        "id": "dQw4w9WgXcQ",
+        "title": "公開影片",
+        "channel": "公開頻道",
+        "upload_date": "20260820",
+        "duration": 120,
+        "live_status": "not_live",
+        "availability": "public",
+        "language": "zh-TW",
+        "subtitles": {},
+        "automatic_captions": {},
+    }
+
+    class FakeProbe:
+        def __init__(self, runner: object) -> None:
+            pass
+
+        def __call__(self, url: str) -> dict[str, object]:
+            return metadata
+
+    class UnusedCaptionClient:
+        def __init__(self, *, client_factory: object) -> None:
+            pass
+
+        def __call__(self, url: str) -> str:
+            raise AssertionError("no caption URL should be fetched")
+
+    class RecordingMedia:
+        def __init__(self, runner: object, **kwargs: object) -> None:
+            pass
+
+        def audio_chunks(self, url: str, chunk_seconds: int):
+            events.append("download")
+            raise AssertionError("download must not begin without OpenAI key")
+
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(cli, "YtDlpMetadataProbe", FakeProbe)
+    monkeypatch.setattr(cli, "YouTubeCaptionClient", UnusedCaptionClient)
+    monkeypatch.setattr(cli, "YouTubeMediaPipeline", RecordingMedia)
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+
+    workflow = cli._workflow()
+    with pytest.raises(DigestError) as raised:
+        workflow._extractor.extract(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        )
+
+    assert raised.value.as_dict() == {
+        "stage": "input",
+        "code": "MISSING_API_KEY",
+        "message": "OPENAI_API_KEY is required for YouTube audio transcription",
+        "retryable": False,
+    }
+    assert events == []
+
+
+def test_invalid_youtube_settings_do_not_break_ordinary_web_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "invalid")
+    monkeypatch.setenv("AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS", "invalid")
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+
+    class Web:
+        def __init__(self, *, client_factory: object) -> None:
+            pass
+        def extract(self, url: str) -> str:
+            return "web-result"
+
+    monkeypatch.setattr(cli, "WebExtractor", Web)
+
+    workflow = cli._workflow()
+
+    assert workflow._extractor.extract("https://example.com/article") == "web-result"
+
+
+def test_invalid_youtube_settings_fail_only_when_youtube_route_is_selected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", "invalid")
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+
+    workflow = cli._workflow()
+
+    with pytest.raises(DigestError) as raised:
+        workflow._extractor.extract("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    assert raised.value.code == "INVALID_CONFIG"
+    assert "AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS" in raised.value.message
+
+
+def test_youtube_chunk_byte_limit_is_validated_when_route_is_selected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES", "0")
+    monkeypatch.setattr(cli, "_summarizer", lambda: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+    workflow = cli._workflow()
+    with pytest.raises(DigestError) as raised:
+        workflow._extractor.extract("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    assert raised.value.code == "INVALID_CONFIG"
+    assert "AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES" in raised.value.message
 
 
 def test_production_can_select_openai(monkeypatch) -> None:

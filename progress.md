@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：正式分類器已通過固定測試集評估並產生 production artifacts；下一核心來源里程碑為 YouTube
+> 目前階段：YouTube 公開影片的本地自動化里程碑已通過；真實有字幕與無字幕影片驗收尚受本機工具與憑證阻擋
 >
-> 下次續作：設計 YouTube 有字幕與無可用字幕的獨立來源流程，取得架構核准後依 TDD 實作
+> 下次續作：安裝並審查 `yt-dlp` 與 FFmpeg、備妥轉錄用 OpenAI 金鑰及網路後，以兩支當時仍可公開存取的短影片完成有字幕／無字幕手動驗收
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | 尚未開始 | 有字幕與無可用字幕都屬後續核心 MVP |
+| YouTube 公開影片 | 自動化已完成／真實驗收阻擋 | 獨立解析器、字幕優先、無字幕音訊轉錄、安全錯誤、Schema 與 Astro 契約均有本地自動化覆蓋；未安裝媒體工具且無轉錄金鑰，因此兩項真實 smoke 保持未驗證 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -61,11 +61,22 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
+| 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
+| YouTube 本機工具與手動驗收 | 2026-08-21 安全先決檢查：`yt-dlp` 與 FFmpeg 都不在 `PATH`；摘要 provider 金鑰已設定，但轉錄所需 `OPENAI_API_KEY` 未設定。因必要工具已缺少，未發起網路或 API 呼叫，也未挑選、保存或推測任何真實影片 URL；有字幕與無字幕 smoke 均為 **UNVERIFIED** |
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### YouTube 本地自動化里程碑（2026-08-21）
+
+- 已依 TDD 擴充 Astro 前端契約：focused RED 為 `21 passed / 1 failed`，失敗原因是 Zod 將 `sourceType: youtube` 拒為非 `web`；將 TypeScript 與 Zod 同步擴充為 `web | youtube` 後，focused GREEN 為 `22 passed`。
+- 完整本地自動化驗證：Python `396 passed`，但仍有 1 個既有 Google SDK `DeprecationWarning`；Vitest `25 passed`；Astro check 為 `0 errors / 0 warnings / 0 hints`，正式建置完成 `5 pages`。
+- portable Schema 與 storage 專項 `16 passed`；`site/dist` 無 `.mp3`、`.m4a`、`.webm`、`.vtt` 或 `.srt` 檔案，deployment verifier 與 `git diff --check` 通過。規定的寬鬆 `git grep` 因 9 處既有文件／測試字串命中，作為 false-positive baseline 警告保留，不謊稱為無命中。
+- 本機沒有 `yt-dlp` 與 FFmpeg，且未設定無字幕轉錄需要的 `OPENAI_API_KEY`；因此未呼叫真實網路或 API，有字幕與無字幕影片的手動整合驗收均保持 **UNVERIFIED**。
+- `npm ci` 依賴已由上階段準備且 audit 為 0 vulnerabilities，但 `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准 install-script 通知，本次未核准或執行該 scripts。
+- 下一核心實作里程碑為公開社群單篇貼文；YouTube 手動驗收在必要工具、金鑰與網路備妥後仍需回補，不得以自動化替代。
 
 ### Task 8 正式分類器驗收（2026-08-21）
 
@@ -160,9 +171,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 依核准 MVP 規格提出 YouTube 來源設計，維持與一般網頁解析器隔離，並分別定義有字幕與無可用字幕的處理邊界及安全錯誤。
-2. 設計取得核准後依 TDD 實作，日常測試使用本地 fixture／替身，不依賴 YouTube 網路狀態。
-3. YouTube 有字幕與無可用字幕各以一個使用者核准的真實公開案例驗收後，再進入公開社群單篇貼文里程碑。
+1. 審查並安裝 `yt-dlp` 與 FFmpeg，備妥轉錄用 OpenAI 金鑰與可用網路，但不加入 Cookie、登入或繞過存取限制的設定。
+2. 在執行當時挑選一支短的公開有字幕影片與一支短的公開無字幕影片，分別驗證 Schema、canonical `watch?v=` URL、`sourceType: youtube` 與無暫存路徑／逐字稿殘留。
+3. 本機自動化 YouTube 里程碑已可交付；公開社群單篇貼文是下一核心實作里程碑，不得將上述手動驗收錯標為完成。
 
 ## 更新規則
 
@@ -190,3 +201,10 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - Final reviewed cohort: 180 rows, 30 per category, 60 per batch; 180 approved, no pending/rejected, unique IDs and canonical URLs.
 - Dataset SHA-256: `1b65281c6dda2a60b800442140129915ff84d292da0e4fdfa69246b50544459c`.
 - Classifier training/evaluation and model artifacts remain incomplete.
+
+### YouTube source final integration verification (2026-08-22)
+
+- Completed the approved public single-video YouTube ingestion scope: canonical URL handling, duplicate preflight, caption-first extraction, safe media fallback, OpenAI transcription, `sourceType: youtube` persistence, CLI routing, schema compatibility, and Astro rendering.
+- Final security review approved the implementation after adding a 24 MiB pre-upload audio-chunk limit, sanitizing unexpected transcription and filesystem failures, preserving temporary-workspace cleanup, and deferring YouTube-only configuration validation until the YouTube route is selected.
+- Fresh full verification passed: Python `416 passed` with one pre-existing google-genai/Python 3.14 deprecation warning; Vitest `25 passed`; Astro check reported 0 diagnostics and the production build generated 5 pages; `git diff --check` passed.
+- Real public-video smoke tests for both caption and no-caption paths remain **UNVERIFIED** because this environment does not have yt-dlp/FFmpeg or a transcription API key. The corresponding `todo.md` acceptance item remains unchecked.
