@@ -266,3 +266,33 @@ def test_workflow_persists_youtube_source_type_and_canonical_url() -> None:
     assert str(result.canonical_url) == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     assert result.source_type == "youtube"
     assert repository.saved == [result]
+
+
+def test_workflow_rejects_equivalent_youtube_url_before_extraction() -> None:
+    events: list[str] = []
+    existing = SummaryRecord(
+        schemaVersion=1,
+        id="existing-youtube",
+        canonicalUrl="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        sourceType="youtube",
+        title="Existing video",
+        author=None,
+        sourcePublishedAt=None,
+        createdAt=NOW,
+        updatedAt=NOW,
+        summary="Summary",
+        keyPoints=["One", "Two", "Three"],
+        category=CATEGORY,
+        tags=["YouTube"],
+        editorial="Editorial",
+        status="published",
+    )
+    workflow, repository, classifier = make_workflow(events, existing=[existing])
+
+    with pytest.raises(DigestError) as raised:
+        workflow.run("https://youtu.be/dQw4w9WgXcQ?t=10", NOW)
+
+    assert raised.value.code == "DUPLICATE_URL"
+    assert events == ["preflight"]
+    assert classifier.inputs == []
+    assert repository.saved == []

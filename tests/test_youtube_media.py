@@ -686,3 +686,35 @@ def test_audio_chunks_cleanup_when_consumer_is_interrupted(
             raise failure
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_audio_chunks_rejects_oversized_output_and_cleans_up(tmp_path: Path) -> None:
+    runner = CreatingRunner()
+    pipeline = YouTubeMediaPipeline(runner, temp_root=tmp_path, max_chunk_bytes=5)
+
+    with pytest.raises(DigestError) as raised:
+        with pipeline.audio_chunks(VIDEO_URL, 600):
+            pytest.fail("oversized chunks must not reach the transcription boundary")
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "MEDIA_CHUNK_TOO_LARGE",
+        "message": "Audio segment exceeds the upload size limit",
+        "retryable": False,
+    }
+    assert raised.value.__context__ is None
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_command_runner_accepts_ffmpeg_version_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    observed: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    CommandRunner().run(["ffmpeg", "-version"])
+
+    assert observed == [["ffmpeg", "-version"]]

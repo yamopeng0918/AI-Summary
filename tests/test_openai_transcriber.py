@@ -187,3 +187,64 @@ def test_chunk_failure_does_not_return_partial_transcript(tmp_path: Path) -> Non
 
     assert raised.value.code == "TRANSCRIPTION_TIMEOUT"
     assert transcriptions.names == ["chunk-0000.mp3", "chunk-0001.mp3"]
+
+
+def test_maps_unexpected_sdk_failure_without_leaking_details(tmp_path: Path) -> None:
+    chunk = make_chunk(tmp_path, "SECRET-chunk.mp3")
+    client, _ = client_with([RuntimeError("SECRET_SDK_FAILURE")])
+
+    with pytest.raises(DigestError) as raised:
+        OpenAIAudioTranscriber(client, "test-model").transcribe([chunk])
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "TRANSCRIPTION_FAILED",
+        "message": "Audio transcription request failed",
+        "retryable": False,
+    }
+    assert "SECRET" not in rendered_exception(raised.value)
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None
+
+
+def test_rejects_non_string_response_without_leaking_details(tmp_path: Path) -> None:
+    chunk = make_chunk(tmp_path, "SECRET-chunk.mp3")
+    client, _ = client_with([SimpleNamespace(secret="SECRET_RESPONSE")])
+
+    with pytest.raises(DigestError) as raised:
+        OpenAIAudioTranscriber(client, "test-model").transcribe([chunk])
+
+    assert raised.value.code == "TRANSCRIPTION_FAILED"
+    assert "SECRET" not in rendered_exception(raised.value)
+    assert raised.value.__context__ is None
+
+
+def test_sanitizes_failure_while_reading_response_text(tmp_path: Path) -> None:
+    class MalformedResponse:
+        @property
+        def text(self) -> str:
+            raise RuntimeError("SECRET_RESPONSE_ACCESS")
+
+    class MalformedTranscriptions:
+        def create(self, **kwargs: object) -> object:
+            return MalformedResponse()
+
+    client = SimpleNamespace(audio=SimpleNamespace(transcriptions=MalformedTranscriptions()))
+    with pytest.raises(DigestError) as raised:
+        OpenAIAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path)])
+
+    assert raised.value.code == "TRANSCRIPTION_FAILED"
+    assert "SECRET" not in rendered_exception(raised.value)
+    assert raised.value.__context__ is None
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
+def test_preserves_process_control_exceptions(tmp_path: Path, interrupt: BaseException) -> None:
+    class InterruptingTranscriptions:
+        def create(self, **kwargs: object) -> object:
+            raise interrupt
+
+    client = SimpleNamespace(audio=SimpleNamespace(transcriptions=InterruptingTranscriptions()))
+
+    with pytest.raises(type(interrupt)):
+        OpenAIAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path)])

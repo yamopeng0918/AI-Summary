@@ -21,6 +21,11 @@ def test_preserves_existing_web_normalization() -> None:
     assert canonicalize_source_url("HTTPS://EXAMPLE.COM/a?utm_source=x&b=2") == "https://example.com/a?b=2"
 
 
+@pytest.mark.parametrize("raw_url", ["https://example.com/article", "not-a-url"])
+def test_is_youtube_url_returns_false_for_other_or_invalid_urls(raw_url: str) -> None:
+    assert is_youtube_url(raw_url) is False
+
+
 @pytest.mark.parametrize(
     "raw_url",
     [

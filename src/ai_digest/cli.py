@@ -16,7 +16,7 @@ from ai_digest.classifiers.base import Classifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.classifiers.trained import TrainedClassifier
 from ai_digest.domain import DigestError, SummaryRecord
-from ai_digest.extractors.router import ExtractorRouter
+from ai_digest.extractors.router import ExtractorRouter, LazyExtractor
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.extractors.youtube import (
     YouTubeCaptionClient,
@@ -93,14 +93,19 @@ def _positive_int_setting(name: str, default: int) -> int:
     return value
 
 
-def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWorkflow:
+def _youtube_extractor() -> YouTubeExtractor:
     runner = CommandRunner()
-    media = YouTubeMediaPipeline(runner)
+    media = YouTubeMediaPipeline(
+        runner,
+        max_chunk_bytes=_positive_int_setting(
+            "AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES", 24 * 1024 * 1024
+        ),
+    )
     model = os.environ.get("AI_DIGEST_TRANSCRIPTION_MODEL", "gpt-transcribe")
     chunk_seconds = _positive_int_setting(
         "AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS", 600
     )
-    youtube = YouTubeExtractor(
+    return YouTubeExtractor(
         probe=YtDlpMetadataProbe(runner),
         caption_client=YouTubeCaptionClient(client_factory=_web_client_factory),
         media=media.audio_chunks,
@@ -112,9 +117,13 @@ def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWor
         ),
         chunk_seconds=chunk_seconds,
     )
+
+
+def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWorkflow:
     return AddArticleWorkflow(
         extractor=ExtractorRouter(
-            WebExtractor(client_factory=_web_client_factory), youtube
+            WebExtractor(client_factory=_web_client_factory),
+            LazyExtractor(_youtube_extractor),
         ),
         summarizer=_summarizer(),
         classifier=_classifier(),

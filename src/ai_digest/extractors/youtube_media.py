@@ -223,9 +223,15 @@ class CommandRunner:
 class YouTubeMediaPipeline:
     """Download and segment YouTube audio inside an isolated workspace."""
 
-    def __init__(self, runner: CommandRunner, temp_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        runner: CommandRunner,
+        temp_root: Path | None = None,
+        max_chunk_bytes: int = 24 * 1024 * 1024,
+    ) -> None:
         self._runner = runner
         self._temp_root = temp_root
+        self._max_chunk_bytes = max_chunk_bytes
 
     @contextmanager
     def audio_chunks(self, url: str, chunk_seconds: int) -> Iterator[list[Path]]:
@@ -283,6 +289,13 @@ class YouTubeMediaPipeline:
                     "Media conversion produced no audio",
                     True,
                 )
+            if any(chunk.stat().st_size > self._max_chunk_bytes for chunk in chunks):
+                raise DigestError(
+                    "extract",
+                    "MEDIA_CHUNK_TOO_LARGE",
+                    "Audio segment exceeds the upload size limit",
+                    False,
+                ) from None
             yield chunks
         except BaseException as error:
             primary_failure = error

@@ -113,7 +113,17 @@ class YouTubeExtractor:
         if track is not None:
             text = self._caption_text(track.url)
         else:
-            transcriber = self._transcriber_factory()
+            factory_failure: DigestError | None = None
+            try:
+                transcriber = self._transcriber_factory()
+            except DigestError:
+                raise
+            except Exception:
+                factory_failure = _error(
+                    "TRANSCRIPTION_FAILED", "Audio transcription configuration failed", False
+                )
+            if factory_failure is not None:
+                raise factory_failure from None
             with self._media(url, self._chunk_seconds) as chunks:
                 text = transcriber.transcribe(chunks)
         if not isinstance(text, str) or len(text) < _MIN_TEXT_LENGTH:

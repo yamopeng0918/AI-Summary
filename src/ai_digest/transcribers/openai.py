@@ -29,7 +29,27 @@ class OpenAIAudioTranscriber:
             result, failure = self._transcribe_chunk(chunk)
             if failure is not None:
                 raise failure
-            text = getattr(result, "text", "").strip()
+            response_failure: DigestError | None = None
+            try:
+                raw_text = getattr(result, "text", None)
+            except Exception:
+                raw_text = None
+                response_failure = DigestError(
+                    "extract",
+                    "TRANSCRIPTION_FAILED",
+                    "Audio transcription response is invalid",
+                    False,
+                )
+            if response_failure is not None:
+                raise response_failure from None
+            if not isinstance(raw_text, str):
+                raise DigestError(
+                    "extract",
+                    "TRANSCRIPTION_FAILED",
+                    "Audio transcription response is invalid",
+                    False,
+                ) from None
+            text = raw_text.strip()
             if not text:
                 raise DigestError(
                     "extract",
@@ -74,6 +94,10 @@ class OpenAIAudioTranscriber:
                 error.status_code >= 500,
             )
         except OSError:
+            return None, DigestError(
+                "extract", "TRANSCRIPTION_FAILED", "Audio transcription request failed", False
+            )
+        except Exception:
             return None, DigestError(
                 "extract", "TRANSCRIPTION_FAILED", "Audio transcription request failed", False
             )

@@ -154,6 +154,42 @@ def test_missing_transcription_configuration_stops_before_media_download() -> No
     assert events == []
 
 
+def test_unexpected_transcriber_factory_failure_is_sanitized() -> None:
+    extractor = YouTubeExtractor(
+        probe=lambda url: {
+            "title": "Video", "duration": 120, "subtitles": {}, "automatic_captions": {}
+        },
+        caption_client=lambda url: "",
+        media=lambda url, seconds: pytest.fail("media must not start"),
+        transcriber_factory=lambda: (_ for _ in ()).throw(RuntimeError("SECRET_FACTORY")),
+        max_duration_seconds=7200,
+        chunk_seconds=600,
+    )
+
+    with pytest.raises(DigestError) as raised:
+        extractor.extract(VIDEO_URL)
+
+    assert raised.value.code == "TRANSCRIPTION_FAILED"
+    assert "SECRET" not in "".join(__import__("traceback").format_exception(raised.value))
+    assert raised.value.__context__ is None
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
+def test_transcriber_factory_preserves_process_control_exceptions(interrupt: BaseException) -> None:
+    extractor = YouTubeExtractor(
+        probe=lambda url: {
+            "title": "Video", "duration": 120, "subtitles": {}, "automatic_captions": {}
+        },
+        caption_client=lambda url: "",
+        media=lambda url, seconds: pytest.fail("media must not start"),
+        transcriber_factory=lambda: (_ for _ in ()).throw(interrupt),
+        max_duration_seconds=7200,
+        chunk_seconds=600,
+    )
+    with pytest.raises(type(interrupt)):
+        extractor.extract(VIDEO_URL)
+
+
 @pytest.mark.parametrize(
     ("changes", "code"),
     [
