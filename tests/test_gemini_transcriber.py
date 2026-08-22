@@ -1,7 +1,10 @@
 from pathlib import Path
 from types import SimpleNamespace
+import traceback
 
+import httpx
 import pytest
+from google.genai import errors
 
 from ai_digest.domain import DigestError
 from ai_digest.transcribers import gemini as gemini_transcriber
@@ -31,13 +34,44 @@ class FakeModels:
         uploaded = contents[1]
         self.events.append(("generate", f"{model}:{uploaded.name}"))
         assert contents[0] == GeminiAudioTranscriber.TRANSCRIPTION_PROMPT
-        return next(self.responses)
+        outcome = next(self.responses)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+
+class ControlledFiles(FakeFiles):
+    def __init__(
+        self,
+        events: list[tuple[str, str]],
+        *,
+        upload_error: BaseException | None = None,
+        delete_error: BaseException | None = None,
+    ) -> None:
+        super().__init__(events)
+        self.upload_error = upload_error
+        self.delete_error = delete_error
+
+    def upload(self, *, file: Path) -> object:
+        if self.upload_error is not None:
+            self.events.append(("upload", file.name))
+            raise self.upload_error
+        return super().upload(file=file)
+
+    def delete(self, *, name: str) -> None:
+        self.events.append(("delete", name))
+        if self.delete_error is not None:
+            raise self.delete_error
 
 
 def make_chunk(root: Path, name: str) -> Path:
     chunk = root / name
     chunk.write_bytes(b"audio")
     return chunk
+
+
+def rendered_exception(error: BaseException) -> str:
+    return "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
 
 def test_missing_key_fails_before_constructing_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -92,3 +126,214 @@ def accepts_transcriber(value: AudioTranscriber) -> AudioTranscriber:
 def test_gemini_transcriber_satisfies_audio_transcriber_contract() -> None:
     client = SimpleNamespace(files=object(), models=object())
     assert accepts_transcriber(GeminiAudioTranscriber(client, "model")) is not None
+
+
+@pytest.mark.parametrize("invalid_text", [None, 123, "", "   "])
+def test_invalid_response_is_rejected_safely(tmp_path: Path, invalid_text: object) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=FakeFiles(events),
+        models=FakeModels(events, [SimpleNamespace(text=invalid_text)]),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "TRANSCRIPTION_FAILED",
+        "message": "Audio transcription response is invalid",
+        "retryable": False,
+    }
+    assert raised.value.__cause__ is None
+
+
+def test_partial_transcript_is_not_returned_when_later_response_is_blank(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=FakeFiles(events),
+        models=FakeModels(
+            events,
+            [SimpleNamespace(text="first complete chunk"), SimpleNamespace(text="   ")],
+        ),
+    )
+    chunks = [make_chunk(tmp_path, "chunk-0000.mp3"), make_chunk(tmp_path, "chunk-0001.mp3")]
+
+    with pytest.raises(DigestError):
+        GeminiAudioTranscriber(client, "test-model").transcribe(chunks)
+
+    assert [event for event in events if event[0] == "delete"] == [
+        ("delete", "files/chunk-1"),
+        ("delete", "files/chunk-2"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "message", "retryable"),
+    [
+        (
+            httpx.TimeoutException("SECRET"),
+            "TRANSCRIPTION_TIMEOUT",
+            "Audio transcription timed out",
+            True,
+        ),
+        (
+            httpx.TransportError("SECRET"),
+            "TRANSCRIPTION_FAILED",
+            "Audio transcription request failed",
+            True,
+        ),
+        (
+            errors.ClientError(429, {"message": "SECRET"}, None),
+            "TRANSCRIPTION_RATE_LIMITED",
+            "Audio transcription is rate limited",
+            True,
+        ),
+        (
+            errors.ClientError(400, {"message": "SECRET"}, None),
+            "TRANSCRIPTION_FAILED",
+            "Audio transcription request failed",
+            False,
+        ),
+        (
+            errors.ServerError(503, {"message": "SECRET"}, None),
+            "TRANSCRIPTION_FAILED",
+            "Audio transcription request failed",
+            True,
+        ),
+        (
+            errors.UnknownApiResponseError(200, {"message": "SECRET"}, None),
+            "TRANSCRIPTION_FAILED",
+            "Audio transcription request failed",
+            False,
+        ),
+        (
+            OSError("SECRET C:\\private\\chunk.mp3"),
+            "TRANSCRIPTION_FAILED",
+            "Audio transcription request failed",
+            False,
+        ),
+        (
+            RuntimeError("SECRET files/private"),
+            "TRANSCRIPTION_FAILED",
+            "Audio transcription request failed",
+            False,
+        ),
+    ],
+)
+def test_maps_failures_without_leaking_details(
+    tmp_path: Path,
+    error: Exception,
+    code: str,
+    message: str,
+    retryable: bool,
+) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(files=FakeFiles(events), models=FakeModels(events, [error]))
+    chunk = make_chunk(tmp_path, "SECRET-chunk.mp3")
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model").transcribe([chunk])
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": code,
+        "message": message,
+        "retryable": retryable,
+    }
+    rendered = rendered_exception(raised.value)
+    for secret in ("SECRET", "private", "chunk.mp3"):
+        assert secret not in str(raised.value)
+        assert secret not in rendered
+    assert raised.value.__cause__ is None
+
+
+def test_upload_failure_does_not_attempt_remote_cleanup(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events, upload_error=RuntimeError("SECRET upload")),
+        models=FakeModels(events, []),
+    )
+
+    with pytest.raises(DigestError):
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert events == [("upload", "chunk.mp3")]
+
+
+def test_generation_failure_attempts_remote_cleanup_once(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events),
+        models=FakeModels(events, [RuntimeError("SECRET generation")]),
+    )
+
+    with pytest.raises(DigestError):
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert [event for event in events if event[0] == "delete"] == [
+        ("delete", "files/chunk-1")
+    ]
+
+
+def test_cleanup_failure_after_success_is_safe_and_non_retryable(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events, delete_error=RuntimeError("SECRET files/private")),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "TRANSCRIPTION_FAILED",
+        "message": "Audio transcription cleanup failed",
+        "retryable": False,
+    }
+    assert "SECRET" not in rendered_exception(raised.value)
+
+
+def test_primary_failure_wins_when_generation_and_cleanup_both_fail(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events, delete_error=RuntimeError("SECRET cleanup")),
+        models=FakeModels(events, [httpx.TimeoutException("SECRET generation")]),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert (raised.value.code, raised.value.retryable) == ("TRANSCRIPTION_TIMEOUT", True)
+    assert "SECRET" not in rendered_exception(raised.value)
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
+def test_generation_interrupt_cleans_up_then_propagates(
+    tmp_path: Path, interrupt: BaseException
+) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events),
+        models=FakeModels(events, [interrupt]),
+    )
+
+    with pytest.raises(type(interrupt)):
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert [event for event in events if event[0] == "delete"] == [
+        ("delete", "files/chunk-1")
+    ]
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
+def test_cleanup_interrupt_propagates(tmp_path: Path, interrupt: BaseException) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events, delete_error=interrupt),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    with pytest.raises(type(interrupt)):
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
