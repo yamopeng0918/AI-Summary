@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-21
+> 最後更新：2026-08-22
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：YouTube 公開影片的本地自動化里程碑已通過；真實有字幕與無字幕影片驗收尚受本機工具與憑證阻擋
+> 目前階段：provider-aligned 音訊轉錄 Task 1～3 已在隔離分支完成；Task 4 文件、完整 gates 與真實無字幕 Gemini 驗收尚未完成
 >
-> 下次續作：安裝並審查 `yt-dlp` 與 FFmpeg、備妥轉錄用 OpenAI 金鑰及網路後，以兩支當時仍可公開存取的短影片完成有字幕／無字幕手動驗收
+> 下次續作：完成 provider-aligned Task 4 的設定文件與完整驗證，重新檢查 `yt-dlp`、FFmpeg、`GEMINI_API_KEY` 與網路先決條件後，再執行已核准的無字幕 Gemini 真實驗收
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | 自動化已完成／真實驗收阻擋 | 獨立解析器、字幕優先、無字幕音訊轉錄、安全錯誤、Schema 與 Astro 契約均有本地自動化覆蓋；未安裝媒體工具且無轉錄金鑰，因此兩項真實 smoke 保持未驗證 |
+| YouTube 公開影片 | provider-aligned 自動化進行中／真實驗收未完成 | 原 YouTube 自動化里程碑已通過；Gemini Files API 轉錄、安全遠端清理及單一 provider 路由的 Task 1～3 已完成並通過 177 項相關測試，Task 4 完整 gates 與真實無字幕 Gemini 驗收尚待執行 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -62,12 +62,20 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
-| YouTube 本機工具與手動驗收 | 2026-08-21 安全先決檢查：`yt-dlp` 與 FFmpeg 都不在 `PATH`；摘要 provider 金鑰已設定，但轉錄所需 `OPENAI_API_KEY` 未設定。因必要工具已缺少，未發起網路或 API 呼叫，也未挑選、保存或推測任何真實影片 URL；有字幕與無字幕 smoke 均為 **UNVERIFIED** |
+| YouTube 本機工具與手動驗收 | 2026-08-21 的先決檢查顯示 `yt-dlp` 與 FFmpeg 不在 `PATH`；2026-08-22 改為 `AI_DIGEST_PROVIDER` 同時選擇摘要與轉錄，Gemini 路徑不再需要 OpenAI 金鑰。工具、`GEMINI_API_KEY` 與網路狀態尚未重新檢查，無字幕 Gemini 真實驗收仍為 **UNVERIFIED** |
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### Provider-aligned 音訊轉錄 Task 1～3（2026-08-22）
+
+- 核准設計與實作計畫已建立；工作在隔離分支 `feature/provider-aligned-transcription` 進行，未 push、合併或部署。
+- Task 1 提交 `8e38e61`：新增 `GeminiAudioTranscriber`，依序上傳音訊 chunk、呼叫 Gemini 逐字轉錄、刪除每個遠端檔案並合併完整結果；缺少 `GEMINI_API_KEY` 時在 client 建構前安全失敗。
+- Task 2 提交 `c4d88e4`：補齊畸形／空白回應拒絕、timeout／rate limit／transport／SDK／本機錯誤映射、無部分結果、成功／失敗／中斷清理、雙重失敗主要錯誤優先及敏感資訊不洩漏。Gemini 與既有 OpenAI transcriber 專項為 `39 passed`。
+- Task 3 提交 `b779286`：`AI_DIGEST_PROVIDER` 現在同時選擇摘要器與無字幕音訊轉錄器；Gemini 與 OpenAI 各只使用自己的金鑰及 `GEMINI_TRANSCRIPTION_MODEL`／`OPENAI_TRANSCRIPTION_MODEL`，不自動 fallback，舊 `AI_DIGEST_TRANSCRIPTION_MODEL` 不再由正式程式讀取。CLI、YouTube、media 與兩 provider transcriber 測試為 `177 passed`。
+- 以上驗證均使用 fake client 與本地 fixture，沒有呼叫外部網路、媒體工具或付費 API；只有既存的 google-genai／Python 3.14 `DeprecationWarning`。Task 4 的 `.env.example`、README、舊設計 supersession note、完整 Python／前端／建置／部署驗證及真實無字幕 Gemini 驗收尚未執行，因此不得宣稱 provider-aligned 里程碑完成。
 
 ### YouTube 本地自動化里程碑（2026-08-21）
 
@@ -171,9 +179,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 審查並安裝 `yt-dlp` 與 FFmpeg，備妥轉錄用 OpenAI 金鑰與可用網路，但不加入 Cookie、登入或繞過存取限制的設定。
-2. 在執行當時挑選一支短的公開有字幕影片與一支短的公開無字幕影片，分別驗證 Schema、canonical `watch?v=` URL、`sourceType: youtube` 與無暫存路徑／逐字稿殘留。
-3. 本機自動化 YouTube 里程碑已可交付；公開社群單篇貼文是下一核心實作里程碑，不得將上述手動驗收錯標為完成。
+1. 完成 provider-aligned Task 4：更新 `.env.example`、README 與舊 YouTube 設計的 supersession note，執行完整 Python、前端、正式建置、Schema、deployment verifier、敏感資料與媒體殘留 gates。
+2. 重新檢查 `yt-dlp`、FFmpeg、`GEMINI_API_KEY` 與網路先決條件；只有全部具備時，才以已核准的無字幕影片 `https://www.youtube.com/watch?v=4gciWspBVHw` 執行隔離 Gemini 真實驗收，不加入 Cookie、登入或繞過存取限制的設定。
+3. 真實驗收成功且 JSON、暫存清理與敏感資訊檢查都有證據後，才可勾選 YouTube 真實案例驗收；完成 provider-aligned 收尾後，下一核心實作里程碑為公開社群單篇貼文。
 
 ## 更新規則
 
