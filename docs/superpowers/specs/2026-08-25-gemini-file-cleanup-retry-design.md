@@ -1,7 +1,7 @@
 # Gemini Files cleanup retry design
 
 Date: 2026-08-25
-Status: Approved
+Status: Implemented; live acceptance blocked
 
 ## 1. Context and goal
 
@@ -105,3 +105,18 @@ Expected implementation changes are limited to:
 - `progress.md` and `todo.md` for verified evidence.
 
 Any change to public data format, CLI interface, provider selection, retry configuration, or other source parsers requires separate approval.
+
+## 9. Implementation and verification evidence
+
+The approved implementation is present in `GeminiAudioTranscriber`; no parser, summary provider, CLI interface, data format, or OpenAI behavior changed.
+
+| Requirement | Task evidence |
+|---|---|
+| Delete only, at most three attempts, with delays exactly 1.0 then 2.0 seconds | Task 1 implementation in `src/ai_digest/transcribers/gemini.py`; Task 2 focused fake-client tests assert the delete attempt count and recorded delays. |
+| 404 succeeds; timeout, transport, 429, and 5xx retry; other failures stop; interruptions propagate | Task 2 focused Gemini transcriber tests cover each classification and assert no unnecessary sleep or retry. |
+| Generation failure remains primary when cleanup also exhausts retries; no partial transcript | Task 2 focused tests cover primary-error precedence and safe failure mapping. |
+| Automated tests have no real sleep, network, media-binary, or paid API dependency | Task 2 uses injected sleepers, fake clients, and local fixtures; the 2026-08-25 full local suite passed 452 tests. |
+
+On 2026-08-25, fresh local gates passed: Python `452 passed, 2 warnings`; Schema/storage `28 passed, 1 warning`; Vitest `25 passed`; Astro `0 errors / 0 warnings / 0 hints` and `5` pages; deployment verification and `git diff --check` exited 0; `site/dist` media residue was 0. The required tools were `yt-dlp 2026.08.19` and FFmpeg `9.0.1`; the Gemini key presence check succeeded without exposing its value.
+
+Exactly one approved no-caption live invocation was attempted with `gemini-3.6-flash`. Its acceptance root did not exist afterward and contained `0` JSON records, so the required record validation could not pass. The Gemini Files non-identifying count was `0` before and `0` after the invocation; no remote File metadata was printed or deleted. There was no uniquely identifiable local acceptance record to remove. A fresh paid retry requires a new decision. The combined captioned/no-caption acceptance remains incomplete.
