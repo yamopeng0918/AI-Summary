@@ -35,6 +35,7 @@ Gemini is the default provider. Configure Gemini explicitly in PowerShell:
 $env:AI_DIGEST_PROVIDER = 'gemini'
 $env:GEMINI_API_KEY = '<your-gemini-api-key>'
 $env:GEMINI_MODEL = 'gemini-3.6-flash' # optional; this is the default
+$env:GEMINI_TRANSCRIPTION_MODEL = 'gemini-3.6-flash' # optional; no-caption YouTube default
 ```
 
 To use OpenAI explicitly:
@@ -43,9 +44,10 @@ To use OpenAI explicitly:
 $env:AI_DIGEST_PROVIDER = 'openai'
 $env:OPENAI_API_KEY = '<your-openai-api-key>'
 $env:OPENAI_MODEL = 'gpt-5-mini' # optional; this is the default
+$env:OPENAI_TRANSCRIPTION_MODEL = 'gpt-transcribe' # optional; no-caption YouTube default
 ```
 
-There is no automatic fallback between providers. `add` requires only the API key for the selected provider. Local `list`, `show`, `archive`, and `publish` commands do not require either provider key.
+There is no automatic fallback between providers. `AI_DIGEST_PROVIDER` selects both structured summarization and no-caption YouTube audio transcription, and `add` requires only the API key for that selected provider. Local `list`, `show`, `archive`, and `publish` commands do not require either provider key.
 
 可用 `AI_DIGEST_SUMMARY_ROOT` 將 JSON 寫入其他本機目錄；未設定時使用 `data/summaries`。
 
@@ -74,16 +76,17 @@ yt-dlp --version
 ffmpeg -version
 ```
 
-YouTube 擷取採字幕優先：人工字幕優先於自動字幕，只有完全沒有可用字幕時，才會下載公開音訊、由 FFmpeg 分段，並送至 OpenAI 語音轉文字 API。預設影片上限為兩小時（`7200` 秒），超過上限時會在下載音訊前停止。可在本機調整以下設定：
+YouTube 擷取採字幕優先：人工字幕優先於自動字幕，只有完全沒有可用字幕時，才會下載公開音訊、由 FFmpeg 分段，並交給 `AI_DIGEST_PROVIDER` 所選的 Gemini 或 OpenAI 轉錄器。預設影片上限為兩小時（`7200` 秒），超過上限時會在下載音訊前停止。可在本機調整以下設定：
 
 ```powershell
-$env:AI_DIGEST_TRANSCRIPTION_MODEL = 'gpt-transcribe'
+$env:GEMINI_TRANSCRIPTION_MODEL = 'gemini-3.6-flash'
+$env:OPENAI_TRANSCRIPTION_MODEL = 'gpt-transcribe'
 $env:AI_DIGEST_TRANSCRIPTION_CHUNK_SECONDS = '600'
 $env:AI_DIGEST_TRANSCRIPTION_MAX_CHUNK_BYTES = '25165824'
 $env:AI_DIGEST_YOUTUBE_MAX_DURATION_SECONDS = '7200'
 ```
 
-`OPENAI_API_KEY` 只在影片確實需要音訊轉錄時才延遲檢查；有可用字幕且摘要 provider 為 Gemini 時不需要 OpenAI 金鑰。無字幕而缺少該金鑰時，系統會在下載音訊前以 `MISSING_API_KEY` 失敗。
+音訊轉錄器只在影片確實沒有可用字幕時才延遲建立。Gemini 路徑只使用 `GEMINI_API_KEY`，透過 Files API 逐段上傳、轉錄，並在成功、失敗或中斷時嘗試刪除每個遠端暫存檔；OpenAI 路徑只使用 `OPENAI_API_KEY`。兩條路徑都不會自動 fallback 到另一個 provider。缺少所選 provider 金鑰時，系統會在下載音訊前以 `MISSING_API_KEY` 失敗。
 
 音訊同時受分段秒數與 24 MiB 的預設檔案大小上限保護。分段超過上限時會以 `MEDIA_CHUNK_TOO_LARGE` 安全停止；若無法檢查分段檔案，則回報可重試的 `MEDIA_DOWNLOAD_FAILED`。這兩種錯誤都不會輸出暫存路徑或底層作業系統錯誤。
 

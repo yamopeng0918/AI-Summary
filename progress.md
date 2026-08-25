@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-22
+> 最後更新：2026-08-25
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：provider-aligned 音訊轉錄 Task 1～3 已在隔離分支完成；Task 4 文件、完整 gates 與真實無字幕 Gemini 驗收尚未完成
+> 目前階段：provider-aligned 音訊轉錄自動化與文件 gates 已通過；真實無字幕 Gemini 驗收因缺少 `yt-dlp` 與 FFmpeg 阻擋
 >
-> 下次續作：完成 provider-aligned Task 4 的設定文件與完整驗證，重新檢查 `yt-dlp`、FFmpeg、`GEMINI_API_KEY` 與網路先決條件後，再執行已核准的無字幕 Gemini 真實驗收
+> 下次續作：安裝並審查 `yt-dlp` 與 FFmpeg，重新確認版本與網路後，以已核准影片完成隔離無字幕 Gemini 真實驗收；不得以自動化測試取代
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | provider-aligned 自動化進行中／真實驗收未完成 | 原 YouTube 自動化里程碑已通過；Gemini Files API 轉錄、安全遠端清理及單一 provider 路由的 Task 1～3 已完成並通過 177 項相關測試，Task 4 完整 gates 與真實無字幕 Gemini 驗收尚待執行 |
+| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收阻擋 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與操作文件已完成；完整 Python `444 passed`、Vitest `25 passed`、Astro 0 diagnostics／5 pages、Schema/storage `28 passed` 及部署安全 gates 通過，但真實無字幕驗收缺少媒體工具 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -62,12 +62,21 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
-| YouTube 本機工具與手動驗收 | 2026-08-21 的先決檢查顯示 `yt-dlp` 與 FFmpeg 不在 `PATH`；2026-08-22 改為 `AI_DIGEST_PROVIDER` 同時選擇摘要與轉錄，Gemini 路徑不再需要 OpenAI 金鑰。工具、`GEMINI_API_KEY` 與網路狀態尚未重新檢查，無字幕 Gemini 真實驗收仍為 **UNVERIFIED** |
+| YouTube 本機工具與手動驗收 | 2026-08-25 重新載入系統／使用者 PATH 後，`yt-dlp` 與 FFmpeg 均無法解析，`GEMINI_API_KEY` 已設定。因工具先決條件不完整，未發起網路、媒體下載或付費 API 呼叫；核准的無字幕影片仍為 **UNVERIFIED**，有字幕案例也沒有可據以勾選整體驗收的完整紀錄 |
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### Provider-aligned 音訊轉錄 Task 4 自動化收尾（2026-08-25）
+
+- `.env.example` 與 README 已改用 `GEMINI_TRANSCRIPTION_MODEL=gemini-3.6-flash`、`OPENAI_TRANSCRIPTION_MODEL=gpt-transcribe`；`AI_DIGEST_PROVIDER` 同時選擇摘要與無字幕轉錄，只有所選 provider 金鑰需要設定，沒有跨 provider fallback。
+- README 已記錄 Gemini Files API 的逐段上傳與遠端清理生命週期，OpenAI 路徑仍保留；舊 YouTube 設計頂端已連結 2026-08-22 provider-aligned 設計並標示原 OpenAI-only 決策被部分取代。
+- 完整 Python suite 為 `444 passed`，只有既存 google-genai／Python 3.14 `DeprecationWarning`；Vitest `25 passed`；Astro check 為 `0 errors / 0 warnings / 0 hints`，正式建置 `5 pages`；Schema/storage 專項 `28 passed`。
+- `git diff --check`、tracked／`site/dist` deployment verifier 與建置輸出媒體殘留掃描均通過，`site/dist` 未發現 `.mp3`、`.m4a`、`.webm`、`.vtt` 或 `.srt`。
+- 先決條件檢查只回報布林狀態、不輸出金鑰：`yt-dlp=False`、`ffmpeg=False`、`gemini_api_key=True`。因此沒有對核准的無字幕影片 `https://www.youtube.com/watch?v=4gciWspBVHw` 發起網路或 Gemini API 呼叫，沒有建立驗收 JSON，也沒有產生需清理的驗收目錄；實際 Gemini 轉錄模型尚未送出請求，設定預設值為 `gemini-3.6-flash`。
+- repository 目前沒有足以證明先前有字幕真實驗收之 URL 與有效紀錄；加上本次無字幕驗收受阻，`todo.md` 的「有字幕與無字幕各一例」維持未勾選。下一核心實作仍是公開社群單篇貼文，但 YouTube 真實驗收技術債必須在工具備妥後回補。
 
 ### Provider-aligned 音訊轉錄 Task 1～3（2026-08-22）
 

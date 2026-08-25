@@ -3,6 +3,8 @@
 日期：2026-08-21
 狀態：已核准，待撰寫實作計畫
 
+> Superseded in part on 2026-08-22: provider selection for audio transcription now follows `AI_DIGEST_PROVIDER`; see `2026-08-22-provider-aligned-audio-transcription-design.md`. All other YouTube source constraints remain in force.
+
 ## 1. 目標與範圍
 
 本設計為 AI Digest MVP 新增公開 YouTube 單支影片來源，涵蓋有可用字幕與無可用字幕兩種情況。輸出沿用既有繁體中文摘要、分類、標籤、AI 編輯觀點與 JSON 儲存流程。

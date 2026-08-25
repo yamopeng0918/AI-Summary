@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-22
+> 最後同步：2026-08-25
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -91,7 +91,7 @@
 - [x] 驗證畸形回應、SDK／HTTP／本機錯誤、清理失敗、雙重失敗與程序中斷均使用安全錯誤及確定性清理。
 - [x] 讓 `AI_DIGEST_PROVIDER` 同時選擇摘要器與無字幕轉錄器，且 Gemini／OpenAI 各只使用自己的金鑰與模型設定，不自動 fallback。
 - [x] 以本地 fake 與 fixture 完成 Task 1～3 相關驗證：transcriber 專項 `39 passed`；CLI、YouTube、media 與 transcriber 集合 `177 passed`。
-- [ ] 更新 `.env.example`、README 與舊 YouTube 設計的 supersession note，並完成 provider-aligned 完整 Python／前端／正式建置／部署安全 gates。
+- [x] 更新 `.env.example`、README 與舊 YouTube 設計的 supersession note，並完成 provider-aligned 完整 Python／前端／正式建置／部署安全 gates（Python `444 passed`、Vitest `25 passed`、Astro 0 diagnostics／5 pages、Schema/storage `28 passed`）。
 - [ ] 重新確認 `yt-dlp`、FFmpeg、`GEMINI_API_KEY` 與網路先決條件，以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留。
 
 ### 公開社群單篇貼文
