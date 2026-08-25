@@ -95,7 +95,7 @@
 - [x] 核准 Gemini Files 清理有限重試設計：只重試 delete，最多三次，等待 1／2 秒；404 視為成功，暫時性錯誤才重試，且保留主要錯誤優先與安全輸出。
 - [x] 完成 Gemini Files 清理有限重試的嚴格 TDD 實作計畫與完整驗收步驟。
 - [x] 完成 Gemini Files 清理有限重試實作並通過完整自動化 gates（Python `452 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro 0 diagnostics／5 pages；deployment verifier、diff 與 `site/dist` 媒體掃描通過）。
-- [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（唯一一次重試後的 live invocation 未建立 acceptance JSON；Gemini Files 非識別性計數前後皆為 0，沒有可刪除的唯一 local record。不得在沒有新決定下重跑）。
+- [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（操作員回報一次 live 嘗試且未授權或執行重跑，但執行計數、stage、exit 與原因沒有可持久 artifact。可持久證據僅為預期 acceptance root 缺失、預期 JSON 計數 0、驗證不可用/false，以及 Gemini Files 非識別性 pre/post 計數皆為 0；不得在沒有新決定下重跑）。
 
 ### 公開社群單篇貼文
 

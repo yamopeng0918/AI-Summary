@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：Gemini Files 清理有限重試已實作並通過完整自動化 gates；唯一一次重試後的無字幕 Gemini live acceptance 未產生隔離紀錄，真實驗收仍受阻
+> 目前階段：Gemini Files 清理有限重試已實作並通過完整自動化 gates；操作員回報的無字幕 Gemini live 嘗試缺少可持久 stage／exit 證據，真實驗收仍受阻
 >
-> 下次續作：取得新的明確決定後，才可對核准影片發起新的付費 Gemini live acceptance；不得以本次失敗為由盲目重試、留下遠端檔案或以自動化測試取代
+> 下次續作：取得新的明確決定後，才可對核准影片發起新的付費 Gemini live acceptance；操作員回報本次沒有授權或執行重跑，但該次執行計數本身沒有可持久證據，不得盲目重試、留下遠端檔案或以自動化測試取代
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收受阻 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-25 的完整 gates 與工具檢查通過，但唯一一次重試後 live acceptance 未建立隔離 JSON，前後 Gemini Files 非識別性計數均為 0，驗收仍未完成 |
+| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收受阻 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-25 的完整 gates 與工具檢查通過。操作員回報一次 live 嘗試且未重跑，但可持久證據僅顯示預期隔離 root 缺失、預期 JSON 計數為 0、驗證不可用/false，以及 Gemini Files 非識別性 pre/post 計數均為 0；驗收仍未完成 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -74,8 +74,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - adapter 內已實作固定有限重試：只重試 `files.delete()`，最多三次，暫時性失敗後等待 1 秒與 2 秒；timeout、transport、429 與 5xx 可重試，404 視為已達成清理，其他 4xx 與一般錯誤立即失敗。
 - 既有主要錯誤優先、安全訊息、無部分逐字稿及中斷傳播規則保持不變；沒有新增環境變數、CLI 選項、SDK 全域重試、背景工作、帳號級 Files 掃描或跨 provider fallback。
 - 2026-08-25 fresh gates：完整 Python `452 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints`、`5 pages`；`git diff --check` 與 tracked/`site/dist` deployment verifier exit 0；`site/dist` 媒體殘留 0。warnings 為 google-genai deprecation 與既有 pytest cache path 問題。
-- `yt-dlp 2026.08.19`、FFmpeg `9.0.1` 與不輸出值的 Gemini key 檢查均成功。Gemini Files 非識別性總數在 live 前後均為 0；沒有列印或刪除帳號中其他 File。
-- 唯一一次核准無字幕 URL live invocation 使用 `gemini-3.6-flash`，未建立 acceptance root 且 JSON 計數為 0，故 `SummaryRecord` 布林驗證為 false（`record-count`）。沒有可唯一識別的 local record 可刪除；未追蹤媒體殘留 0（repository 中 1 個已追蹤測試 fixture 不屬於 acceptance）。依一次付費呼叫限制，未重跑。設計狀態為 `Implemented; live acceptance blocked`，下次需新的明確決定。
+- `yt-dlp 2026.08.19`、FFmpeg `9.0.1` 與不輸出值的 Gemini key 檢查均成功。Gemini Files 非識別性 pre/post 計數記錄均為 0；沒有列印或刪除帳號中其他 File。
+- 操作員回報一次核准無字幕 URL live 嘗試使用 `gemini-3.6-flash`，且沒有授權或執行重跑；但沒有保留可持久的 CLI stage、exit 或執行計數 artifact，故不得把該嘗試或其原因視為獨立驗證事實。可持久證據僅為預期 acceptance root 缺失、預期 JSON 計數 0，故 `SummaryRecord` 驗證不可用/false（`record-count`），以及 Files pre/post 計數 0。沒有可唯一識別的 local record 被證實可刪除；未追蹤媒體殘留 0（repository 中 1 個已追蹤測試 fixture 不屬於 acceptance）。設計狀態為 `Implemented; live acceptance blocked`，下次需新的明確決定。
 
 ### Provider-aligned 音訊轉錄 Task 4 自動化收尾（2026-08-25）
 
