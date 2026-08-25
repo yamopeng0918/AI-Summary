@@ -99,13 +99,13 @@ class GeminiAudioTranscriber:
 
         if isinstance(primary, (KeyboardInterrupt, SystemExit)):
             raise primary
+        if isinstance(cleanup, (KeyboardInterrupt, SystemExit)):
+            raise cleanup
         if primary is not None:
             if isinstance(primary, DigestError):
                 raise primary
             if isinstance(primary, Exception):
                 raise _safe_failure(primary) from None
-        if isinstance(cleanup, (KeyboardInterrupt, SystemExit)):
-            raise cleanup
         if cleanup is not None:
             raise DigestError(
                 "extract",

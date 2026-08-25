@@ -413,6 +413,22 @@ def test_primary_failure_wins_when_generation_and_cleanup_both_fail(tmp_path: Pa
 
 
 @pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
+def test_cleanup_interrupt_wins_over_ordinary_primary_failure(
+    tmp_path: Path, interrupt: BaseException
+) -> None:
+    events: list[tuple[str, str]] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(events, delete_error=interrupt),
+        models=FakeModels(events, [RuntimeError("SECRET generation")]),
+    )
+
+    with pytest.raises(type(interrupt)):
+        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert len([event for event in events if event[0] == "delete"]) == 1
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
 def test_generation_interrupt_cleans_up_then_propagates(
     tmp_path: Path, interrupt: BaseException
 ) -> None:
