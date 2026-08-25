@@ -47,10 +47,12 @@ class ControlledFiles(FakeFiles):
         *,
         upload_error: BaseException | None = None,
         delete_error: BaseException | None = None,
+        delete_outcomes: list[BaseException | None] | None = None,
     ) -> None:
         super().__init__(events)
         self.upload_error = upload_error
         self.delete_error = delete_error
+        self.delete_outcomes = iter(delete_outcomes or [])
 
     def upload(self, *, file: Path) -> object:
         if self.upload_error is not None:
@@ -60,8 +62,9 @@ class ControlledFiles(FakeFiles):
 
     def delete(self, *, name: str) -> None:
         self.events.append(("delete", name))
-        if self.delete_error is not None:
-            raise self.delete_error
+        outcome = next(self.delete_outcomes, self.delete_error)
+        if outcome is not None:
+            raise outcome
 
 
 def make_chunk(root: Path, name: str) -> Path:
@@ -292,6 +295,61 @@ def test_cleanup_failure_after_success_is_safe_and_non_retryable(tmp_path: Path)
         "message": "Audio transcription cleanup failed",
         "retryable": False,
     }
+    assert "SECRET" not in rendered_exception(raised.value)
+
+
+def test_cleanup_retries_transient_failures_with_bounded_delays(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(
+            events,
+            delete_outcomes=[
+                httpx.TimeoutException("SECRET timeout"),
+                errors.ServerError(503, {"message": "SECRET server"}, None),
+                None,
+            ],
+        ),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    result = GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+        [make_chunk(tmp_path, "chunk.mp3")]
+    )
+
+    assert result == "complete transcript"
+    assert [event for event in events if event[0] == "delete"] == [
+        ("delete", "files/chunk-1"),
+        ("delete", "files/chunk-1"),
+        ("delete", "files/chunk-1"),
+    ]
+    assert sleeps == [1.0, 2.0]
+
+
+def test_cleanup_stops_after_three_transient_failures(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(
+            events,
+            delete_outcomes=[httpx.TransportError("SECRET transport")] * 3,
+        ),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+            [make_chunk(tmp_path, "chunk.mp3")]
+        )
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "TRANSCRIPTION_FAILED",
+        "message": "Audio transcription cleanup failed",
+        "retryable": False,
+    }
+    assert len([event for event in events if event[0] == "delete"]) == 3
+    assert sleeps == [1.0, 2.0]
     assert "SECRET" not in rendered_exception(raised.value)
 
 

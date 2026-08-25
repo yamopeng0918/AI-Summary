@@ -1,5 +1,7 @@
 """Safe Gemini adapter for audio transcription."""
 
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -29,14 +31,38 @@ def _safe_failure(error: Exception) -> DigestError:
 class GeminiAudioTranscriber:
     """Transcribe local audio chunks with Gemini and remove uploaded files."""
 
+    _CLEANUP_RETRY_DELAYS = (1.0, 2.0)
+
     TRANSCRIPTION_PROMPT = (
         "請忠實轉錄這段音訊。只輸出依原語言呈現的完整逐字稿；"
         "不要摘要、翻譯、補寫、評論或加入格式說明。"
     )
 
-    def __init__(self, client: Any, model: str) -> None:
+    def __init__(
+        self,
+        client: Any,
+        model: str,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._client = client
         self._model = model
+        self._sleep = sleeper
+
+    def _delete_uploaded(self, name: str) -> None:
+        for attempt in range(len(self._CLEANUP_RETRY_DELAYS) + 1):
+            try:
+                self._client.files.delete(name=name)
+                return
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except BaseException as error:
+                retryable = isinstance(
+                    error,
+                    (httpx.TimeoutException, httpx.TransportError, errors.ServerError),
+                )
+                if not retryable or attempt == len(self._CLEANUP_RETRY_DELAYS):
+                    raise
+                self._sleep(self._CLEANUP_RETRY_DELAYS[attempt])
 
     def transcribe(self, chunks: list[Path]) -> str:
         completed: list[str] = []
@@ -61,7 +87,7 @@ class GeminiAudioTranscriber:
             cleanup: BaseException | None = None
             if uploaded is not None:
                 try:
-                    self._client.files.delete(name=uploaded.name)
+                    self._delete_uploaded(uploaded.name)
                 except BaseException as error:
                     cleanup = error
 
