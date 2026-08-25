@@ -1,7 +1,7 @@
 # Gemini Files cleanup retry design
 
 Date: 2026-08-25
-Status: Approved in conversation; pending written-spec review
+Status: Approved
 
 ## 1. Context and goal
 
