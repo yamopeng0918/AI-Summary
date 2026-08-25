@@ -158,7 +158,7 @@ def _evaluation_service() -> ClassifierEvaluationService:
 
 
 def _emit(payload: dict[str, object], *, err: bool = False) -> None:
-    typer.echo(json.dumps(payload, ensure_ascii=False), err=err)
+    typer.echo(json.dumps(payload, ensure_ascii=True), err=err)
 
 
 def create_app(

@@ -144,6 +144,20 @@ def test_add_reports_all_pipeline_stages_and_saved_location(tmp_path) -> None:
     assert json.loads(result.stdout.splitlines()[-1])["path"] == str(tmp_path / "example.json")
 
 
+def test_json_events_are_safe_for_non_utf8_windows_consoles(monkeypatch) -> None:
+    emitted: list[str] = []
+
+    def cp950_echo(message: str, *, err: bool = False) -> None:
+        message.encode("cp950")
+        emitted.append(message)
+
+    monkeypatch.setattr(cli.typer, "echo", cp950_echo)
+
+    cli._emit({"stage": "complete", "id": "unicode-级"})
+
+    assert json.loads(emitted[0]) == {"stage": "complete", "id": "unicode-级"}
+
+
 def test_add_stops_reporting_progress_after_an_early_failure(tmp_path) -> None:
     error = DigestError("extract", "FAILED", "safe", False)
     app, _ = make_app(tmp_path, FakeWorkflow(error=error, stages=("input", "extract")))

@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：provider-aligned 音訊轉錄自動化與文件 gates 已通過；真實無字幕 Gemini 驗收因缺少 `yt-dlp` 與 FFmpeg 阻擋
+> 目前階段：provider-aligned 音訊轉錄自動化與文件 gates 已通過；真實無字幕 Gemini 流程已產生合格紀錄，但完整驗收因第二次執行的 Gemini Files 清理失敗而尚未通過
 >
-> 下次續作：安裝並審查 `yt-dlp` 與 FFmpeg，重新確認版本與網路後，以已核准影片完成隔離無字幕 Gemini 真實驗收；不得以自動化測試取代
+> 下次續作：評估 Gemini Files 刪除失敗的有限重試策略，經 TDD 與完整 gates 後再以已核准影片重跑隔離驗收；不得盲目重試、留下遠端檔案或以自動化測試取代
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收阻擋 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與操作文件已完成；完整 Python `444 passed`、Vitest `25 passed`、Astro 0 diagnostics／5 pages、Schema/storage `28 passed` 及部署安全 gates 通過，但真實無字幕驗收缺少媒體工具 |
+| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收未通過 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與操作文件已完成；安裝 `yt-dlp 2026.08.19` 與 `FFmpeg 9.0.1` 後，真實無字幕流程曾產生並驗證合格 JSON，但第二次端到端執行因遠端刪除失敗而安全停止，驗收仍未完成 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -62,7 +62,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
-| YouTube 本機工具與手動驗收 | 2026-08-25 重新載入系統／使用者 PATH 後，`yt-dlp` 與 FFmpeg 均無法解析，`GEMINI_API_KEY` 已設定。因工具先決條件不完整，未發起網路、媒體下載或付費 API 呼叫；核准的無字幕影片仍為 **UNVERIFIED**，有字幕案例也沒有可據以勾選整體驗收的完整紀錄 |
+| YouTube 本機工具與手動驗收 | 2026-08-25 使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、已設定的 `GEMINI_API_KEY` 與 `gemini-3.6-flash` 執行核准無字幕影片。第一次完成擷取、轉錄、摘要、分類、驗證與保存，產物通過 Schema、來源、狀態、內容與敏感痕跡檢查，但 CP950 終端在輸出 `complete` 時失敗；TDD 修正後第二次執行在 Gemini Files 刪除階段安全失敗。唯一遺留 File 已依時間、MIME 與大小精確刪除並確認清單為 0；整體真實驗收仍為 **UNVERIFIED** |
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
@@ -77,6 +77,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - `git diff --check`、tracked／`site/dist` deployment verifier 與建置輸出媒體殘留掃描均通過，`site/dist` 未發現 `.mp3`、`.m4a`、`.webm`、`.vtt` 或 `.srt`。
 - 先決條件檢查只回報布林狀態、不輸出金鑰：`yt-dlp=False`、`ffmpeg=False`、`gemini_api_key=True`。因此沒有對核准的無字幕影片 `https://www.youtube.com/watch?v=4gciWspBVHw` 發起網路或 Gemini API 呼叫，沒有建立驗收 JSON，也沒有產生需清理的驗收目錄；實際 Gemini 轉錄模型尚未送出請求，設定預設值為 `gemini-3.6-flash`。
 - repository 目前沒有足以證明先前有字幕真實驗收之 URL 與有效紀錄；加上本次無字幕驗收受阻，`todo.md` 的「有字幕與無字幕各一例」維持未勾選。下一核心實作仍是公開社群單篇貼文，但 YouTube 真實驗收技術債必須在工具備妥後回補。
+
+### Provider-aligned 無字幕真實驗收嘗試（2026-08-25）
+
+- 以 Chocolatey 安裝 `FFmpeg 9.0.1`，並確認既有 `yt-dlp 2026.08.19`、`GEMINI_API_KEY` 與網路先決條件可用；使用的摘要與轉錄模型皆為預設 `gemini-3.6-flash`。
+- 核准無字幕案例 `https://www.youtube.com/watch?v=4gciWspBVHw` 第一次執行完成至 `save` 並產生唯一 JSON。`SummaryRecord` 驗證、`sourceType=youtube`、canonical URL、`published`、非空摘要與編輯觀點、3～5 個重點及敏感／媒體痕跡掃描全部通過，且本機沒有媒體殘留；CLI 僅在 CP950 終端輸出包含不可編碼紀錄 ID 的 `complete` JSON 時失敗。
+- 依 TDD 新增非 UTF-8 Windows console 回歸測試，先以相同 `UnicodeEncodeError` RED，將結構化事件改為 ASCII-escaped JSON 後 GREEN；CLI 專項 `38 passed`，完整 Python suite `445 passed`。Vitest `25 passed`，Astro `0 errors / 0 warnings / 0 hints`、正式建置 `5 pages`，deployment verifier 與媒體掃描通過。
+- 清除第一次隔離資料後重跑端到端驗收，流程在 Gemini Files 刪除時以安全錯誤 `TRANSCRIPTION_FAILED / Audio transcription cleanup failed` 停止，沒有保存第二份 JSON。沒有盲目第三次重試；Gemini Files 唯一遺留音訊依建立時間、`audio/mpeg` MIME 與大小精確識別、刪除，並確認 Files 清單為 0。
+- 因第二次執行未到達 `complete`，且既有有字幕案例仍缺完整有效證據，`todo.md` 的整體真實案例驗收維持未勾選。下一步是先設計並核准有限、可測試且不掩蓋主要錯誤的 Gemini Files 刪除重試策略，再重跑一次隔離驗收。
 
 ### Provider-aligned 音訊轉錄 Task 1～3（2026-08-22）
 
@@ -188,9 +196,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 下次工作交接
 
-1. 完成 provider-aligned Task 4：更新 `.env.example`、README 與舊 YouTube 設計的 supersession note，執行完整 Python、前端、正式建置、Schema、deployment verifier、敏感資料與媒體殘留 gates。
-2. 重新檢查 `yt-dlp`、FFmpeg、`GEMINI_API_KEY` 與網路先決條件；只有全部具備時，才以已核准的無字幕影片 `https://www.youtube.com/watch?v=4gciWspBVHw` 執行隔離 Gemini 真實驗收，不加入 Cookie、登入或繞過存取限制的設定。
-3. 真實驗收成功且 JSON、暫存清理與敏感資訊檢查都有證據後，才可勾選 YouTube 真實案例驗收；完成 provider-aligned 收尾後，下一核心實作里程碑為公開社群單篇貼文。
+1. 針對 2026-08-25 真實驗收觀察到的 Gemini Files 單次刪除失敗，先提出有限重試設計並取得核准；不得以無界重試、忽略清理錯誤或刪除帳號中其他 Files 作為修復。
+2. 依 TDD 實作核准的清理策略並執行完整 Python、前端、建置、deployment verifier、敏感資料與媒體殘留 gates，再以 `https://www.youtube.com/watch?v=4gciWspBVHw` 重跑一次隔離無字幕驗收。
+3. 只有端到端到達 `complete`、JSON 與本機／遠端清理都有證據，且有字幕案例也有有效紀錄時，才可勾選 YouTube 真實案例驗收；之後下一核心實作里程碑為公開社群單篇貼文。
 
 ## 更新規則
 
