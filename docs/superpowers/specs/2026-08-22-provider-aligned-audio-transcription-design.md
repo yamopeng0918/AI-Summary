@@ -3,6 +3,8 @@
 Date: 2026-08-22
 Status: Approved
 
+> Superseded in part on 2026-08-25: Gemini Files deletion now uses the bounded retry and HTTP 404 semantics defined in `2026-08-25-gemini-file-cleanup-retry-design.md`. All other provider-aligned transcription requirements remain in force.
+
 ## 1. Goal and scope
 
 AI Digest will keep both Gemini and OpenAI providers. The existing `AI_DIGEST_PROVIDER` setting will select one provider for the complete `add` workflow: both structured summarization and the audio transcription fallback for public YouTube videos without usable captions.

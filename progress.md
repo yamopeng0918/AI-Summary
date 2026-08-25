@@ -69,6 +69,12 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
+### Gemini Files 清理有限重試設計（2026-08-25）
+
+- 使用者已核准 adapter 內的固定有限重試：只重試 `files.delete()`，最多三次，暫時性失敗後等待 1 秒與 2 秒；timeout、transport、429 與 5xx 可重試，404 視為已達成清理，其他 4xx 與一般錯誤立即失敗。
+- 既有主要錯誤優先、安全訊息、無部分逐字稿及中斷傳播規則保持不變；不新增環境變數、CLI 選項、SDK 全域重試、背景工作、帳號級 Files 掃描或跨 provider fallback。
+- 核准設計已寫入 `docs/superpowers/specs/2026-08-25-gemini-file-cleanup-retry-design.md`；目前只完成設計文件，尚未撰寫實作計畫或修改正式程式，等待 written-spec review。
+
 ### Provider-aligned 音訊轉錄 Task 4 自動化收尾（2026-08-25）
 
 - `.env.example` 與 README 已改用 `GEMINI_TRANSCRIPTION_MODEL=gemini-3.6-flash`、`OPENAI_TRANSCRIPTION_MODEL=gpt-transcribe`；`AI_DIGEST_PROVIDER` 同時選擇摘要與無字幕轉錄，只有所選 provider 金鑰需要設定，沒有跨 provider fallback。

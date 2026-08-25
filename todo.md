@@ -92,6 +92,7 @@
 - [x] 讓 `AI_DIGEST_PROVIDER` 同時選擇摘要器與無字幕轉錄器，且 Gemini／OpenAI 各只使用自己的金鑰與模型設定，不自動 fallback。
 - [x] 以本地 fake 與 fixture 完成 Task 1～3 相關驗證：transcriber 專項 `39 passed`；CLI、YouTube、media 與 transcriber 集合 `177 passed`。
 - [x] 更新 `.env.example`、README 與舊 YouTube 設計的 supersession note，並完成 provider-aligned 完整 Python／前端／正式建置／部署安全 gates（Python `444 passed`、Vitest `25 passed`、Astro 0 diagnostics／5 pages、Schema/storage `28 passed`）。
+- [x] 核准 Gemini Files 清理有限重試設計：只重試 delete，最多三次，等待 1／2 秒；404 視為成功，暫時性錯誤才重試，且保留主要錯誤優先與安全輸出。
 - [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（`yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、Gemini 金鑰與網路已確認；首次產物合格但 CLI `complete` 遇 CP950 編碼錯誤，修正後重跑又遇 Gemini Files 刪除失敗，唯一遺留 File 已精確清除，仍不得勾選）。
 
 ### 公開社群單篇貼文
