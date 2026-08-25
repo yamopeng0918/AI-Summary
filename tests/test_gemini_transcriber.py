@@ -295,7 +295,51 @@ def test_cleanup_failure_after_success_is_safe_and_non_retryable(tmp_path: Path)
         "message": "Audio transcription cleanup failed",
         "retryable": False,
     }
+    assert len([event for event in events if event[0] == "delete"]) == 1
     assert "SECRET" not in rendered_exception(raised.value)
+
+
+def test_cleanup_treats_not_found_as_already_deleted(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(
+            events,
+            delete_outcomes=[errors.ClientError(404, {"message": "SECRET missing"}, None)],
+        ),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    result = GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+        [make_chunk(tmp_path, "chunk.mp3")]
+    )
+
+    assert result == "complete transcript"
+    assert len([event for event in events if event[0] == "delete"]) == 1
+    assert sleeps == []
+
+
+def test_cleanup_retries_rate_limit_then_succeeds(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(
+            events,
+            delete_outcomes=[
+                errors.ClientError(429, {"message": "SECRET limited"}, None),
+                None,
+            ],
+        ),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    result = GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+        [make_chunk(tmp_path, "chunk.mp3")]
+    )
+
+    assert result == "complete transcript"
+    assert len([event for event in events if event[0] == "delete"]) == 2
+    assert sleeps == [1.0]
 
 
 def test_cleanup_retries_transient_failures_with_bounded_delays(tmp_path: Path) -> None:
@@ -364,6 +408,7 @@ def test_primary_failure_wins_when_generation_and_cleanup_both_fail(tmp_path: Pa
         GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
 
     assert (raised.value.code, raised.value.retryable) == ("TRANSCRIPTION_TIMEOUT", True)
+    assert len([event for event in events if event[0] == "delete"]) == 1
     assert "SECRET" not in rendered_exception(raised.value)
 
 
@@ -380,9 +425,32 @@ def test_generation_interrupt_cleans_up_then_propagates(
     with pytest.raises(type(interrupt)):
         GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
 
+    assert len([event for event in events if event[0] == "delete"]) == 1
     assert [event for event in events if event[0] == "delete"] == [
         ("delete", "files/chunk-1")
     ]
+
+
+def test_primary_generation_failure_wins_after_cleanup_retries_exhausted(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(
+            events,
+            delete_outcomes=[errors.ServerError(503, {"message": "SECRET cleanup"}, None)] * 3,
+        ),
+        models=FakeModels(events, [httpx.TimeoutException("SECRET generation")]),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+            [make_chunk(tmp_path, "chunk.mp3")]
+        )
+
+    assert (raised.value.code, raised.value.retryable) == ("TRANSCRIPTION_TIMEOUT", True)
+    assert len([event for event in events if event[0] == "delete"]) == 3
+    assert sleeps == [1.0, 2.0]
+    assert "SECRET" not in rendered_exception(raised.value)
 
 
 @pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
@@ -395,3 +463,5 @@ def test_cleanup_interrupt_propagates(tmp_path: Path, interrupt: BaseException) 
 
     with pytest.raises(type(interrupt)):
         GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+
+    assert len([event for event in events if event[0] == "delete"]) == 1

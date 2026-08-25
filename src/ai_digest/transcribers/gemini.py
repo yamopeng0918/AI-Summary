@@ -55,6 +55,12 @@ class GeminiAudioTranscriber:
                 return
             except (KeyboardInterrupt, SystemExit):
                 raise
+            except errors.ClientError as error:
+                if error.code == 404:
+                    return
+                if error.code != 429 or attempt == len(self._CLEANUP_RETRY_DELAYS):
+                    raise
+                self._sleep(self._CLEANUP_RETRY_DELAYS[attempt])
             except BaseException as error:
                 retryable = isinstance(
                     error,
