@@ -15,7 +15,7 @@
 - Use the approved editorial layout: warm white `#f7f2e7`, dark green `#17352d`, orange `#ef6a47`.
 - Show `AI DIGEST`, category, title, one-to-two summary lines, source label, and uppercase source type.
 - Source label is the non-blank author when available; otherwise it is `new URL(canonicalUrl).hostname`.
-- Bundle Noto Serif TC variable TTF and OFL-1.1 license in the repository; no runtime or build-time font download is allowed.
+- Bundle static `NotoSerifTC-Regular.ttf` (400), `NotoSerifTC-Bold.ttf` (700), and the OFL-1.1 license in the repository; no runtime or build-time font download is allowed.
 - Do not change the summary JSON Schema or write generated PNG files into `data/summaries`.
 - Generated PNG files live only in `site/dist/og/`; do not track build output.
 - Homepage cards display the image; detail-page body does not.
@@ -30,7 +30,8 @@
 **Files:**
 - Modify: `site/package.json`
 - Modify: `site/package-lock.json`
-- Create: `site/src/assets/fonts/NotoSerifTC-VariableFont_wght.ttf`
+- Create: `site/src/assets/fonts/NotoSerifTC-Regular.ttf`
+- Create: `site/src/assets/fonts/NotoSerifTC-Bold.ttf`
 - Create: `site/src/assets/fonts/OFL.txt`
 - Create: `site/src/lib/og-image.ts`
 - Create: `site/src/lib/og-image.test.ts`
@@ -103,11 +104,10 @@ Run from `site/` after network approval:
 
 ```powershell
 npm.cmd install --save-exact satori sharp@0.35.3
-Invoke-WebRequest 'https://raw.githubusercontent.com/google/fonts/main/ofl/notoseriftc/NotoSerifTC%5Bwght%5D.ttf' -OutFile 'src/assets/fonts/NotoSerifTC-VariableFont_wght.ttf'
-Invoke-WebRequest 'https://raw.githubusercontent.com/google/fonts/main/ofl/notoseriftc/OFL.txt' -OutFile 'src/assets/fonts/OFL.txt'
+Add OFL-compatible static `NotoSerifTC-Regular.ttf` (400), `NotoSerifTC-Bold.ttf` (700), and `OFL.txt` to `src/assets/fonts/`.
 ```
 
-Confirm both downloaded files are non-empty and `OFL.txt` contains `SIL OPEN FONT LICENSE Version 1.1`. Do not execute either download during normal tests or builds.
+Confirm both static TTFs are non-empty and `OFL.txt` contains `SIL OPEN FONT LICENSE Version 1.1`. Do not download fonts during normal tests or builds.
 
 - [ ] **Step 4: Implement the minimal pure display model**
 
@@ -202,7 +202,7 @@ Expected: FAIL because `renderOgImage` is not exported.
 
 - [ ] **Step 3: Implement the approved editorial renderer**
 
-In `og-image.ts`, load the font once with `readFile` and `new URL('../assets/fonts/NotoSerifTC-VariableFont_wght.ttf', import.meta.url)`. Implement `renderOgImage` by passing a Satori element tree with fixed `width: 1200`, `height: 630`, approved colors, title lines from `fitOgText(content.title, [22, 22, 22])`, and summary lines from `fitOgText(content.summary, [46, 46])`; convert the SVG with:
+In `og-image.ts`, load both static font assets once through module-relative URLs using `new URL(..., import.meta.url)`. Implement `renderOgImage` by passing a Satori element tree with fixed `width: 1200`, `height: 630`, approved colors, title lines from `fitOgText(content.title, [22, 22, 22])`, and summary lines from `fitOgText(content.summary, [46, 46])`; convert the SVG with:
 
 ```ts
 const png = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -213,7 +213,7 @@ if (metadata.format !== 'png' || metadata.width !== 1200 || metadata.height !== 
 return png;
 ```
 
-Register the bundled font in Satori as `Noto Serif TC`, data `fontData`, weight `400`, style `normal`; use the same font at higher CSS weights so the single variable file supplies the approved hierarchy. Keep all record strings as React/Satori text children, never as raw HTML.
+Register `NotoSerifTC-Regular.ttf` in Satori as `Noto Serif TC`, weight `400`, style `normal`, and `NotoSerifTC-Bold.ttf` under the same family, weight `700`, style `normal`. Use Regular for summary/supporting text and Bold for `AI DIGEST`, category, title, and source emphasis. Keep all record strings as React/Satori text children, never as raw HTML.
 
 - [ ] **Step 4: Run the renderer test and confirm GREEN**
 

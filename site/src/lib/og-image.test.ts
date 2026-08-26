@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
 import sharp from 'sharp';
 import type { SummaryRecord } from './summaries';
 import { createOgImageContent, fitOgText, renderOgImage } from './og-image';
@@ -28,6 +32,25 @@ describe('OG image content', () => {
 
     expect(png.byteLength).toBeGreaterThan(1_000);
     expect(metadata).toMatchObject({ format: 'png', width: 1200, height: 630 });
+  });
+
+  it('loads bundled fonts module-relatively when the current directory changes', async () => {
+    const originalDirectory = process.cwd();
+    const temporaryDirectory = await mkdtemp(join(tmpdir(), 'ai-digest-og-image-'));
+
+    try {
+      process.chdir(temporaryDirectory);
+      vi.resetModules();
+      const { renderOgImage: renderFromMovedDirectory } = await import('./og-image');
+
+      const png = await renderFromMovedDirectory(record);
+
+      expect((await sharp(png).metadata()).format).toBe('png');
+    } finally {
+      process.chdir(originalDirectory);
+      await rm(temporaryDirectory, { force: true, recursive: true });
+      vi.resetModules();
+    }
   });
 
   it('uses author before hostname and uppercases source type', () => {

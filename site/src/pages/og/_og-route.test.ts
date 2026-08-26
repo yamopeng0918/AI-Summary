@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 
+import { loadPublishedSummaries } from '../../lib/summary-loader';
 import { GET, getStaticPaths } from './[id].png';
 
 describe('OG PNG route', () => {
-  it('creates paths only from the published-summary loader result', async () => {
+  it('creates paths that exactly match the published-summary loader result', async () => {
     const paths = await getStaticPaths();
+    const publishedIds = loadPublishedSummaries().map((record) => record.id);
 
-    expect(paths.length).toBeGreaterThan(0);
-    expect(paths.every((path) => typeof path.params.id === 'string')).toBe(true);
+    expect(paths.map((path) => path.params.id)).toEqual(publishedIds);
   });
 
   it('returns a valid PNG response for route props', async () => {

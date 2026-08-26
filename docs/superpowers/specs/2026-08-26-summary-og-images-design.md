@@ -21,7 +21,7 @@
 
 標題與摘要使用確定性的換行、字級級距及最大行數。超過安全上限時以省略號截斷，不得溢出 1200 × 630 畫布。首頁卡片以完整文章標題作為圖片 `alt`。
 
-為避免 Windows 與 GitHub Actions 的字型差異，repository 在 `site/src/assets/fonts/` 納管一份 OFL-1.1 授權、涵蓋所需字重的 Noto Serif TC 可變字重 TTF 及其授權文件。渲染器只能讀取該專案內字型，不依賴作業系統字型或建置時網路下載。
+為避免 Windows 與 GitHub Actions 的字型差異，repository 在 `site/src/assets/fonts/` 納管 OFL-1.1 授權、`NotoSerifTC-Regular.ttf`（400）及 `NotoSerifTC-Bold.ttf`（700）兩個靜態 Noto Serif TC TTF 與其授權文件。渲染器只能使用該專案內字型，不依賴作業系統字型或建置時網路下載。
 
 ## 3. 架構與元件
 

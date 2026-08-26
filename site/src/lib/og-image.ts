@@ -1,26 +1,19 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-
 import satori from 'satori';
 import { createElement, type JSXNode } from 'satori/jsx';
 import sharp from 'sharp';
 
+import boldFontDataUrl from '../assets/fonts/NotoSerifTC-Bold.ttf?inline';
+import regularFontDataUrl from '../assets/fonts/NotoSerifTC-Regular.ttf?inline';
 import type { SummaryRecord } from './summaries';
 
-const fontData = readFile(
-  resolve(process.cwd(), 'src', 'assets', 'fonts', 'NotoSerifTC-VariableFont_wght.ttf'),
-).then(
-  (data) => {
-    const tableCount = data.readUInt16BE(4);
-    for (let index = 0; index < tableCount; index += 1) {
-      const offset = 12 + index * 16;
-      if (data.toString('ascii', offset, offset + 4) === 'fvar') {
-        data.write('skip', offset, 'ascii');
-      }
-    }
-    return data;
-  },
-);
+const fontData = Promise.all([
+  fetch(new URL(regularFontDataUrl, import.meta.url)).then(async (response) => {
+    return Buffer.from(await response.arrayBuffer());
+  }),
+  fetch(new URL(boldFontDataUrl, import.meta.url)).then(async (response) => {
+    return Buffer.from(await response.arrayBuffer());
+  }),
+]);
 
 export interface OgImageContent {
   title: string;
@@ -62,6 +55,7 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
   const content = createOgImageContent(record);
   const titleLines = fitOgText(content.title, [22, 22, 22]);
   const summaryLines = fitOgText(content.summary, [46, 46]);
+  const [regularFontData, boldFontData] = await fontData;
   const svg = await satori(
     createElement(
       'div',
@@ -122,7 +116,7 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
           style: {
             display: 'flex',
             fontSize: '22px',
-            fontWeight: 600,
+            fontWeight: 700,
             marginTop: 'auto',
           },
         },
@@ -130,7 +124,10 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
       ) as JSXNode,
     ),
     {
-      fonts: [{ data: await fontData, name: 'Noto Serif TC', weight: 400, style: 'normal' }],
+      fonts: [
+        { data: regularFontData, name: 'Noto Serif TC', weight: 400, style: 'normal' },
+        { data: boldFontData, name: 'Noto Serif TC', weight: 700, style: 'normal' },
+      ],
       height: 630,
       width: 1200,
     },
