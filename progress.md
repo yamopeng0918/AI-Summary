@@ -74,6 +74,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - adapter 內已實作固定有限重試：只重試 `files.delete()`，最多三次，暫時性失敗後等待 1 秒與 2 秒；timeout、transport、429 與 5xx 可重試，404 視為已達成清理，其他 4xx 與一般錯誤立即失敗。
 - 既有主要錯誤優先、安全訊息、無部分逐字稿及中斷傳播規則保持不變；沒有新增環境變數、CLI 選項、SDK 全域重試、背景工作、帳號級 Files 掃描或跨 provider fallback。
 - 2026-08-25 fresh gates：完整 Python `452 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints`、`5 pages`；`git diff --check` 與 tracked/`site/dist` deployment verifier exit 0；`site/dist` 媒體殘留 0。warnings 為 google-genai deprecation 與既有 pytest cache path 問題。
+- 2026-08-26 final reviewer 補齊不必要 retry／等待的自動化證據：`tests/test_gemini_transcriber.py` 為 `32 passed, 2 warnings`，明確覆蓋 first-success、cleanup HTTP 400、unexpected cleanup exception，以及成功／主要一般錯誤交叉的 `KeyboardInterrupt`／`SystemExit` cleanup；所有不應重試的案例均記錄 `sleeper=[]`，且安全錯誤不洩漏敏感標記。此為本機 coverage 補強，不改變 live acceptance blocked 狀態。
 - `yt-dlp 2026.08.19`、FFmpeg `9.0.1` 與不輸出值的 Gemini key 檢查均成功。Gemini Files 非識別性 pre/post 計數記錄均為 0；沒有列印或刪除帳號中其他 File。
 - 操作員回報一次核准無字幕 URL live 嘗試使用 `gemini-3.6-flash`，且沒有授權或執行重跑；但沒有保留可持久的 CLI stage、exit 或執行計數 artifact，故不得把該嘗試或其原因視為獨立驗證事實。可持久證據僅為預期 acceptance root 缺失、預期 JSON 計數 0，故 `SummaryRecord` 驗證不可用/false（`record-count`），以及 Files pre/post 計數 0。沒有可唯一識別的 local record 被證實可刪除；未追蹤媒體殘留 0（repository 中 1 個已追蹤測試 fixture 不屬於 acceptance）。設計狀態為 `Implemented; live acceptance blocked`，下次需新的明確決定。
 

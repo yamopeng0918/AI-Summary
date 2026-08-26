@@ -97,6 +97,7 @@ def test_missing_key_fails_before_constructing_client(monkeypatch: pytest.Monkey
 
 def test_transcribes_chunks_in_order_and_deletes_each_remote_file(tmp_path: Path) -> None:
     events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
     client = SimpleNamespace(
         files=FakeFiles(events),
         models=FakeModels(
@@ -106,7 +107,9 @@ def test_transcribes_chunks_in_order_and_deletes_each_remote_file(tmp_path: Path
     )
     chunks = [make_chunk(tmp_path, "chunk-0000.mp3"), make_chunk(tmp_path, "chunk-0001.mp3")]
 
-    result = GeminiAudioTranscriber(client, "gemini-3.6-flash").transcribe(chunks)
+    result = GeminiAudioTranscriber(
+        client, "gemini-3.6-flash", sleeper=sleeps.append
+    ).transcribe(chunks)
 
     assert result == "第一段逐字稿\n第二段逐字稿"
     assert events == [
@@ -117,6 +120,7 @@ def test_transcribes_chunks_in_order_and_deletes_each_remote_file(tmp_path: Path
         ("generate", "gemini-3.6-flash:files/chunk-2"),
         ("delete", "files/chunk-2"),
     ]
+    assert sleeps == []
 
 
 from ai_digest.transcribers import AudioTranscriber
@@ -281,13 +285,16 @@ def test_generation_failure_attempts_remote_cleanup_once(tmp_path: Path) -> None
 
 def test_cleanup_failure_after_success_is_safe_and_non_retryable(tmp_path: Path) -> None:
     events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
     client = SimpleNamespace(
         files=ControlledFiles(events, delete_error=RuntimeError("SECRET files/private")),
         models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
     )
 
     with pytest.raises(DigestError) as raised:
-        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+        GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+            [make_chunk(tmp_path, "chunk.mp3")]
+        )
 
     assert raised.value.as_dict() == {
         "stage": "extract",
@@ -296,7 +303,37 @@ def test_cleanup_failure_after_success_is_safe_and_non_retryable(tmp_path: Path)
         "retryable": False,
     }
     assert len([event for event in events if event[0] == "delete"]) == 1
-    assert "SECRET" not in rendered_exception(raised.value)
+    assert sleeps == []
+    for marker in ("SECRET", "private"):
+        assert marker not in str(raised.value)
+        assert marker not in rendered_exception(raised.value)
+
+
+def test_cleanup_nonretryable_client_error_fails_once_without_sleep(tmp_path: Path) -> None:
+    events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
+    client = SimpleNamespace(
+        files=ControlledFiles(
+            events,
+            delete_error=errors.ClientError(400, {"message": "SECRET cleanup-400"}, None),
+        ),
+        models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
+    )
+
+    with pytest.raises(DigestError) as raised:
+        GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+            [make_chunk(tmp_path, "chunk.mp3")]
+        )
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "TRANSCRIPTION_FAILED",
+        "message": "Audio transcription cleanup failed",
+        "retryable": False,
+    }
+    assert len([event for event in events if event[0] == "delete"]) == 1
+    assert sleeps == []
+    assert "SECRET cleanup-400" not in rendered_exception(raised.value)
 
 
 def test_cleanup_treats_not_found_as_already_deleted(tmp_path: Path) -> None:
@@ -417,15 +454,19 @@ def test_cleanup_interrupt_wins_over_ordinary_primary_failure(
     tmp_path: Path, interrupt: BaseException
 ) -> None:
     events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
     client = SimpleNamespace(
         files=ControlledFiles(events, delete_error=interrupt),
         models=FakeModels(events, [RuntimeError("SECRET generation")]),
     )
 
     with pytest.raises(type(interrupt)):
-        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+        GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+            [make_chunk(tmp_path, "chunk.mp3")]
+        )
 
     assert len([event for event in events if event[0] == "delete"]) == 1
+    assert sleeps == []
 
 
 @pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
@@ -472,12 +513,16 @@ def test_primary_generation_failure_wins_after_cleanup_retries_exhausted(tmp_pat
 @pytest.mark.parametrize("interrupt", [KeyboardInterrupt(), SystemExit(2)])
 def test_cleanup_interrupt_propagates(tmp_path: Path, interrupt: BaseException) -> None:
     events: list[tuple[str, str]] = []
+    sleeps: list[float] = []
     client = SimpleNamespace(
         files=ControlledFiles(events, delete_error=interrupt),
         models=FakeModels(events, [SimpleNamespace(text="complete transcript")]),
     )
 
     with pytest.raises(type(interrupt)):
-        GeminiAudioTranscriber(client, "test-model").transcribe([make_chunk(tmp_path, "chunk.mp3")])
+        GeminiAudioTranscriber(client, "test-model", sleeper=sleeps.append).transcribe(
+            [make_chunk(tmp_path, "chunk.mp3")]
+        )
 
     assert len([event for event in events if event[0] == "delete"]) == 1
+    assert sleeps == []
