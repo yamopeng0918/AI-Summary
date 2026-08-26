@@ -76,6 +76,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 無字幕案例 exit 1，階段為 `input, extract, extract`，錯誤碼 `TRANSCRIPTION_FAILED`，未到 `complete` 且無未解析輸出。依核准停止規則沒有重跑；失敗後精確 isolation root 不存在，JSON、媒體與其他檔案均為 0，Gemini Files 唯讀計數為 0。
 - 有字幕真實驗收已完成；無字幕此次僅證明 fail-closed 與清理成功，未證明端到端成功。整體「有字幕與無字幕各一例」及無字幕隔離驗收仍維持未勾選，新的付費嘗試需另行決定。
 - 記錄更新後的新鮮 gates：完整 Python `453 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints` 並建置 `5 pages`；deployment verifier、`git diff --check` 與 `site/dist` 媒體掃描通過，兩個精確驗收 root 均不存在。
+- 後續唯讀診斷確認無字幕案例為公開、非直播、2292 秒、沒有人工或自動字幕，依 600 秒設定預期切成 4 個 chunk；轉錄模型仍為 `gemini-3.6-flash`。`MEDIA_DOWNLOAD_FAILED` 與實際 `TRANSCRIPTION_FAILED` 的錯誤邊界證明流程已進入轉錄建立／請求／回應／清理範圍，但該 code 同時涵蓋四種安全訊息。上一輪只保存 code、未保存安全 `message`，因此現有證據不足以區分 configuration、request、invalid response 或 cleanup；不得臆測根因或直接修改。下一個有判別力的步驟是取得明確付費重試核准後，只額外保存既有安全 `message`、stage、code、retryable 與 exit，不保存原始 SDK 錯誤或敏感資料。
 
 ### Gemini Files 清理有限重試設計（2026-08-25）
 
