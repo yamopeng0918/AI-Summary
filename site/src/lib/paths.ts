@@ -5,3 +5,7 @@ export function homePath(baseUrl: string): string {
 export function summaryPath(baseUrl: string, id: string): string {
   return `${homePath(baseUrl)}summaries/${encodeURIComponent(id)}/`;
 }
+
+export function ogImagePath(baseUrl: string, id: string): string {
+  return `${homePath(baseUrl)}og/${encodeURIComponent(id)}.png`;
+}

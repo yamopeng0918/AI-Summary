@@ -4,9 +4,21 @@ import { homePath } from '../lib/paths';
 
 interface Props {
   title: string;
+  description?: string;
+  canonicalUrl?: string;
+  ogImageUrl?: string;
+  ogImageAlt?: string;
+  pageType?: 'website' | 'article';
 }
 
-const { title } = Astro.props;
+const {
+  title,
+  description = 'AI Digest 的公開內容摘要',
+  canonicalUrl,
+  ogImageUrl,
+  ogImageAlt,
+  pageType = 'website',
+} = Astro.props;
 const baseUrl = import.meta.env.BASE_URL;
 ---
 
@@ -15,7 +27,24 @@ const baseUrl = import.meta.env.BASE_URL;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="description" content="AI Digest 的公開內容摘要" />
+    <meta name="description" content={description} />
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={pageType} />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    {ogImageUrl && ogImageAlt && (
+      <>
+        <meta property="og:image" content={ogImageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content={ogImageAlt} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content={ogImageUrl} />
+      </>
+    )}
     <title>{title}</title>
   </head>
   <body>
