@@ -69,6 +69,12 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
+### 2026-08-26：YouTube 分支合併與 GitHub 同步
+
+- `feature/provider-aligned-transcription` 已 fast-forward 合併至本機 `master`，YouTube 里程碑完成提交為 `01bdec7`；合併前已執行 `git pull --ff-only origin master` 並確認遠端沒有新提交。
+- 合併後的新鮮 gates：完整 Python `453 passed, 1 warning`；Schema/storage `28 passed`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints` 並建置 `5 pages`；deployment verifier、`git diff --check` 與 `site/dist` 媒體掃描通過。
+- `master` 已成功 push 至 GitHub，遠端由 `7cc0451` 前進至 `01bdec7`。主工作區既有 4 個未追蹤使用者檔案未被加入、修改或刪除；未建立 Pull Request，也未手動部署 GitHub Pages。
+
 ### 2026-08-26：核准 YouTube 雙案例驗收
 
 - 使用者提供並核准有字幕案例 `https://www.youtube.com/watch?v=xFPiU5sit7g`，並明確核准對既有無字幕案例 `https://www.youtube.com/watch?v=4gciWspBVHw` 再執行一次 Gemini 付費驗收。兩次均使用新的隔離目錄，CLI 原始輸出不落盤，只記錄去識別化階段、錯誤碼與退出狀態。
