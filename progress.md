@@ -69,6 +69,11 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
+### 2026-08-26：Windows CLI PATH 修正
+
+- 重現 `ai-digest` 為 `CommandNotFoundException`：CLI 已正確存在於 `D:\Project\AI-Summary\.venv\Scripts\ai-digest.exe`，但目前 PowerShell 未啟用虛擬環境，且 Execution Policy 阻擋 `Activate.ps1`。
+- 不修改 Execution Policy；已驗證直接執行 `.\.venv\Scripts\ai-digest.exe`，以及把 `.venv\Scripts` 加到目前 process `PATH` 後裸用 `ai-digest list`／`--help`，均 exit 0。受控環境無權寫入互動使用者的登錄 PATH，因此未宣稱持久修改；README 已補充兩種可立即使用的安全方式。
+
 ### 2026-08-26：YouTube 分支合併與 GitHub 同步
 
 - `feature/provider-aligned-transcription` 已 fast-forward 合併至本機 `master`，YouTube 里程碑完成提交為 `01bdec7`；合併前已執行 `git pull --ff-only origin master` 並確認遠端沒有新提交。

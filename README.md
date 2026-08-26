@@ -25,6 +25,21 @@ python -m pip install -e ".[dev]"
 
 啟用虛擬環境後，`ai-digest` 指令應可直接使用。目前這台開發機器的 user-site Python Scripts 目錄未在 `PATH` 中；若跳過虛擬環境而安裝到 user site，裸用 `ai-digest` 可能找不到指令。請改用上述 `.venv` 流程，或將對應 Scripts 目錄加入 `PATH`。
 
+若 PowerShell 的 Execution Policy 阻擋 `Activate.ps1`，不必永久降低安全設定，可直接執行虛擬環境中的 CLI：
+
+```powershell
+& '.\.venv\Scripts\ai-digest.exe' list
+```
+
+若要在目前 PowerShell 視窗使用裸 `ai-digest`，可只調整目前 process 的 `PATH`，不修改系統設定：
+
+```powershell
+$env:Path = "$(Resolve-Path '.\.venv\Scripts');$env:Path"
+ai-digest list
+```
+
+也可自行把 repository 的 `.venv\Scripts` 絕對路徑加入使用者 `PATH`；持久更新後需關閉並重新開啟 PowerShell。
+
 ## 本機設定
 
 金鑰只設在目前 PowerShell 進程，不得寫入 repository。摘要 provider 設定如下：
