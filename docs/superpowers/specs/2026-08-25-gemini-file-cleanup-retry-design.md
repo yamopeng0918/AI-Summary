@@ -1,7 +1,7 @@
 # Gemini Files cleanup retry design
 
 Date: 2026-08-25
-Status: Implemented; captioned acceptance passed, no-caption acceptance blocked
+Status: Implemented and verified
 
 ## 1. Context and goal
 
@@ -126,3 +126,5 @@ Later on 2026-08-26, the user supplied and approved the captioned public video `
 The captioned run exited 0 with stages `input, extract, summarize, classify, validate, save, complete`, no error code, and no unparsed output. Its sole JSON record passed `SummaryRecord` validation and the required source, exact canonical URL, `published`, non-empty content, 3–5 key points, timezone, forbidden-marker, and zero-media checks. Gemini Files remained 0, and only the exact validated captioned isolation root was removed.
 
 The authorized no-caption run exited 1 with stages `input, extract, extract`, code `TRANSCRIPTION_FAILED`, no `complete` stage, and no unparsed output. Per the approved stop rule it was not rerun. The exact isolation root was absent after failure, with zero JSON, media, or other files, and the read-only Gemini Files count was 0. This proves fail-closed local and remote cleanup for this attempt, but it does not satisfy the successful no-caption acceptance criterion. The combined acceptance and no-caption todo items therefore remain unchecked pending a new decision.
+
+After a later explicit paid-retry approval on 2026-08-26, the same no-caption case completed successfully. The CLI exited 0 with stages `input, extract, summarize, classify, validate, save, complete`, no error event, and no unparsed output. The sole JSON passed `SummaryRecord`, exact canonical URL, `published`, non-empty content, 3–5 key points, timezone, forbidden-marker, and zero-media validation. Gemini Files was 0 before and after the run, and the exact isolation root was removed after validation. Together with the previously successful captioned case, the combined YouTube live acceptance is complete.

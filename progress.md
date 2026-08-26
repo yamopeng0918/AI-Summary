@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：Gemini Files 清理有限重試已實作並通過完整自動化 gates；核准有字幕案例已通過，核准無字幕 Gemini live 嘗試安全失敗，合併真實驗收仍受阻
+> 目前階段：YouTube provider-aligned 實作、自動化 gates，以及核准的有字幕／無字幕真實案例驗收均已完成
 >
-> 下次續作：先評估 2026-08-26 無字幕案例的 `TRANSCRIPTION_FAILED`；只有取得新的明確決定後，才可發起新的付費 Gemini live acceptance，不得盲目重試、留下遠端檔案或以自動化測試取代
+> 下次續作：進入核心 MVP 的公開社群單篇貼文設計；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收部分通過 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕案例完整通過。核准無字幕案例以 `TRANSCRIPTION_FAILED` 安全停止且本機／遠端零殘留，未達 `complete`，因此整體驗收仍未完成 |
+| YouTube 公開影片 | 已完成 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕與無字幕案例均完整到達 `complete`，通過資料驗證並確認本機／遠端零殘留 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -77,6 +77,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 有字幕真實驗收已完成；無字幕此次僅證明 fail-closed 與清理成功，未證明端到端成功。整體「有字幕與無字幕各一例」及無字幕隔離驗收仍維持未勾選，新的付費嘗試需另行決定。
 - 記錄更新後的新鮮 gates：完整 Python `453 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints` 並建置 `5 pages`；deployment verifier、`git diff --check` 與 `site/dist` 媒體掃描通過，兩個精確驗收 root 均不存在。
 - 後續唯讀診斷確認無字幕案例為公開、非直播、2292 秒、沒有人工或自動字幕，依 600 秒設定預期切成 4 個 chunk；轉錄模型仍為 `gemini-3.6-flash`。`MEDIA_DOWNLOAD_FAILED` 與實際 `TRANSCRIPTION_FAILED` 的錯誤邊界證明流程已進入轉錄建立／請求／回應／清理範圍，但該 code 同時涵蓋四種安全訊息。上一輪只保存 code、未保存安全 `message`，因此現有證據不足以區分 configuration、request、invalid response 或 cleanup；不得臆測根因或直接修改。下一個有判別力的步驟是取得明確付費重試核准後，只額外保存既有安全 `message`、stage、code、retryable 與 exit，不保存原始 SDK 錯誤或敏感資料。
+- 使用者後續明確改回付費方式並核准重試；新隔離 root 與 Gemini Files pre-count 均為 0。無字幕案例 exit 0，階段 `input, extract, summarize, classify, validate, save, complete`，無錯誤事件及未解析輸出。唯一 JSON 通過 `SummaryRecord`、精確 canonical URL、`published`、非空 summary/editorial、3～5 key points、含時區時間、零禁止標記與零媒體檢查；Gemini Files post-count 為 0，驗證後只刪除精確 root。至此有字幕與無字幕真實案例驗收均完成。
+- 里程碑完成後的新鮮 gates：完整 Python `453 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints` 並建置 `5 pages`；deployment verifier、`git diff --check` 與 `site/dist` 媒體掃描通過，驗收 root 不存在。
 
 ### Gemini Files 清理有限重試設計（2026-08-25）
 
