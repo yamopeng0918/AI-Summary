@@ -83,7 +83,7 @@
 - [x] 支援有可用字幕的公開影片。
 - [x] 支援無可用字幕影片的影音處理與轉錄流程。
 - [x] 處理驗證失效、限流、工具變動與中斷後可重試狀態。
-- [ ] 有字幕與無可用字幕各以一個使用者核准的真實公開案例驗收。
+- [ ] 有字幕與無可用字幕各以一個使用者核准的真實公開案例驗收（2026-08-26 有字幕案例已完整通過；無字幕案例 `TRANSCRIPTION_FAILED` 且未到 `complete`，因此整體維持未勾選）。
 
 #### Provider-aligned 音訊轉錄（2026-08-22）
 
@@ -96,7 +96,7 @@
 - [x] 完成 Gemini Files 清理有限重試的嚴格 TDD 實作計畫與完整驗收步驟。
 - [x] 完成 Gemini Files 清理有限重試實作並通過完整自動化 gates（Python `453 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro 0 diagnostics／5 pages；deployment verifier、diff 與 `site/dist` 媒體掃描通過）。
 - [x] 補齊 Gemini Files cleanup-retry final review 的自動化證據：focused `tests/test_gemini_transcriber.py` 為 `32 passed, 2 warnings`，驗證 first-success、HTTP 400、unexpected exception 與 cleanup interrupt 均不會不必要地 retry 或 sleep，並維持安全輸出。
-- [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（2026-08-26 controller 發現精確 isolation root 中唯一 JSON、零媒體，並安全驗證 YouTube／核准 canonical URL／`published`／非空內容／3～5 key points／含時區時間與零禁止標記；確認 Files=0 後精確刪除 root。操作員回報一次 live 嘗試且未授權或執行重跑，但執行計數、CLI `complete` stage、exit 與原因沒有可持久 artifact；有字幕案例也缺有效證據，故維持未勾選且不得在沒有新決定下重跑）。
+- [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（2026-08-26 新核准嘗試保留完整去識別化證據：exit 1，階段 `input, extract, extract`，錯誤碼 `TRANSCRIPTION_FAILED`，未到 `complete`；失敗後隔離 root 不存在，JSON／媒體／其他檔案及 Gemini Files 均為 0。依停止規則未重跑，需新決定後才可再嘗試）。
 
 ### 公開社群單篇貼文
 

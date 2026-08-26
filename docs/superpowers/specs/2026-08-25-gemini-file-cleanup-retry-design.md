@@ -1,7 +1,7 @@
 # Gemini Files cleanup retry design
 
 Date: 2026-08-25
-Status: Implemented; live acceptance blocked
+Status: Implemented; captioned acceptance passed, no-caption acceptance blocked
 
 ## 1. Context and goal
 
@@ -120,3 +120,9 @@ The approved implementation is present in `GeminiAudioTranscriber`; no parser, s
 On 2026-08-26, fresh controller gates passed: Python `453 passed, 2 warnings`; Schema/storage `28 passed, 1 warning`; Vitest `25 passed`; Astro `0 errors / 0 warnings / 0 hints` and `5` pages; deployment verification and `git diff --check` exited 0; `site/dist` media residue was 0. The required tools were `yt-dlp 2026.08.19` and FFmpeg `9.0.1`; the Gemini key presence check succeeded without exposing its value.
 
 The operator report states that one approved no-caption live invocation was attempted with `gemini-3.6-flash`, and that no rerun was authorized or performed. That execution count, terminal stage, exit result, and cause are not independently established by a durable CLI artifact. On 2026-08-26, the controller found the exact isolated acceptance root with exactly one JSON file and zero media files. It safely validated that record as YouTube content for the approved canonical URL, `published`, timezone-aware, with non-empty summary and editorial, 3–5 key points, and zero forbidden repository/media/Files/Gemini-URI markers; no record content, ID, title, or raw JSON was output. The controller observed zero running ai-digest/yt-dlp/ffmpeg processes and a current Gemini Files count of 0, then confirmed the exact root was unchanged and deleted only that exact root; it is now absent. Record `createdAt` (`2026-08-25T22:43:02.489095+08:00`) is before the first docs commit at 22:50:42; directory/file creation (`2026-08-25T22:52:53+08:00`) is after that commit and before the wording-correction commit at 22:56:22. This sequence is compatible with, but does not prove, delayed/asynchronous completion after the premature filesystem check, and does not prove a CLI stage/exit or execution count. The missing CLI stage/exit evidence still prevents proving `complete`. A fresh paid retry requires a new decision, and the combined captioned/no-caption acceptance remains incomplete.
+
+Later on 2026-08-26, the user supplied and approved the captioned public video `https://www.youtube.com/watch?v=xFPiU5sit7g` and explicitly authorized one fresh no-caption attempt for `https://www.youtube.com/watch?v=4gciWspBVHw`. Both runs used new absent isolation roots and retained only sanitized CLI evidence.
+
+The captioned run exited 0 with stages `input, extract, summarize, classify, validate, save, complete`, no error code, and no unparsed output. Its sole JSON record passed `SummaryRecord` validation and the required source, exact canonical URL, `published`, non-empty content, 3–5 key points, timezone, forbidden-marker, and zero-media checks. Gemini Files remained 0, and only the exact validated captioned isolation root was removed.
+
+The authorized no-caption run exited 1 with stages `input, extract, extract`, code `TRANSCRIPTION_FAILED`, no `complete` stage, and no unparsed output. Per the approved stop rule it was not rerun. The exact isolation root was absent after failure, with zero JSON, media, or other files, and the read-only Gemini Files count was 0. This proves fail-closed local and remote cleanup for this attempt, but it does not satisfy the successful no-caption acceptance criterion. The combined acceptance and no-caption todo items therefore remain unchecked pending a new decision.

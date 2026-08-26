@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：Gemini Files 清理有限重試已實作並通過完整自動化 gates；操作員回報的無字幕 Gemini live 嘗試缺少可持久 stage／exit 證據，真實驗收仍受阻
+> 目前階段：Gemini Files 清理有限重試已實作並通過完整自動化 gates；核准有字幕案例已通過，核准無字幕 Gemini live 嘗試安全失敗，合併真實驗收仍受阻
 >
-> 下次續作：取得新的明確決定後，才可對核准影片發起新的付費 Gemini live acceptance；操作員回報本次沒有授權或執行重跑，但該次執行計數本身沒有可持久證據，不得盲目重試、留下遠端檔案或以自動化測試取代
+> 下次續作：先評估 2026-08-26 無字幕案例的 `TRANSCRIPTION_FAILED`；只有取得新的明確決定後，才可發起新的付費 Gemini live acceptance，不得盲目重試、留下遠端檔案或以自動化測試取代
 
 ## 專案目標
 
@@ -28,7 +28,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁本機里程碑 | 自動化驗證已完成 | URL 安全檢查、擷取、Gemini/OpenAI 摘要邊界與 provider 選擇、開發用分類器、Schema、原子 JSON 儲存、CLI 與 Astro 已串接；完整 Python suite 135 項通過 |
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
-| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收受阻 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 controller gates 通過。控制器發現並驗證唯一隔離 JSON、確認無媒體與 Files=0，再精確清除 root；但沒有 CLI `complete` stage／exit artifact，且有字幕案例證據仍缺，驗收仍未完成 |
+| YouTube 公開影片 | provider-aligned 自動化已完成／真實驗收部分通過 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕案例完整通過。核准無字幕案例以 `TRANSCRIPTION_FAILED` 安全停止且本機／遠端零殘留，未達 `complete`，因此整體驗收仍未完成 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
@@ -68,6 +68,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-26：核准 YouTube 雙案例驗收
+
+- 使用者提供並核准有字幕案例 `https://www.youtube.com/watch?v=xFPiU5sit7g`，並明確核准對既有無字幕案例 `https://www.youtube.com/watch?v=4gciWspBVHw` 再執行一次 Gemini 付費驗收。兩次均使用新的隔離目錄，CLI 原始輸出不落盤，只記錄去識別化階段、錯誤碼與退出狀態。
+- 有字幕案例 exit 0，階段為 `input, extract, summarize, classify, validate, save, complete`，無錯誤碼、無未解析輸出。唯一 JSON 通過 `SummaryRecord`、YouTube、精確 canonical URL、`published`、非空 summary/editorial、3～5 key points、含時區時間、零禁止標記與零媒體檢查；Gemini Files 中間計數為 0，驗證後只刪除精確隔離 root。
+- 無字幕案例 exit 1，階段為 `input, extract, extract`，錯誤碼 `TRANSCRIPTION_FAILED`，未到 `complete` 且無未解析輸出。依核准停止規則沒有重跑；失敗後精確 isolation root 不存在，JSON、媒體與其他檔案均為 0，Gemini Files 唯讀計數為 0。
+- 有字幕真實驗收已完成；無字幕此次僅證明 fail-closed 與清理成功，未證明端到端成功。整體「有字幕與無字幕各一例」及無字幕隔離驗收仍維持未勾選，新的付費嘗試需另行決定。
+- 記錄更新後的新鮮 gates：完整 Python `453 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro `0 errors / 0 warnings / 0 hints` 並建置 `5 pages`；deployment verifier、`git diff --check` 與 `site/dist` 媒體掃描通過，兩個精確驗收 root 均不存在。
 
 ### Gemini Files 清理有限重試設計（2026-08-25）
 
