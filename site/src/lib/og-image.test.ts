@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import sharp from 'sharp';
 import type { SummaryRecord } from './summaries';
-import { createOgImageContent, fitOgText } from './og-image';
+import { createOgImageContent, fitOgText, renderOgImage } from './og-image';
 
 const record: SummaryRecord = {
   schemaVersion: 1,
@@ -21,6 +22,14 @@ const record: SummaryRecord = {
 };
 
 describe('OG image content', () => {
+  it('renders a non-empty 1200 by 630 PNG with Chinese content', async () => {
+    const png = await renderOgImage(record);
+    const metadata = await sharp(png).metadata();
+
+    expect(png.byteLength).toBeGreaterThan(1_000);
+    expect(metadata).toMatchObject({ format: 'png', width: 1200, height: 630 });
+  });
+
   it('uses author before hostname and uppercases source type', () => {
     expect(createOgImageContent(record)).toMatchObject({ source: '王小明', sourceType: 'WEB' });
   });

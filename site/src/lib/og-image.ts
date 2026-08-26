@@ -1,4 +1,26 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+import satori from 'satori';
+import { createElement, type JSXNode } from 'satori/jsx';
+import sharp from 'sharp';
+
 import type { SummaryRecord } from './summaries';
+
+const fontData = readFile(
+  resolve(process.cwd(), 'src', 'assets', 'fonts', 'NotoSerifTC-VariableFont_wght.ttf'),
+).then(
+  (data) => {
+    const tableCount = data.readUInt16BE(4);
+    for (let index = 0; index < tableCount; index += 1) {
+      const offset = 12 + index * 16;
+      if (data.toString('ascii', offset, offset + 4) === 'fvar') {
+        data.write('skip', offset, 'ascii');
+      }
+    }
+    return data;
+  },
+);
 
 export interface OgImageContent {
   title: string;
@@ -34,4 +56,89 @@ export function createOgImageContent(record: SummaryRecord): OgImageContent {
     source: record.author?.trim() || new URL(record.canonicalUrl).hostname,
     sourceType: record.sourceType.toUpperCase() as OgImageContent['sourceType'],
   };
+}
+
+export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
+  const content = createOgImageContent(record);
+  const titleLines = fitOgText(content.title, [22, 22, 22]);
+  const summaryLines = fitOgText(content.summary, [46, 46]);
+  const svg = await satori(
+    createElement(
+      'div',
+      {
+        style: {
+          backgroundColor: '#f7f2e7',
+          color: '#17352d',
+          display: 'flex',
+          flexDirection: 'column',
+          fontFamily: 'Noto Serif TC',
+          height: '630px',
+          padding: '52px 64px 48px',
+          width: '1200px',
+        },
+      },
+      createElement('div', {
+        style: { backgroundColor: '#ef6a47', height: '12px', marginBottom: '28px', width: '100%' },
+      }) as JSXNode,
+      createElement(
+        'div',
+        { style: { display: 'flex', fontSize: '26px', fontWeight: 700, letterSpacing: '0.12em' } },
+        'AI DIGEST',
+      ) as JSXNode,
+      createElement(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            fontSize: '54px',
+            fontWeight: 700,
+            lineHeight: 1.25,
+            marginTop: '26px',
+          },
+        },
+        ...titleLines.map(
+          (line) => createElement('div', { style: { display: 'flex' } }, line) as JSXNode,
+        ),
+      ) as JSXNode,
+      createElement(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            fontSize: '25px',
+            lineHeight: 1.5,
+            marginTop: '24px',
+          },
+        },
+        ...summaryLines.map(
+          (line) => createElement('div', { style: { display: 'flex' } }, line) as JSXNode,
+        ),
+      ) as JSXNode,
+      createElement(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            fontSize: '22px',
+            fontWeight: 600,
+            marginTop: 'auto',
+          },
+        },
+        `${content.category}  |  ${content.source}  |  ${content.sourceType}`,
+      ) as JSXNode,
+    ),
+    {
+      fonts: [{ data: await fontData, name: 'Noto Serif TC', weight: 400, style: 'normal' }],
+      height: 630,
+      width: 1200,
+    },
+  );
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  const metadata = await sharp(png).metadata();
+  if (metadata.format !== 'png' || metadata.width !== 1200 || metadata.height !== 630) {
+    throw new Error('OG image renderer produced invalid PNG dimensions');
+  }
+  return png;
 }
