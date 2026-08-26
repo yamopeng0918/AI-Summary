@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-25
+> 最後同步：2026-08-26
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -94,9 +94,9 @@
 - [x] 更新 `.env.example`、README 與舊 YouTube 設計的 supersession note，並完成 provider-aligned 完整 Python／前端／正式建置／部署安全 gates（Python `444 passed`、Vitest `25 passed`、Astro 0 diagnostics／5 pages、Schema/storage `28 passed`）。
 - [x] 核准 Gemini Files 清理有限重試設計：只重試 delete，最多三次，等待 1／2 秒；404 視為成功，暫時性錯誤才重試，且保留主要錯誤優先與安全輸出。
 - [x] 完成 Gemini Files 清理有限重試的嚴格 TDD 實作計畫與完整驗收步驟。
-- [x] 完成 Gemini Files 清理有限重試實作並通過完整自動化 gates（Python `452 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro 0 diagnostics／5 pages；deployment verifier、diff 與 `site/dist` 媒體掃描通過）。
+- [x] 完成 Gemini Files 清理有限重試實作並通過完整自動化 gates（Python `453 passed, 2 warnings`；Schema/storage `28 passed, 1 warning`；Vitest `25 passed`；Astro 0 diagnostics／5 pages；deployment verifier、diff 與 `site/dist` 媒體掃描通過）。
 - [x] 補齊 Gemini Files cleanup-retry final review 的自動化證據：focused `tests/test_gemini_transcriber.py` 為 `32 passed, 2 warnings`，驗證 first-success、HTTP 400、unexpected exception 與 cleanup interrupt 均不會不必要地 retry 或 sleep，並維持安全輸出。
-- [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（操作員回報一次 live 嘗試且未授權或執行重跑，但執行計數、stage、exit 與原因沒有可持久 artifact。可持久證據僅為預期 acceptance root 缺失、預期 JSON 計數 0、驗證不可用/false，以及 Gemini Files 非識別性 pre/post 計數皆為 0；不得在沒有新決定下重跑）。
+- [ ] 以核准的無字幕影片完成隔離真實驗收並驗證無本機／遠端暫存資訊殘留（2026-08-26 controller 發現精確 isolation root 中唯一 JSON、零媒體，並安全驗證 YouTube／核准 canonical URL／`published`／非空內容／3～5 key points／含時區時間與零禁止標記；確認 Files=0 後精確刪除 root。操作員回報一次 live 嘗試且未授權或執行重跑，但執行計數、CLI `complete` stage、exit 與原因沒有可持久 artifact；有字幕案例也缺有效證據，故維持未勾選且不得在沒有新決定下重跑）。
 
 ### 公開社群單篇貼文
 
