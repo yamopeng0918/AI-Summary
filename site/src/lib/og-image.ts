@@ -1,9 +1,10 @@
 import satori from 'satori';
 import { createElement, type JSXNode } from 'satori/jsx';
 import sharp from 'sharp';
+import { parse } from '@shuding/opentype.js';
 
-import boldFontDataUrl from '../assets/fonts/NotoSerifTC-Bold.ttf?inline';
-import regularFontDataUrl from '../assets/fonts/NotoSerifTC-Regular.ttf?inline';
+import boldFontDataUrl from '../assets/fonts/NotoSerifCJKtc-Bold.otf?inline';
+import regularFontDataUrl from '../assets/fonts/NotoSerifCJKtc-Regular.otf?inline';
 import type { SummaryRecord } from './summaries';
 
 const fontData = Promise.all([
@@ -13,7 +14,22 @@ const fontData = Promise.all([
   fetch(new URL(boldFontDataUrl, import.meta.url)).then(async (response) => {
     return Buffer.from(await response.arrayBuffer());
   }),
-]);
+]).then(([regularFontData, boldFontData]) => ({
+  boldFont: parse(
+    boldFontData.buffer.slice(
+      boldFontData.byteOffset,
+      boldFontData.byteOffset + boldFontData.byteLength,
+    ) as ArrayBuffer,
+  ),
+  boldFontData,
+  regularFont: parse(
+    regularFontData.buffer.slice(
+      regularFontData.byteOffset,
+      regularFontData.byteOffset + regularFontData.byteLength,
+    ) as ArrayBuffer,
+  ),
+  regularFontData,
+}));
 
 export interface OgImageContent {
   title: string;
@@ -22,6 +38,19 @@ export interface OgImageContent {
   source: string;
   sourceType: 'WEB' | 'YOUTUBE' | 'SOCIAL';
 }
+
+export interface OgImageLayout extends OgImageContent {
+  titleLines: string[];
+  summaryLines: string[];
+}
+
+export interface FontCharacterMap {
+  charToGlyphIndex(character: string): number;
+}
+
+const TITLE_LINE_LIMITS = [18, 18, 18] as const;
+const SUMMARY_LINE_LIMITS = [40, 40] as const;
+const SOURCE_LABEL_LIMIT = 36;
 
 export function fitOgText(text: string, limits: readonly number[]): string[] {
   const characters = Array.from(text.trim());
@@ -41,6 +70,19 @@ export function fitOgText(text: string, limits: readonly number[]): string[] {
   return lines;
 }
 
+export function assertFontCoversStrings(
+  font: FontCharacterMap,
+  strings: readonly string[],
+  fontLabel: string,
+): void {
+  const missingCharacters = [
+    ...new Set(strings.flatMap((value) => Array.from(value))),
+  ].filter((character) => font.charToGlyphIndex(character) === 0);
+  if (missingCharacters.length > 0) {
+    throw new Error(`OG font ${fontLabel} is missing glyphs: ${missingCharacters.join(', ')}`);
+  }
+}
+
 export function createOgImageContent(record: SummaryRecord): OgImageContent {
   return {
     title: record.title,
@@ -51,11 +93,29 @@ export function createOgImageContent(record: SummaryRecord): OgImageContent {
   };
 }
 
-export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
+export function createOgImageLayout(record: SummaryRecord): OgImageLayout {
   const content = createOgImageContent(record);
-  const titleLines = fitOgText(content.title, [22, 22, 22]);
-  const summaryLines = fitOgText(content.summary, [46, 46]);
-  const [regularFontData, boldFontData] = await fontData;
+  return {
+    ...content,
+    titleLines: fitOgText(content.title, TITLE_LINE_LIMITS),
+    summaryLines: fitOgText(content.summary, SUMMARY_LINE_LIMITS),
+    source: fitOgText(content.source, [SOURCE_LABEL_LIMIT])[0] ?? '',
+  };
+}
+
+export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
+  const content = createOgImageLayout(record);
+  const { boldFont, boldFontData, regularFont, regularFontData } = await fontData;
+  assertFontCoversStrings(
+    boldFont,
+    ['AI DIGEST', content.category, ...content.titleLines, content.source, content.sourceType],
+    'Noto Serif CJK TC Bold',
+  );
+  assertFontCoversStrings(
+    regularFont,
+    content.summaryLines,
+    'Noto Serif CJK TC Regular',
+  );
   const svg = await satori(
     createElement(
       'div',
@@ -76,8 +136,23 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
       }) as JSXNode,
       createElement(
         'div',
-        { style: { display: 'flex', fontSize: '26px', fontWeight: 700, letterSpacing: '0.12em' } },
-        'AI DIGEST',
+        {
+          style: {
+            alignItems: 'center',
+            display: 'flex',
+            fontSize: '26px',
+            fontWeight: 700,
+            justifyContent: 'space-between',
+            letterSpacing: '0.12em',
+            width: '100%',
+          },
+        },
+        createElement('div', { style: { display: 'flex', whiteSpace: 'nowrap' } }, 'AI DIGEST') as JSXNode,
+        createElement(
+          'div',
+          { style: { display: 'flex', textAlign: 'right', whiteSpace: 'nowrap' } },
+          content.category,
+        ) as JSXNode,
       ) as JSXNode,
       createElement(
         'div',
@@ -91,8 +166,13 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
             marginTop: '26px',
           },
         },
-        ...titleLines.map(
-          (line) => createElement('div', { style: { display: 'flex' } }, line) as JSXNode,
+        ...content.titleLines.map(
+          (line) =>
+            createElement(
+              'div',
+              { style: { display: 'flex', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' } },
+              line,
+            ) as JSXNode,
         ),
       ) as JSXNode,
       createElement(
@@ -106,8 +186,13 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
             marginTop: '24px',
           },
         },
-        ...summaryLines.map(
-          (line) => createElement('div', { style: { display: 'flex' } }, line) as JSXNode,
+        ...content.summaryLines.map(
+          (line) =>
+            createElement(
+              'div',
+              { style: { display: 'flex', overflow: 'hidden', whiteSpace: 'nowrap', width: '100%' } },
+              line,
+            ) as JSXNode,
         ),
       ) as JSXNode,
       createElement(
@@ -117,10 +202,17 @@ export async function renderOgImage(record: SummaryRecord): Promise<Buffer> {
             display: 'flex',
             fontSize: '22px',
             fontWeight: 700,
+            justifyContent: 'space-between',
             marginTop: 'auto',
+            width: '100%',
           },
         },
-        `${content.category}  |  ${content.source}  |  ${content.sourceType}`,
+        createElement(
+          'div',
+          { style: { display: 'flex', overflow: 'hidden', whiteSpace: 'nowrap' } },
+          content.source,
+        ) as JSXNode,
+        createElement('div', { style: { display: 'flex', whiteSpace: 'nowrap' } }, content.sourceType) as JSXNode,
       ) as JSXNode,
     ),
     {

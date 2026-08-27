@@ -53,7 +53,7 @@
 - [x] 完成手機與桌面版基本響應式介面與本機靜態建置。
 - [x] 建立 GitHub Pages workflow、`/AI-Summary/` base path、artifact verifier 與本機 `build:pages` gate。
 - [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（最新 run `31674616177`，commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`）。
-- [x] 為每筆已發布摘要產生 OG PNG，並完成詳情頁 metadata 與首頁卡片顯示；自動化 artifact audit 及真實中文長標題視覺驗收均通過。
+- [x] 為每筆已發布摘要產生 OG PNG，使用官方完整 Pan-CJK Regular／Bold OTF、渲染前 fail-closed cmap 檢查與 `18`／`40`／`36` 安全排版；詳情頁 metadata、首頁卡片、分類右上／來源 footer、完整 PNG artifact gate，以及全部六張原始解析度視覺驗收均通過。
 
 ### 文件與安全收尾
 

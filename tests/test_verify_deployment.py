@@ -10,17 +10,69 @@ from scripts.verify_deployment import (
     scan_sensitive_files,
     tracked_paths,
     verify_generated_links,
+    verify_generated_summary_artifacts,
 )
 
 
-def _png_header(width: int, height: int) -> bytes:
-    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+def _png_chunk(chunk_type: bytes, data: bytes = b"") -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data))
+    )
+
+
+def _png_ihdr(width: int, height: int) -> bytes:
+    return _png_chunk(
+        b"IHDR",
+        struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0),
+    )
+
+
+def _png(width: int, height: int) -> bytes:
+    scanlines = (b"\x00" + bytes(width)) * height
     return (
         b"\x89PNG\r\n\x1a\n"
-        + struct.pack(">I", len(ihdr_data))
-        + b"IHDR"
-        + ihdr_data
-        + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data))
+        + _png_ihdr(width, height)
+        + _png_chunk(b"IDAT", zlib.compress(scanlines))
+        + _png_chunk(b"IEND")
+    )
+
+
+def _summary_detail_artifact_html() -> str:
+    return (
+        '<link rel="canonical" '
+        'href="https://yamopeng0918.github.io/AI-Summary/summaries/demo/">'
+        '<meta property="og:title" content="AI &amp; &quot;ML&quot; &lt;速報&gt;｜AI Digest">'
+        '<meta property="og:description" content="Research &amp; results">'
+        '<meta property="og:type" content="article">'
+        '<meta property="og:url" '
+        'content="https://yamopeng0918.github.io/AI-Summary/summaries/demo/">'
+        '<meta property="og:image" '
+        'content="https://yamopeng0918.github.io/AI-Summary/og/demo.png">'
+        '<meta property="og:image:width" content="1200">'
+        '<meta property="og:image:height" content="630">'
+        '<meta property="og:image:alt" content="AI &amp; &quot;ML&quot; &lt;速報&gt;">'
+        '<meta name="twitter:card" content="summary_large_image">'
+        '<meta name="twitter:title" content="AI &amp; &quot;ML&quot; &lt;速報&gt;｜AI Digest">'
+        '<meta name="twitter:description" content="Research &amp; results">'
+        '<meta name="twitter:image" '
+        'content="https://yamopeng0918.github.io/AI-Summary/og/demo.png">'
+    )
+
+
+def _summary_card_artifact_html(
+    *,
+    image_src: str = "/AI-Summary/og/demo.png",
+    loading: str = "lazy",
+) -> str:
+    return (
+        '<a href="/AI-Summary/summaries/demo/">'
+        '<img class="summary-card-image" '
+        f'src="{image_src}" alt="AI &amp; &quot;ML&quot; &lt;速報&gt;" '
+        f'width="1200" height="630" loading="{loading}" decoding="async">'
+        "</a>"
     )
 
 
@@ -200,7 +252,7 @@ def test_generated_links_rejects_wrong_sized_referenced_og_image(tmp_path: Path)
         '<meta name="twitter:image" content="/AI-Summary/og/demo.png">',
         encoding="utf-8",
     )
-    image.write_bytes(_png_header(1200, 629))
+    image.write_bytes(_png(1200, 629))
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == [
         f"{detail}: local image /AI-Summary/og/demo.png must be 1200x630 PNG (found 1200x629)"
@@ -230,7 +282,7 @@ def test_generated_links_rejects_referenced_og_image_without_ihdr_crc(
     detail.parent.mkdir(parents=True)
     image.parent.mkdir()
     detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
-    image.write_bytes(_png_header(1200, 630)[:-4])
+    image.write_bytes(b"\x89PNG\r\n\x1a\n" + _png_ihdr(1200, 630)[:-4])
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == [
         f"{detail}: local image /AI-Summary/og/demo.png has a truncated PNG IHDR"
@@ -249,6 +301,88 @@ def test_generated_links_rejects_referenced_og_image_with_invalid_ihdr_layout(
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == [
         f"{detail}: local image /AI-Summary/og/demo.png has an invalid PNG IHDR"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("png_bytes", "violation"),
+    [
+        (
+            b"\x89PNG\r\n\x1a\n" + _png_ihdr(1200, 630) + _png_chunk(b"IEND"),
+            "PNG has no IDAT chunk",
+        ),
+        (
+            _png(1200, 630)[:-12],
+            "PNG has no terminal IEND chunk",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1200, 630)
+            + _png_ihdr(1200, 630)
+            + _png_chunk(b"IDAT", zlib.compress(b""))
+            + _png_chunk(b"IEND"),
+            "PNG must contain exactly one IHDR first",
+        ),
+        (
+            _png(1200, 630)[:-1] + bytes([_png(1200, 630)[-1] ^ 0xFF]),
+            "PNG CRC mismatch in IEND",
+        ),
+        (
+            _png(1200, 630)[:-2],
+            "has a truncated PNG chunk",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1200, 630)
+            + _png_chunk(b"IDAT", b"not zlib")
+            + _png_chunk(b"IEND"),
+            "has undecodable PNG image data",
+        ),
+        (
+            _png(1200, 630) + b"trailing",
+            "PNG has data after IEND",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_chunk(b"IDAT", zlib.compress(b""))
+            + _png_ihdr(1200, 630)
+            + _png_chunk(b"IEND"),
+            "PNG must contain exactly one IHDR first",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1200, 630)
+            + struct.pack(">I", 16_777_217)
+            + b"IDAT",
+            "PNG chunk exceeds 16777216-byte limit",
+        ),
+    ],
+    ids=[
+        "missing-idat",
+        "missing-iend",
+        "duplicate-ihdr",
+        "bad-crc",
+        "truncated-chunk",
+        "undecodable-idat",
+        "data-after-iend",
+        "ihdr-not-first",
+        "oversized-chunk",
+    ],
+)
+def test_generated_links_rejects_incomplete_or_undecodable_png_structure(
+    tmp_path: Path,
+    png_bytes: bytes,
+    violation: str,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(png_bytes)
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png {violation}"
     ]
 
 
@@ -329,6 +463,27 @@ def test_generated_links_collects_same_site_absolute_og_image(tmp_path: Path) ->
     ]
 
 
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "/og/demo.png",
+        "https://yamopeng0918.github.io/og/demo.png",
+    ],
+    ids=["root-relative", "same-site-absolute"],
+)
+def test_generated_links_rejects_image_urls_outside_the_approved_base(
+    tmp_path: Path,
+    reference: str,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(f'<img src="{reference}">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: image reference {reference} misses /AI-Summary/"
+    ]
+
+
 def test_generated_links_accepts_percent_encoded_unicode_og_image_path(
     tmp_path: Path,
 ) -> None:
@@ -337,7 +492,7 @@ def test_generated_links_accepts_percent_encoded_unicode_og_image_path(
     detail.parent.mkdir(parents=True)
     image.parent.mkdir()
     detail.write_text('<img src="/AI-Summary/og/%E4%B8%AD%E6%96%87.png">', encoding="utf-8")
-    image.write_bytes(_png_header(1200, 630))
+    image.write_bytes(_png(1200, 630))
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == []
 
@@ -381,9 +536,98 @@ def test_generated_links_accepts_valid_referenced_og_image(tmp_path: Path) -> No
         '<meta name="twitter:image" content="/AI-Summary/og/demo.png">',
         encoding="utf-8",
     )
-    image.write_bytes(_png_header(1200, 630))
+    image.write_bytes(_png(1200, 630))
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_summary_artifacts_accept_escaped_https_metadata_and_resolved_card_image(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    (tmp_path / "index.html").write_text(
+        _summary_card_artifact_html(),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == []
+
+
+def test_summary_artifacts_reject_an_unescaped_metadata_attribute(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        _summary_detail_artifact_html().replace(
+            'property="og:title" content="AI &amp;',
+            'property="og:title" content="AI &',
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "index.html").write_text(
+        _summary_card_artifact_html(),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == [
+        f"{detail}: metadata og:title content is not safely HTML-escaped"
+    ]
+
+
+def test_summary_artifacts_reject_non_https_image_metadata(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        _summary_detail_artifact_html().replace(
+            'property="og:image" content="https://',
+            'property="og:image" content="http://',
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "index.html").write_text(
+        _summary_card_artifact_html(),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == [
+        f"{detail}: metadata og:image must be an absolute HTTPS URL"
+    ]
+
+
+def test_summary_artifacts_reject_unresolved_or_misconfigured_card_image(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    homepage = tmp_path / "index.html"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    homepage.write_text(
+        _summary_card_artifact_html(
+            image_src="/AI-Summary/og/missing.png",
+            loading="eager",
+        ),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == [
+        f"{homepage}: card image /AI-Summary/og/missing.png is missing",
+        f"{homepage}: card image /AI-Summary/og/missing.png must use loading=lazy",
+        f"{homepage}: card image /AI-Summary/og/missing.png does not match a published summary",
+        f"{detail}: published summary has no matching homepage card image",
+    ]
 
 
 @pytest.mark.parametrize(
