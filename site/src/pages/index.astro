@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { summaryPath } from '../lib/paths';
+import { ogImagePath, summaryPath } from '../lib/paths';
 import { serializeSummaryRecords } from '../lib/summaries';
 import { loadPublishedSummaries } from '../lib/summary-loader';
 
@@ -46,6 +46,17 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
         <section class="summary-grid" id="summary-list" aria-label="摘要列表">
           {summaries.map((record) => (
             <article class="summary-card" data-summary-card={record.id}>
+              <a href={summaryPath(baseUrl, record.id)} aria-label={`閱讀摘要：${record.title}`}>
+                <img
+                  class="summary-card-image"
+                  src={ogImagePath(baseUrl, record.id)}
+                  alt={record.title}
+                  width="1200"
+                  height="630"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </a>
               <div class="card-meta">
                 <span>{record.category}</span>
                 <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
