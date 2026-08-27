@@ -180,21 +180,89 @@ def _resolve_local_image_reference(
     return image_path, "local"
 
 
-def scan_sensitive_files(paths: Iterable[Path]) -> list[str]:
-    """Return violations for tracked environment files and credential shapes."""
-    violations: list[str] = []
-    for path in paths:
-        if path.name == ".env":
-            violations.append(f"{path}: tracked .env file")
+def _contained_distribution_files(
+    dist_root: Path,
+) -> tuple[list[tuple[Path, Path]], list[str]]:
+    """Return only regular files resolved inside the distribution directory."""
+    try:
+        resolved_dist_root = dist_root.resolve()
+    except (OSError, RuntimeError):
+        return [], [f"{dist_root}: distribution directory could not be resolved"]
 
-        contents = path.read_bytes()
+    try:
+        is_directory = resolved_dist_root.is_dir()
+    except OSError:
+        return [], [f"{dist_root}: distribution directory could not be inspected"]
+    if not is_directory:
+        return [], []
+
+    try:
+        candidates = sorted(dist_root.rglob("*"))
+    except (OSError, RuntimeError):
+        return [], [f"{dist_root}: distribution directory could not be enumerated"]
+
+    files: list[tuple[Path, Path]] = []
+    violations: list[str] = []
+    for candidate in candidates:
+        try:
+            resolved_candidate = candidate.resolve()
+        except (OSError, RuntimeError):
+            violations.append(
+                f"{candidate}: distribution entry could not be resolved"
+            )
+            continue
+
+        try:
+            resolved_candidate.relative_to(resolved_dist_root)
+        except ValueError:
+            violations.append(
+                f"{candidate}: distribution entry escapes distribution directory"
+            )
+            continue
+
+        try:
+            is_file = resolved_candidate.is_file()
+        except OSError:
+            violations.append(
+                f"{candidate}: distribution entry could not be inspected"
+            )
+            continue
+        if is_file:
+            files.append((candidate, resolved_candidate))
+
+    return files, violations
+
+
+def _scan_sensitive_file_pairs(
+    paths: Iterable[tuple[Path, Path]],
+    *,
+    read_error: str,
+) -> list[str]:
+    violations: list[str] = []
+    for display_path, read_path in paths:
+        if display_path.name == ".env":
+            violations.append(f"{display_path}: tracked .env file")
+
+        try:
+            contents = read_path.read_bytes()
+        except OSError:
+            violations.append(f"{display_path}: {read_error}")
+            continue
         if b"\x00" in contents:
             continue
         text = contents.decode("utf-8", errors="replace")
         for name, pattern in SENSITIVE_PATTERNS.items():
             if pattern.search(text):
-                violations.append(f"{path}: {name}")
+                violations.append(f"{display_path}: {name}")
     return violations
+
+
+def scan_sensitive_files(paths: Iterable[Path]) -> list[str]:
+    """Return violations for tracked environment files and credential shapes."""
+    return _scan_sensitive_file_pairs(
+        ((path, path) for path in paths),
+        read_error="file could not be read",
+    )
 
 
 def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
@@ -749,13 +817,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.tracked:
         violations.extend(scan_sensitive_files(tracked_paths()))
     if args.dist is not None:
-        violations.extend(
-            scan_sensitive_files(
-                path for path in sorted(args.dist.rglob("*")) if path.is_file()
+        dist_files, dist_file_violations = _contained_distribution_files(args.dist)
+        violations.extend(dist_file_violations)
+        if not dist_file_violations:
+            dist_scan_violations = _scan_sensitive_file_pairs(
+                dist_files,
+                read_error="distribution entry could not be read",
             )
-        )
-        violations.extend(verify_generated_links(args.dist, args.base))
-        violations.extend(verify_generated_summary_artifacts(args.dist, args.base))
+            violations.extend(dist_scan_violations)
+            if not dist_scan_violations:
+                violations.extend(verify_generated_links(args.dist, args.base))
+                violations.extend(
+                    verify_generated_summary_artifacts(args.dist, args.base)
+                )
 
     for violation in violations:
         print(violation, file=sys.stderr)

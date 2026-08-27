@@ -119,7 +119,7 @@ data/summaries/*.json
 2. 完整前端測試。
 3. `astro check`。
 4. 正式 Pages build。
-5. deployment verifier 先以同一個 resolver 對圖片 URL 執行 percent／反斜線正規化、`resolve()` 與 `dist_root` containment 檢查，確認未 traversal、未形成 encoded absolute path、未經 symlink 逃逸後才可呼叫 `is_file()` 或讀檔；PNG 驗證使用最多七組 `(row_bytes, row_count)` scanline runs 與解壓前算術上限檢查，再執行有界 chunk、CRC、IHDR／IDAT／IEND、截斷、row filter 與解碼檢查，並驗證建置後 metadata／卡片 artifact 及 `site/dist` 敏感資料掃描。
+5. deployment verifier 在任何 `site/dist` 敏感資料掃描或 HTML verifier 讀檔前，先建立排序且 fail-closed 的全樹 inventory：解析 resolved root 與每個 candidate、確認 containment，之後才可 `is_file()` 或讀檔；保留 candidate 名稱供 `.env` 與錯誤訊息使用，任一 escape／inspection／read violation 都先中止後續讀取。圖片 URL 另以同一個 resolver 執行 percent／反斜線正規化、`resolve()` 與 `dist_root` containment 檢查；PNG 驗證使用最多七組 `(row_bytes, row_count)` scanline runs 與解壓前算術上限檢查，再執行有界 chunk、CRC、IHDR／IDAT／IEND、截斷、row filter 與解碼檢查，並驗證建置後 metadata／卡片 artifact。
 6. `git diff --check`。
 7. 以原始解析度人工檢視目前全部六張實際 PNG，逐張確認沒有缺字、裁切、溢出或低對比，且分類在右上、來源與來源類型在 footer。
 
