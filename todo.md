@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-08-26
+> 最後同步：2026-08-27
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -53,6 +53,7 @@
 - [x] 完成手機與桌面版基本響應式介面與本機靜態建置。
 - [x] 建立 GitHub Pages workflow、`/AI-Summary/` base path、artifact verifier 與本機 `build:pages` gate。
 - [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（最新 run `31674616177`，commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`）。
+- [x] 為每筆已發布摘要產生 OG PNG，並完成詳情頁 metadata 與首頁卡片顯示；自動化 artifact audit 及真實中文長標題視覺驗收均通過。
 
 ### 文件與安全收尾
 
