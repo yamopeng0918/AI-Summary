@@ -1,6 +1,7 @@
 from pathlib import Path
 import struct
 import subprocess
+import zlib
 
 import pytest
 
@@ -13,10 +14,13 @@ from scripts.verify_deployment import (
 
 
 def _png_header(width: int, height: int) -> bytes:
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
     return (
         b"\x89PNG\r\n\x1a\n"
-        + b"\x00\x00\x00\rIHDR"
-        + struct.pack(">II", width, height)
+        + struct.pack(">I", len(ihdr_data))
+        + b"IHDR"
+        + ihdr_data
+        + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data))
     )
 
 
@@ -218,6 +222,36 @@ def test_generated_links_rejects_referenced_og_image_with_truncated_ihdr(
     ]
 
 
+def test_generated_links_rejects_referenced_og_image_without_ihdr_crc(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(_png_header(1200, 630)[:-4])
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png has a truncated PNG IHDR"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_with_invalid_ihdr_layout(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0cIHDR" + b"\x00" * 17)
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png has an invalid PNG IHDR"
+    ]
+
+
 def test_generated_links_rejects_referenced_og_image_path_traversal(
     tmp_path: Path,
 ) -> None:
@@ -227,6 +261,112 @@ def test_generated_links_rejects_referenced_og_image_path_traversal(
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == [
         f"{detail}: local image /AI-Summary/../outside.png escapes distribution directory"
+    ]
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "/AI-Summary%2f..%2foutside.png",
+        "/AI-Summary%5c..%5coutside.png",
+        "https://yamopeng0918.github.io/AI-Summary\\..\\outside.png",
+        "https://yamopeng0918.github.io\\AI-Summary\\..\\outside.png",
+        "https://yamopeng0918.github.io/AI-Summary/og/%2e%2e/%2e%2e/outside.png",
+    ],
+)
+def test_generated_links_rejects_encoded_or_backslash_og_image_traversal(
+    tmp_path: Path,
+    reference: str,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(f'<img src="{reference}">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image {reference} escapes distribution directory"
+    ]
+
+
+def test_generated_links_collects_each_relevant_image_attribute(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(
+        '<img src="/AI-Summary/og/first.png" src="/AI-Summary/og/second.png">',
+        encoding="utf-8",
+    )
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/first.png is missing",
+        f"{detail}: local image /AI-Summary/og/second.png is missing",
+    ]
+
+
+def test_generated_links_collects_each_relevant_meta_content_attribute(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(
+        '<meta property="og:image" content="/AI-Summary/og/first.png" '
+        'content="/AI-Summary/og/second.png">',
+        encoding="utf-8",
+    )
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/first.png is missing",
+        f"{detail}: local image /AI-Summary/og/second.png is missing",
+    ]
+
+
+def test_generated_links_collects_same_site_absolute_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    reference = "https://yamopeng0918.github.io/AI-Summary/og/demo.png"
+    detail.write_text(f'<img src="{reference}">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image {reference} is missing"
+    ]
+
+
+def test_generated_links_accepts_percent_encoded_unicode_og_image_path(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "中文" / "index.html"
+    image = tmp_path / "og" / "中文.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/%E4%B8%AD%E6%96%87.png">', encoding="utf-8")
+    image.write_bytes(_png_header(1200, 630))
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_generated_links_ignores_external_origin_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="https://example.com/og/demo.png">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_generated_links_ignores_data_url_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="data:image/png;base64,AAAA">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_generated_links_reports_malformed_og_image_url_without_raising(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="https://[bad">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: malformed image reference"
     ]
 
 

@@ -19,6 +19,8 @@ SENSITIVE_PATTERNS = {
 }
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_IHDR_LENGTH = b"\x00\x00\x00\r"
+PNG_HEADER_LENGTH = 33
 EXPECTED_OG_IMAGE_DIMENSIONS = (1200, 630)
 GITHUB_PAGES_HOST = "yamopeng0918.github.io"
 
@@ -34,18 +36,25 @@ class _HrefParser(HTMLParser):
             if name.lower() == "href" and value is not None:
                 self.hrefs.append(value.strip())
 
-        attributes = {
-            name.lower(): value.strip()
+        if tag.lower() == "img":
+            self.image_references.extend(
+                value.strip()
+                for name, value in attrs
+                if name.lower() == "src" and value is not None
+            )
+        if tag.lower() == "meta" and any(
+            value is not None
+            and (
+                (name.lower() == "property" and value.lower() == "og:image")
+                or (name.lower() == "name" and value.lower() == "twitter:image")
+            )
             for name, value in attrs
-            if value is not None
-        }
-        if tag.lower() == "img" and (src := attributes.get("src")) is not None:
-            self.image_references.append(src)
-        if tag.lower() == "meta" and (content := attributes.get("content")) is not None:
-            if attributes.get("property", "").lower() == "og:image":
-                self.image_references.append(content)
-            if attributes.get("name", "").lower() == "twitter:image":
-                self.image_references.append(content)
+        ):
+            self.image_references.extend(
+                value.strip()
+                for name, value in attrs
+                if name.lower() == "content" and value is not None
+            )
 
 
 def scan_sensitive_files(paths: Iterable[Path]) -> list[str]:
@@ -66,12 +75,12 @@ def scan_sensitive_files(paths: Iterable[Path]) -> list[str]:
 
 
 def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
-    """Return root-relative links that do not start with the approved Pages base."""
+    """Return href and local generated-image violations in generated HTML."""
     if not dist_root.is_dir():
         return [f"{dist_root}: distribution directory is missing"]
 
     violations: list[str] = []
-    approved_base = "/" + base_path.strip("/")
+    approved_base = "/" + base_path.replace("\\", "/").strip("/")
     if approved_base != "/":
         approved_base += "/"
     resolved_dist_root = dist_root.resolve()
@@ -94,20 +103,26 @@ def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
             )
 
         for reference in parser.image_references:
-            parsed = urlsplit(reference)
-            if parsed.scheme in {"http", "https"}:
-                if parsed.hostname != GITHUB_PAGES_HOST:
+            try:
+                parsed = urlsplit(reference.replace("\\", "/"))
+                if parsed.scheme in {"http", "https"}:
+                    if parsed.hostname != GITHUB_PAGES_HOST:
+                        continue
+                    reference_path = parsed.path
+                elif parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
                     continue
-                reference_path = parsed.path
-            elif parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
+                else:
+                    reference_path = parsed.path
+            except ValueError:
+                violations.append(f"{html_path}: malformed image reference")
                 continue
-            else:
-                reference_path = parsed.path
+
+            reference_path = unquote(reference_path).replace("\\", "/")
 
             if not reference_path.startswith(approved_base):
                 continue
 
-            image_path = (dist_root / Path(unquote(reference_path[len(approved_base) :]))).resolve()
+            image_path = (dist_root / Path(reference_path[len(approved_base) :])).resolve()
             try:
                 image_path.relative_to(resolved_dist_root)
             except ValueError:
@@ -121,13 +136,18 @@ def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
                 continue
 
             with image_path.open("rb") as image_file:
-                header = image_file.read(24)
+                header = image_file.read(PNG_HEADER_LENGTH)
             if header[:8] != PNG_SIGNATURE:
                 violations.append(f"{html_path}: local image {reference} is not a PNG")
                 continue
-            if len(header) < 24 or header[8:16] != b"\x00\x00\x00\rIHDR":
+            if len(header) < PNG_HEADER_LENGTH:
                 violations.append(
                     f"{html_path}: local image {reference} has a truncated PNG IHDR"
+                )
+                continue
+            if header[8:12] != PNG_IHDR_LENGTH or header[12:16] != b"IHDR":
+                violations.append(
+                    f"{html_path}: local image {reference} has an invalid PNG IHDR"
                 )
                 continue
 
