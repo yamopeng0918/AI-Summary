@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from urllib.parse import unquote, urlsplit
 
 
 SENSITIVE_PATTERNS = {
@@ -17,16 +18,34 @@ SENSITIVE_PATTERNS = {
     "private key": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
 }
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+EXPECTED_OG_IMAGE_DIMENSIONS = (1200, 630)
+GITHUB_PAGES_HOST = "yamopeng0918.github.io"
+
 
 class _HrefParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.hrefs: list[str] = []
+        self.image_references: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         for name, value in attrs:
             if name.lower() == "href" and value is not None:
                 self.hrefs.append(value.strip())
+
+        attributes = {
+            name.lower(): value.strip()
+            for name, value in attrs
+            if value is not None
+        }
+        if tag.lower() == "img" and (src := attributes.get("src")) is not None:
+            self.image_references.append(src)
+        if tag.lower() == "meta" and (content := attributes.get("content")) is not None:
+            if attributes.get("property", "").lower() == "og:image":
+                self.image_references.append(content)
+            if attributes.get("name", "").lower() == "twitter:image":
+                self.image_references.append(content)
 
 
 def scan_sensitive_files(paths: Iterable[Path]) -> list[str]:
@@ -52,6 +71,11 @@ def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
         return [f"{dist_root}: distribution directory is missing"]
 
     violations: list[str] = []
+    approved_base = "/" + base_path.strip("/")
+    if approved_base != "/":
+        approved_base += "/"
+    resolved_dist_root = dist_root.resolve()
+
     for html_path in sorted(dist_root.rglob("*.html")):
         parser = _HrefParser()
         parser.feed(html_path.read_text(encoding="utf-8", errors="replace"))
@@ -68,6 +92,54 @@ def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
             violations.append(
                 f"{html_path}: internal href {href} misses {base_path}"
             )
+
+        for reference in parser.image_references:
+            parsed = urlsplit(reference)
+            if parsed.scheme in {"http", "https"}:
+                if parsed.hostname != GITHUB_PAGES_HOST:
+                    continue
+                reference_path = parsed.path
+            elif parsed.scheme or parsed.netloc or not parsed.path.startswith("/"):
+                continue
+            else:
+                reference_path = parsed.path
+
+            if not reference_path.startswith(approved_base):
+                continue
+
+            image_path = (dist_root / Path(unquote(reference_path[len(approved_base) :]))).resolve()
+            try:
+                image_path.relative_to(resolved_dist_root)
+            except ValueError:
+                violations.append(
+                    f"{html_path}: local image {reference} escapes distribution directory"
+                )
+                continue
+
+            if not image_path.is_file():
+                violations.append(f"{html_path}: local image {reference} is missing")
+                continue
+
+            with image_path.open("rb") as image_file:
+                header = image_file.read(24)
+            if header[:8] != PNG_SIGNATURE:
+                violations.append(f"{html_path}: local image {reference} is not a PNG")
+                continue
+            if len(header) < 24 or header[8:16] != b"\x00\x00\x00\rIHDR":
+                violations.append(
+                    f"{html_path}: local image {reference} has a truncated PNG IHDR"
+                )
+                continue
+
+            dimensions = (
+                int.from_bytes(header[16:20], "big"),
+                int.from_bytes(header[20:24], "big"),
+            )
+            if dimensions != EXPECTED_OG_IMAGE_DIMENSIONS:
+                violations.append(
+                    f"{html_path}: local image {reference} must be 1200x630 PNG "
+                    f"(found {dimensions[0]}x{dimensions[1]})"
+                )
     return violations
 
 

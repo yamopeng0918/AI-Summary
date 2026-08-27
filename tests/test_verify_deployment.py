@@ -1,4 +1,5 @@
 from pathlib import Path
+import struct
 import subprocess
 
 import pytest
@@ -9,6 +10,14 @@ from scripts.verify_deployment import (
     tracked_paths,
     verify_generated_links,
 )
+
+
+def _png_header(width: int, height: int) -> bytes:
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + b"\x00\x00\x00\rIHDR"
+        + struct.pack(">II", width, height)
+    )
 
 
 def test_tracked_paths_supports_utf8_filenames(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,6 +159,91 @@ def test_generated_links_reports_a_missing_dist_directory(tmp_path: Path) -> Non
     assert verify_generated_links(missing, "/AI-Summary/") == [
         f"{missing}: distribution directory is missing"
     ]
+
+
+def test_generated_links_rejects_missing_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png is missing"
+    ]
+
+
+def test_generated_links_rejects_malformed_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        '<meta property="og:image" content="/AI-Summary/og/demo.png">',
+        encoding="utf-8",
+    )
+    image.write_bytes(b"not a PNG")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png is not a PNG"
+    ]
+
+
+def test_generated_links_rejects_wrong_sized_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        '<meta name="twitter:image" content="/AI-Summary/og/demo.png">',
+        encoding="utf-8",
+    )
+    image.write_bytes(_png_header(1200, 629))
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png must be 1200x630 PNG (found 1200x629)"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_with_truncated_ihdr(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x04\xb0")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png has a truncated PNG IHDR"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_path_traversal(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="/AI-Summary/../outside.png">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/../outside.png escapes distribution directory"
+    ]
+
+
+def test_generated_links_accepts_valid_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        '<img src="https://yamopeng0918.github.io/AI-Summary/og/demo.png">'
+        '<meta property="og:image" content="/AI-Summary/og/demo.png">'
+        '<meta name="twitter:image" content="/AI-Summary/og/demo.png">',
+        encoding="utf-8",
+    )
+    image.write_bytes(_png_header(1200, 630))
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
 
 
 @pytest.mark.parametrize(
