@@ -141,6 +141,45 @@ class _HrefParser(HTMLParser):
             self._current_anchor_href = None
 
 
+def _resolve_local_image_reference(
+    reference: str,
+    *,
+    approved_base: str,
+    dist_root: Path,
+    resolved_dist_root: Path,
+) -> tuple[Path | None, str]:
+    """Resolve a local image only after URL normalization and containment checks."""
+    try:
+        parsed = urlsplit(reference.replace("\\", "/"))
+        if parsed.scheme in {"http", "https"}:
+            if parsed.hostname != GITHUB_PAGES_HOST:
+                return None, "ignored"
+            reference_path = parsed.path
+        elif parsed.netloc:
+            if parsed.hostname != GITHUB_PAGES_HOST:
+                return None, "ignored"
+            reference_path = parsed.path
+        elif parsed.scheme or not parsed.path.startswith("/"):
+            return None, "ignored"
+        else:
+            reference_path = parsed.path
+    except ValueError:
+        return None, "malformed"
+
+    reference_path = unquote(reference_path).replace("\\", "/")
+    if not reference_path.startswith(approved_base):
+        return None, "outside-base"
+
+    try:
+        image_path = (
+            dist_root / Path(reference_path[len(approved_base) :])
+        ).resolve()
+        image_path.relative_to(resolved_dist_root)
+    except (OSError, ValueError):
+        return None, "escape"
+    return image_path, "local"
+
+
 def scan_sensitive_files(paths: Iterable[Path]) -> list[str]:
     """Return violations for tracked environment files and credential shapes."""
     violations: list[str] = []
@@ -187,40 +226,28 @@ def verify_generated_links(dist_root: Path, base_path: str) -> list[str]:
             )
 
         for reference in parser.image_references:
-            try:
-                parsed = urlsplit(reference.replace("\\", "/"))
-                if parsed.scheme in {"http", "https"}:
-                    if parsed.hostname != GITHUB_PAGES_HOST:
-                        continue
-                    reference_path = parsed.path
-                elif parsed.netloc:
-                    if parsed.hostname != GITHUB_PAGES_HOST:
-                        continue
-                    reference_path = parsed.path
-                elif parsed.scheme or not parsed.path.startswith("/"):
-                    continue
-                else:
-                    reference_path = parsed.path
-            except ValueError:
+            image_path, resolution = _resolve_local_image_reference(
+                reference,
+                approved_base=approved_base,
+                dist_root=dist_root,
+                resolved_dist_root=resolved_dist_root,
+            )
+            if resolution == "ignored":
+                continue
+            if resolution == "malformed":
                 violations.append(f"{html_path}: malformed image reference")
                 continue
-
-            reference_path = unquote(reference_path).replace("\\", "/")
-
-            if not reference_path.startswith(approved_base):
+            if resolution == "outside-base":
                 violations.append(
                     f"{html_path}: image reference {reference} misses {base_path}"
                 )
                 continue
-
-            image_path = (dist_root / Path(reference_path[len(approved_base) :])).resolve()
-            try:
-                image_path.relative_to(resolved_dist_root)
-            except ValueError:
+            if resolution == "escape":
                 violations.append(
                     f"{html_path}: local image {reference} escapes distribution directory"
                 )
                 continue
+            assert image_path is not None
 
             if not image_path.is_file():
                 violations.append(f"{html_path}: local image {reference} is missing")
@@ -275,6 +302,7 @@ def verify_generated_summary_artifacts(
     approved_base = "/" + base_path.replace("\\", "/").strip("/")
     if approved_base != "/":
         approved_base += "/"
+    resolved_dist_root = dist_root.resolve()
 
     summaries_root = dist_root / "summaries"
     detail_paths = (
@@ -423,8 +451,14 @@ def verify_generated_summary_artifacts(
     matched_card_sources: set[str] = set()
     for card_attrs, card_href, raw_tag in homepage_parser.card_images:
         source = card_attrs.get("src", "")
-        if source.startswith(approved_base):
-            image_path = dist_root / Path(unquote(source[len(approved_base) :]))
+        image_path, resolution = _resolve_local_image_reference(
+            source,
+            approved_base=approved_base,
+            dist_root=dist_root,
+            resolved_dist_root=resolved_dist_root,
+        )
+        if resolution == "local":
+            assert image_path is not None
             if not image_path.is_file():
                 violations.append(f"{homepage_path}: card image {source} is missing")
             else:
@@ -433,6 +467,12 @@ def verify_generated_summary_artifacts(
                     violations.append(
                         f"{homepage_path}: card image {source} {png_error}"
                     )
+        elif resolution == "escape":
+            violations.append(
+                f"{homepage_path}: card image {source} escapes distribution directory"
+            )
+        elif resolution == "malformed":
+            violations.append(f"{homepage_path}: card image {source} is malformed")
         else:
             violations.append(
                 f"{homepage_path}: card image {source} misses {base_path}"
@@ -487,16 +527,16 @@ def verify_generated_summary_artifacts(
     return violations
 
 
-def _png_scanline_lengths(
+def _png_scanline_runs(
     width: int,
     height: int,
     bits_per_pixel: int,
     interlace: int,
-) -> list[int]:
+) -> tuple[tuple[int, int], ...]:
     if interlace == 0:
-        return [((width * bits_per_pixel + 7) // 8)] * height
+        return (((width * bits_per_pixel + 7) // 8, height),)
 
-    lengths: list[int] = []
+    runs: list[tuple[int, int]] = []
     for x_start, y_start, x_step, y_step in (
         (0, 0, 8, 8),
         (4, 0, 8, 8),
@@ -511,8 +551,8 @@ def _png_scanline_lengths(
         if pass_width == 0 or pass_height == 0:
             continue
         row_bytes = (pass_width * bits_per_pixel + 7) // 8
-        lengths.extend([row_bytes] * pass_height)
-    return lengths
+        runs.append((row_bytes, pass_height))
+    return tuple(runs)
 
 
 def _validate_png(image_path: Path) -> tuple[tuple[int, int] | None, str | None]:
@@ -524,7 +564,7 @@ def _validate_png(image_path: Path) -> tuple[tuple[int, int] | None, str | None]
             return None, "is not a PNG"
 
         dimensions: tuple[int, int] | None = None
-        scanline_lengths: list[int] = []
+        scanline_runs: tuple[tuple[int, int], ...] = ()
         expected_decoded_bytes = 0
         decoded = bytearray()
         decompressor: zlib.Decompress | None = None
@@ -596,17 +636,21 @@ def _validate_png(image_path: Path) -> tuple[tuple[int, int] | None, str | None]
                     return dimensions, "has an invalid PNG IHDR"
                 dimensions = (width, height)
                 bits_per_pixel = PNG_COLOR_CHANNELS[color_type] * bit_depth
-                scanline_lengths = _png_scanline_lengths(
+                scanline_runs = _png_scanline_runs(
                     width,
                     height,
                     bits_per_pixel,
                     interlace,
                 )
-                expected_decoded_bytes = sum(
-                    1 + row_length for row_length in scanline_lengths
-                )
-                if expected_decoded_bytes > MAX_PNG_CHUNK_BYTES:
-                    return dimensions, "has oversized decoded PNG image data"
+                expected_decoded_bytes = 0
+                for row_bytes, row_count in scanline_runs:
+                    row_span = row_bytes + 1
+                    remaining_limit = (
+                        MAX_PNG_CHUNK_BYTES - expected_decoded_bytes
+                    )
+                    if row_count > remaining_limit // row_span:
+                        return dimensions, "has oversized decoded PNG image data"
+                    expected_decoded_bytes += row_span * row_count
             elif chunk_type == b"PLTE":
                 if seen_plte or seen_idat or chunk_length == 0 or chunk_length % 3 != 0:
                     return dimensions, "has an invalid PNG PLTE chunk"
@@ -672,10 +716,11 @@ def _validate_png(image_path: Path) -> tuple[tuple[int, int] | None, str | None]
         return dimensions, "has undecodable PNG image data"
 
     offset = 0
-    for row_length in scanline_lengths:
-        if decoded[offset] > 4:
-            return dimensions, "has an invalid PNG row filter"
-        offset += 1 + row_length
+    for row_bytes, row_count in scanline_runs:
+        for _ in range(row_count):
+            if decoded[offset] > 4:
+                return dimensions, "has an invalid PNG row filter"
+            offset += 1 + row_bytes
     return dimensions, None
 
 

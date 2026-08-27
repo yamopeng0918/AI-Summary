@@ -5,6 +5,8 @@ import zlib
 
 import pytest
 
+import scripts.verify_deployment as deployment
+
 from scripts.verify_deployment import (
     main,
     scan_sensitive_files,
@@ -356,6 +358,29 @@ def test_generated_links_rejects_referenced_og_image_with_invalid_ihdr_layout(
             + b"IDAT",
             "PNG chunk exceeds 16777216-byte limit",
         ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1, 1)
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00\x00")[:5])
+            + _png_chunk(b"tEXt", b"key\x00value")
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00\x00")[5:])
+            + _png_chunk(b"IEND"),
+            "PNG IDAT chunks must be consecutive",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1, 1)
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00"))
+            + _png_chunk(b"IEND"),
+            "has undecodable PNG image data",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1, 1)
+            + _png_chunk(b"IDAT", zlib.compress(b"\x05\x00"))
+            + _png_chunk(b"IEND"),
+            "has an invalid PNG row filter",
+        ),
     ],
     ids=[
         "missing-idat",
@@ -367,6 +392,9 @@ def test_generated_links_rejects_referenced_og_image_with_invalid_ihdr_layout(
         "data-after-iend",
         "ihdr-not-first",
         "oversized-chunk",
+        "non-consecutive-idat",
+        "incorrect-scanline-length",
+        "invalid-row-filter",
     ],
 )
 def test_generated_links_rejects_incomplete_or_undecodable_png_structure(
@@ -383,6 +411,46 @@ def test_generated_links_rejects_incomplete_or_undecodable_png_structure(
 
     assert verify_generated_links(tmp_path, "/AI-Summary/") == [
         f"{detail}: local image /AI-Summary/og/demo.png {violation}"
+    ]
+
+
+def test_png_scanline_runs_remain_compact_for_maximum_dimensions() -> None:
+    from scripts.verify_deployment import _png_scanline_runs
+
+    assert _png_scanline_runs(1, 0xFFFFFFFF, 8, 0) == ((1, 0xFFFFFFFF),)
+    adam7_runs = _png_scanline_runs(0xFFFFFFFF, 0xFFFFFFFF, 32, 1)
+    assert 1 <= len(adam7_runs) <= 7
+    assert all(row_bytes > 0 and row_count > 0 for row_bytes, row_count in adam7_runs)
+
+
+def test_generated_links_rejects_maximum_height_before_scanline_allocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + _png_ihdr(1, 0xFFFFFFFF)
+        + _png_chunk(b"IEND")
+    )
+
+    def fail_materialized_scanline_list(*_args: object) -> list[int]:
+        pytest.fail("attempted to materialize one entry per PNG scanline")
+
+    monkeypatch.setattr(
+        deployment,
+        "_png_scanline_lengths",
+        fail_materialized_scanline_list,
+        raising=False,
+    )
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png "
+        "has oversized decoded PNG image data"
     ]
 
 
@@ -556,6 +624,92 @@ def test_summary_artifacts_accept_escaped_https_metadata_and_resolved_card_image
     image.write_bytes(_png(1200, 630))
 
     assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == []
+
+
+@pytest.mark.parametrize(
+    "image_src",
+    [
+        "/AI-Summary/%2e%2e/outside.png",
+        "/AI-Summary/%2Foutside.png",
+    ],
+    ids=["encoded-traversal", "encoded-absolute-path"],
+)
+def test_summary_artifacts_reject_outside_card_path_before_filesystem_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    image_src: str,
+) -> None:
+    dist_root = tmp_path / "dist"
+    detail = dist_root / "summaries" / "demo" / "index.html"
+    homepage = dist_root / "index.html"
+    outside = tmp_path / "outside.png"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    homepage.write_text(
+        _summary_card_artifact_html(image_src=image_src),
+        encoding="utf-8",
+    )
+    outside.write_bytes(_png(1200, 630))
+
+    resolved_dist_root = dist_root.resolve()
+    original_is_file = Path.is_file
+
+    def guarded_is_file(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside path was probed: {path.resolve()}")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+
+    assert verify_generated_summary_artifacts(dist_root, "/AI-Summary/") == [
+        f"{homepage}: card image {image_src} escapes distribution directory",
+        f"{homepage}: card image {image_src} does not match a published summary",
+        f"{detail}: published summary has no matching homepage card image",
+    ]
+
+
+def test_summary_artifacts_reject_symlink_escape_before_filesystem_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    detail = dist_root / "summaries" / "demo" / "index.html"
+    homepage = dist_root / "index.html"
+    outside = tmp_path / "outside.png"
+    symlink = dist_root / "og" / "escape.png"
+    detail.parent.mkdir(parents=True)
+    symlink.parent.mkdir()
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    image_src = "/AI-Summary/og/escape.png"
+    homepage.write_text(
+        _summary_card_artifact_html(image_src=image_src),
+        encoding="utf-8",
+    )
+    outside.write_bytes(_png(1200, 630))
+    try:
+        symlink.symlink_to(outside)
+    except (NotImplementedError, OSError) as error:
+        pytest.skip(f"symlink creation is not supported: {error}")
+
+    resolved_dist_root = dist_root.resolve()
+    original_is_file = Path.is_file
+
+    def guarded_is_file(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside path was probed: {path.resolve()}")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+
+    assert verify_generated_summary_artifacts(dist_root, "/AI-Summary/") == [
+        f"{homepage}: card image {image_src} escapes distribution directory",
+        f"{homepage}: card image {image_src} does not match a published summary",
+        f"{detail}: published summary has no matching homepage card image",
+    ]
 
 
 def test_summary_artifacts_reject_an_unescaped_metadata_attribute(tmp_path: Path) -> None:
