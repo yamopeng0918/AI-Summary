@@ -338,9 +338,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ### 首頁編輯雜誌風與完整 OG 縮圖（2026-08-28）
 
-- Task 1（提交 `05fb6af..e34fe29`）已依核准規格完成 A「編輯雜誌風」正式首頁：最新摘要使用精選版型，其他摘要在桌面／平板／手機分別呈現三／二／一欄。
-- 首頁所有 OG 圖固定為 `1200:630` 展示框並使用 `object-fit: contain`，完整呈現且不裁切、不拉伸；Edge 驗收確認桌面精選區為雙欄、小尺寸堆疊，且無水平溢出。
-- Edge 本機驗收確認搜尋、分類篩選、日期排序、無結果狀態、鍵盤焦點與版型互動；1280/800/390 視窗分別確認 3/2/1 欄，鍵盤焦點可見 3px brick-red 外框。圖片失敗 fallback 僅有 source-contract 與 code review 證據，未在 Edge 獨立模擬。
-- 圖片失敗 fallback 已有 source-contract 覆蓋（包含 listener 綁定前 `complete`/`naturalWidth=0` 與後續 `error` 事件）；尚未在 Edge 獨立模擬 fallback，故不宣稱已完成瀏覽器 fallback 模擬。所有卡片圖片維持 `loading="lazy"`，此為使用者明確核准且符合既有 deployment verifier。
-- 最終 controller 驗證（HEAD `e34fe29`）：`npm.cmd test` 為 6 個檔案、57 tests passed；`npm.cmd run build:pages` 為 Astro check 0 errors/warnings/hints、8 pages，deployment verifier exit 0；`git diff --check 05fb6af..HEAD` clean。瀏覽器互動驗收亦確認精選版型、圖片比例約 1200:630、搜尋／分類／最舊排序／無結果流程正確；倒置的無結果狀態已由提交 `7b170f5` 以 TDD 修正。
+- Task 1 最終程式範圍為 `05fb6af..058b386`，head `058b386`（`fix: align editorial cards with source design`）：最新摘要使用精選版型，其他摘要在桌面／平板／手機分別呈現三／二／一欄，既有搜尋、分類、日期排序與無結果流程維持同一組摘要節點。
+- 首頁所有 OG 圖固定為 `1200:630` 展示框並使用 `object-fit: contain`，完整呈現且不裁切、不拉伸。每張一般及精選卡片均可見來源名稱：有作者時使用作者，否則集中對應為 `YouTube`、`社群貼文` 或 `公開網頁`；圖片 fallback 使用相同標示。
+- Edge 本機驗收：1280 視窗 7/7 卡片均可見來源，精選文字在第 1 欄、圖片在第 2 欄，三欄網格且無溢出；390 視窗精選文字為第 1 列（top 624）、圖片為第 2 列（top 1064），`Bluesky` 來源可見、圖片維持 contain 且無溢出。搜尋、分類篩選、日期排序、無結果狀態與鍵盤焦點驗收維持通過。
+- 圖片失敗 fallback 保留 source-contract 覆蓋（listener 綁定前 `complete`/`naturalWidth=0` 與後續 `error` 事件）；尚未在 Edge 獨立模擬 failed-image 路徑，故不宣稱已完成該瀏覽器情境。所有卡片圖片維持 `loading="lazy"`，此為使用者明確核准且符合既有 deployment verifier。
+- 最終驗證（HEAD `058b386`）：focused `npm.cmd test -- src/lib/summaries.test.ts src/lib/card-markup.test.ts` 為 2 個檔案、39 tests passed；完整 `npm.cmd test` 為 6 個檔案、63 tests passed；`npm.cmd run build:pages` 為 Astro check 0 errors/warnings/hints、8 pages，deployment verifier exit 0；`git diff --check` clean（僅 LF/CRLF 工作副本警告）。
 - 本次僅完成本機實作與驗證；未執行 GitHub push、Pages workflow 或遠端首頁視覺驗收，相關項目不得標記為本次完成。

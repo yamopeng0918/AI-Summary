@@ -156,6 +156,8 @@
 
 - [x] 將最新已發布摘要呈現為編輯雜誌風精選卡片，並維持所有摘要共用既有搜尋、分類及排序流程。
 - [x] 首頁 OG 圖使用固定 `1200:630` 展示框與 `object-fit: contain`，不裁切、不拉伸。
-- [x] 完成三／二／一欄響應式排版、可見鍵盤焦點與圖片失敗占位；圖片 fallback 已由 source-contract 測試覆蓋，Edge fallback 獨立模擬仍未執行。
-- [x] 通過相關 Vitest（focused 5 passed）、完整前端測試（6 files, 57 passed）、Astro check、正式 `build:pages`（8 pages、deployment verifier exit 0）及本機 Edge 瀏覽器驗收；所有卡片圖片 `loading="lazy"` 經使用者核准保留。
+- [x] 所有一般與精選卡片可見來源名稱；優先顯示作者，否則以 `YouTube`、`社群貼文`、`公開網頁` 顯示，並與圖片 fallback 共用同一個標示。
+- [x] 完成三／二／一欄響應式排版與可見鍵盤焦點；Edge 1280 確認 7/7 卡片可見來源、精選文字左／圖片右，390 確認精選文字第 1 列、圖片第 2 列且 `Bluesky` 來源可見，均無溢出。
+- [x] 通過相關 Vitest（focused 2 files, 39 passed；完整 6 files, 63 passed）、Astro check、正式 `build:pages`（8 pages、deployment verifier exit 0）及本機 Edge 瀏覽器驗收；程式 head `058b386`，所有卡片圖片 `loading="lazy"` 經使用者核准保留。
+- [x] 圖片 fallback 保留既有 source-contract 覆蓋；Edge failed-image 獨立模擬尚未執行，不宣稱已完成該瀏覽器情境。
 - [ ] 執行本次 Task 1 的 GitHub push、Pages workflow 與遠端首頁視覺驗收。
