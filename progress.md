@@ -63,12 +63,20 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
 | YouTube 本機工具與手動驗收 | 2026-08-26 已使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、`gemini-3.6-flash` 與使用者核准的有字幕／無字幕公開影片完成兩案驗收；兩案均 exit 0、到達 `complete`、通過資料驗證，且本機媒體與 Gemini Files 均為 0 |
-| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
-| OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併並 push 至 GitHub `master`；遠端 Pages deployment 尚未完成獨立驗收 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；run `33134830540` 已成功部署 commit `c17e3ae`，並通過 workflow 內 smoke 與獨立公開 OG 驗收 |
+| OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併、push 並完成 GitHub Pages 遠端驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-28：Pages workflow 與公開 OG 圖遠端驗收
+
+- `master` push 已自動觸發 Pages workflow；commit `c17e3aea90f874a1e135d24b8f9d979d1c9ca50e` 對應 run [`33134830540`](https://github.com/yamopeng0918/AI-Summary/actions/runs/33134830540)，GitHub API 回報 `status=completed`、`conclusion=success`。前一個合併提交 `8891ae0` 的 run `33134643404` 亦為 success。
+- 重新執行既有 `scripts/smoke_pages.py`，公開首頁與 demo 詳情頁均可讀取，exit 0。
+- 另以獨立 HTTP 驗收逐筆檢查全部 `6` 筆 published 摘要：首頁 HTTP 200；`6/6` 詳情頁 HTTP 200；`6/6` OG PNG HTTP 200、`Content-Type: image/png`、PNG signature 有效且尺寸皆為 `1200×630`。
+- 首頁 `6/6` 卡片圖片路徑均指向對應 `/AI-Summary/og/<encoded-id>.png`；每個詳情頁的 `og:image` 與 `twitter:image` 均為同一張絕對 HTTPS 圖片 URL，且 `og:image:width=1200`、`og:image:height=630`。
+- 本次只讀取公開 GitHub API 與 Pages 資產，未使用憑證或輸出頁面原文；遠端 OG 功能驗收狀態由未驗證更新為完成。
 
 ### 2026-08-28：OG 圖合併與 GitHub 同步
 
