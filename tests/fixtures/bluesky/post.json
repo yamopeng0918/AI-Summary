@@ -1,0 +1,58 @@
+{
+  "uri": "at://did:plc:alice/app.bsky.feed.post/3social",
+  "cid": "bafyreipublicpost",
+  "author": {
+    "did": "did:plc:alice",
+    "handle": "alice.example",
+    "displayName": "Alice"
+  },
+  "record": {
+    "$type": "app.bsky.feed.post",
+    "createdAt": "2026-08-28T01:02:03Z",
+    "text": "公開貼文 #AI"
+  },
+  "embed": {
+    "$type": "app.bsky.embed.recordWithMedia#view",
+    "media": {
+      "$type": "app.bsky.embed.images#view",
+      "images": [
+        {
+          "alt": "架構圖",
+          "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:alice/image@jpeg",
+          "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:alice/image@jpeg"
+        },
+        {
+          "alt": " 架構圖 ",
+          "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:alice/duplicate@jpeg",
+          "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:alice/duplicate@jpeg"
+        },
+        {
+          "alt": "   ",
+          "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:alice/blank@jpeg",
+          "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:alice/blank@jpeg"
+        }
+      ],
+      "external": {
+        "uri": "https://example.com/ai-digest",
+        "title": "AI Digest 文件",
+        "description": "不得擷取外部連結正文"
+      }
+    },
+    "record": {
+      "$type": "app.bsky.embed.record#view",
+      "record": {
+        "$type": "app.bsky.embed.record#viewRecord",
+        "uri": "at://did:plc:quoted/app.bsky.feed.post/3quoted",
+        "author": {
+          "did": "did:plc:quoted",
+          "handle": "quoted.example"
+        },
+        "value": {
+          "$type": "app.bsky.feed.post",
+          "createdAt": "2026-08-27T00:00:00Z",
+          "text": "引用貼文不得出現"
+        }
+      }
+    }
+  }
+}
