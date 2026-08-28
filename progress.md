@@ -58,7 +58,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開來源受付費牆、登入或反爬蟲限制 | 不嘗試繞過，回報明確的結構化錯誤 |
 | 真實網頁與 Gemini 驗收 | 已以核准文章與預設 `gemini-3.6-flash` 通過；SDK 仍輸出 Models API 的 AFC 建議警告，但不影響 structured-output 結果 |
 | 正式分類器 artifact | 生產流程只載入 repository 控制的 joblib 與 manifest；缺檔、版本或分類順序不符時 fail closed，沒有 `FixedClassifier` fallback |
-| Python CLI `PATH` | 目前 user-site Scripts 目錄未在 `PATH`；建議啟用 `.venv`，或明確加入對應 Scripts 目錄 |
+| Python CLI `PATH` | CLI 已安裝於 `.venv\Scripts`；目前 PowerShell 可透過直接執行 `.\.venv\Scripts\ai-digest.exe`，或將該目錄加入目前 process `PATH` 後使用 `ai-digest`。尚未宣稱已持久修改互動使用者的 `PATH` |
 | npm 安裝 script | `esbuild@0.28.2` 與 `esbuild@0.25.12` 仍有未核准安裝 script 通知；本里程碑未授權它們 |
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
@@ -68,6 +68,12 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-26：CLI 重複 URL 與記錄查詢診斷
+
+- 操作員以既有 TechOrange canonical URL 執行 `ai-digest add` 時收到 `DUPLICATE_URL`；確認這是規格要求的重複建立保護，既有記錄未被覆寫或刪除。
+- `ai-digest show` 的 `RECORD_NOT_FOUND` 並非資料遺失：輸入值包含 `ai-digest list` 輸出的整列 ID、標題、分類與狀態，而 `show` 只接受第一欄的精確記錄 ID。
+- 已用精確 ID `20260814-always-be-coding-工程師面試必讀-techorange-科技報橘-7374d398` 實際執行 `ai-digest show`，exit 0 並成功載入完整 JSON。此項屬操作診斷，未修改 CLI 行為、資料或 `todo.md` 完成狀態。
 
 ### 2026-08-26：Windows CLI PATH 修正
 
