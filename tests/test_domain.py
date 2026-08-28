@@ -73,6 +73,8 @@ def test_summary_and_extracted_article_accept_social_source_type() -> None:
 
     assert article.source_type == "social"
     assert record.source_type == "social"
+    assert article.model_dump(mode="json", by_alias=True)["sourceType"] == "social"
+    assert record.model_dump(mode="json", by_alias=True)["sourceType"] == "social"
 
 
 def test_summary_record_rejects_two_key_points() -> None:
