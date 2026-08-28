@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：Bluesky 公開單篇貼文的本機實作、真實 AppView 與付費摘要驗收已完成；push、Pages 部署與遠端驗收進行中
+> 目前階段：Bluesky 公開單篇貼文的本機實作、真實 AppView、付費摘要、GitHub push、Pages 部署與公開遠端驗收均已完成
 >
-> 下次續作：將真實 Bluesky 摘要與驗收記錄推送至 GitHub，監看 Pages workflow，並驗證公開列表、搜尋、詳情、來源連結及 OG image；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：依 MVP 剩餘待辦決定是否修正 Windows CP950 的 CLI 輸出相容性，或整理核心 MVP 最終交付；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -70,6 +70,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-28：Bluesky GitHub Pages 遠端驗收
+
+- 真實 Bluesky 摘要與本機驗收紀錄已由 commit `5189f96d07984a6774de0134d33b3c51fde16ab1` push 至 `origin/master`，觸發 GitHub Actions `Deploy to GitHub Pages` run [`33171319697`](https://github.com/yamopeng0918/AI-Summary/actions/runs/33171319697)；GitHub API 回報 `status=completed`、`conclusion=success`。
+- 既有 `scripts/smoke_pages.py` 對公開站點與新記錄 `20260828-bluesky-bsky-app-的-bluesky-貼文-5f8aee85` 執行有限重試驗收並 exit `0`。
+- 獨立公開內容檢查：首頁、Bluesky 詳情頁與 OG PNG 均 HTTP `200`；OG `Content-Type` 為 `image/png`、PNG signature 正確、尺寸為 `1200×630`。
+- 公開首頁包含新記錄 ID、搜尋控制與序列化的 `sourceType: social` 資料；詳情頁包含 Bluesky 標題、DID canonical 官方來源連結、正確 OG URL、`og:image` 1200／630 metadata 與 `twitter:image`。
+- 至此 Bluesky MVP 的 URL→AppView→付費摘要→分類→Schema 驗證→JSON 保存→GitHub Pages 列表／搜尋資料→詳情→來源連結→OG image 已完成真實端到端驗收。回覆、登入或私人內容、引用貼文展開與討論串仍明確不在核准範圍。
 
 ### 2026-08-28：Bluesky 真實 AppView 與付費摘要驗收
 

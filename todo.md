@@ -107,9 +107,9 @@
 - [x] 完成 Bluesky 本機 CLI、Schema／儲存與 Astro 搜尋／排序／OG 社群標籤的回歸驗證（Python `601 passed, 2 skipped, 1 warning`；Vitest `52 passed`；兩種 Astro build 均 0 diagnostics／7 pages）。
 - [x] 使用者核准真實驗收後，以 Bluesky 官方帳號穩定公開、非回覆貼文執行一次 AppView 擷取驗收。
 - [x] 依明確授權對核准 Bluesky 貼文執行一次付費摘要，並驗證 DID canonical URL、`sourceType: social` 與保存 JSON。
-- [ ] 取得明確授權後，提交 Bluesky 驗收記錄並 push 至遠端。
-- [ ] 取得明確授權後，監看 Pages workflow 並驗證公開列表、搜尋、詳情、來源連結與 OG image。
-- [ ] 以使用者核准的真實公開單篇貼文驗收。
+- [x] 依明確授權提交 Bluesky 摘要與驗收記錄，並 push 至 `origin/master`（commit `5189f96`）。
+- [x] 監看 Pages workflow run `33171319697` 成功，並驗證公開列表／搜尋資料、詳情、來源連結與 `1200×630` OG image。
+- [x] 以使用者核准的真實公開單篇 Bluesky 貼文完成端到端驗收。
 
 ### 內容管理與部署
 
