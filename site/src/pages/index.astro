@@ -44,29 +44,40 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
       <>
         <p class="empty-state" id="no-results" role="status" hidden>找不到符合條件的摘要。</p>
         <section class="summary-grid" id="summary-list" aria-label="摘要列表">
-          {summaries.map((record) => (
-            <article class="summary-card" data-summary-card={record.id}>
-              <a href={summaryPath(baseUrl, record.id)} aria-label={`閱讀摘要：${record.title}`}>
-                <img
-                  class="summary-card-image"
-                  src={ogImagePath(baseUrl, record.id)}
-                  alt={record.title}
-                  width="1200"
-                  height="630"
-                  loading="lazy"
-                  decoding="async"
-                />
+          {summaries.map((record, index) => (
+            <article
+              class:list={['summary-card', index === 0 && 'summary-card--featured']}
+              data-summary-card={record.id}
+            >
+              <a class="summary-card-link" href={summaryPath(baseUrl, record.id)} aria-label={`閱讀摘要：${record.title}`}>
+                <div class="summary-card-image-frame">
+                  <span class="summary-card-image-fallback" aria-hidden="true">
+                    {record.author ?? (record.sourceType === 'youtube' ? 'YouTube' : record.sourceType === 'social' ? '社群貼文' : '公開網頁')}
+                  </span>
+                  <img
+                    class="summary-card-image"
+                    src={ogImagePath(baseUrl, record.id)}
+                    alt={record.title}
+                    width="1200"
+                    height="630"
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                  />
+                </div>
+                <div class="summary-card-content">
+                  {index === 0 && <p class="featured-label">編輯精選</p>}
+                  <div class="card-meta">
+                    <span>{record.category}</span>
+                    <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
+                  </div>
+                  <h2>{record.title}</h2>
+                  <p class="card-summary">{record.summary}</p>
+                  <ul class="tag-list" aria-label="標籤">
+                    {record.tags.map((tag) => <li>{tag}</li>)}
+                  </ul>
+                  <span class="card-cta">閱讀完整摘要<span aria-hidden="true"> →</span></span>
+                </div>
               </a>
-              <div class="card-meta">
-                <span>{record.category}</span>
-                <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
-              </div>
-              <h2><a href={summaryPath(baseUrl, record.id)}>{record.title}</a></h2>
-              <p>{record.summary}</p>
-              <ul class="tag-list" aria-label="標籤">
-                {record.tags.map((tag) => <li>{tag}</li>)}
-              </ul>
-              <a class="card-link" href={summaryPath(baseUrl, record.id)}>閱讀完整摘要<span aria-hidden="true"> →</span></a>
             </article>
           ))}
         </section>

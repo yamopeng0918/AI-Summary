@@ -5,25 +5,40 @@ import { describe, expect, it } from 'vitest';
 const homepageSource = readFileSync(new URL('../pages/index.astro', import.meta.url), 'utf8');
 const globalStyles = readFileSync(new URL('../styles/global.css', import.meta.url), 'utf8');
 
-describe('summary card markup', () => {
-  it('renders a linked, lazy-loaded OG image for each summary', () => {
+describe('editorial homepage cards', () => {
+  it('marks only the newest published record as the featured card', () => {
+    expect(homepageSource).toContain('summaries.map((record, index) =>');
+    expect(homepageSource).toContain("index === 0 && 'summary-card--featured'");
+    expect(homepageSource).toContain('data-summary-card={record.id}');
+  });
+
+  it('renders one keyboard-focusable card link with a labelled OG image', () => {
     for (const markup of [
       "import { ogImagePath, summaryPath } from '../lib/paths';",
+      'class="summary-card-link"',
       'href={summaryPath(baseUrl, record.id)}',
       'src={ogImagePath(baseUrl, record.id)}',
       'alt={record.title}',
       'width="1200"',
       'height="630"',
-      'loading="lazy"',
+      'loading={index === 0 ? \'eager\' : \'lazy\'}',
       'decoding="async"',
+      'class="summary-card-image-fallback"',
     ]) {
       expect(homepageSource).toContain(markup);
     }
   });
 
-  it('sizes card images to their stable OG aspect ratio', () => {
-    expect(globalStyles).toMatch(/\.summary-card-image\s*\{[^}]*aspect-ratio:\s*1200\s*\/\s*630[^}]*\}/);
-    expect(globalStyles).toMatch(/\.summary-card-image\s*\{[^}]*object-fit:\s*cover[^}]*\}/);
-    expect(globalStyles).toMatch(/\.summary-card-image\s*\{[^}]*width:\s*100%[^}]*\}/);
+  it('contains OG images without cropping or distortion', () => {
+    expect(globalStyles).toMatch(/\.summary-card-image-frame\s*\{[^}]*aspect-ratio:\s*1200\s*\/\s*630[^}]*\}/);
+    expect(globalStyles).toMatch(/\.summary-card-image\s*\{[^}]*height:\s*100%[^}]*object-fit:\s*contain[^}]*width:\s*100%[^}]*\}/);
+    expect(globalStyles).not.toMatch(/\.summary-card-image\s*\{[^}]*object-fit:\s*cover[^}]*\}/);
+  });
+
+  it('defines featured, three-column, tablet, and mobile layouts', () => {
+    expect(globalStyles).toMatch(/\.summary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)[^}]*\}/);
+    expect(globalStyles).toMatch(/\.summary-card--featured\s*\{[^}]*grid-column:\s*1\s*\/\s*-1[^}]*\}/);
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*56rem\)[\s\S]*?\.summary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*42rem\)[\s\S]*?\.summary-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
   });
 });
