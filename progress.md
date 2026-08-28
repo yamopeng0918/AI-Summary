@@ -64,11 +64,18 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
 | YouTube 本機工具與手動驗收 | 2026-08-26 已使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、`gemini-3.6-flash` 與使用者核准的有字幕／無字幕公開影片完成兩案驗收；兩案均 exit 0、到達 `complete`、通過資料驗證，且本機媒體與 Gemini Files 均為 0 |
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
-| OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。本次 OG 變更只完成本機驗證，尚未 push 或遠端部署 |
+| OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併並 push 至 GitHub `master`；遠端 Pages deployment 尚未完成獨立驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-28：OG 圖合併與 GitHub 同步
+
+- `feature/summary-og-images` 已以 merge commit `8891ae0` 合併至本機 `master`；合併衝突只涉及 `progress.md`，已同時保留 2026-08-26 CLI 診斷與 2026-08-27 OG 驗收紀錄。四個既有使用者未追蹤檔案未被加入、修改或刪除。
+- 合併後重新執行完整 gates：Python `501 passed, 2 skipped, 1 warning`（兩個 skip 為目前 Windows 帳號無 symlink 建立權限，warning 為既有 `google.genai` deprecation）；Vitest `47 passed`；Astro check `17 files`、`0 errors / 0 warnings / 0 hints`；Pages build `7 pages` 並生成 `6` 張 OG PNG；embedded 與獨立 tracked／dist verifier、`git diff --check` 均 exit `0`。
+- `master` 已 push 至 GitHub，重新 fetch 後確認本機 `HEAD` 與 `origin/master` 皆為 `8891ae0f236bf1a58024123c37a824d1d14d01b5`。第一次 push 已在遠端完成但本機未收到結束回應，第二次重試因此收到 remote ref 已前進的拒絕；fetch 後確認沒有分歧或資料遺失。
+- 尚未對此次 push 觸發的 GitHub Actions／Pages 結果及公開 OG 圖 URL 執行獨立遠端驗收，因此不得宣稱遠端部署已通過；本機建置與 GitHub repository 同步已完成。
 
 ### 2026-08-27：每筆摘要 OG PNG 最終驗收
 
