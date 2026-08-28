@@ -151,3 +151,11 @@
 - [x] Provider-aware CLI composition: Gemini is the default; OpenAI is explicit; only the selected provider key is required; there is no automatic fallback; `list`, `show`, `archive`, and `publish` are key-free.
 - [x] Automated provider configuration coverage completed; the full Python suite passed 132 tests.
 - [x] Migrated the Gemini default to stable `gemini-3.6-flash`; full Python automation passed 133 tests and the user-approved live acceptance completed on 2026-08-14.
+
+## 首頁編輯雜誌風與完整 OG 縮圖（2026-08-28）
+
+- [x] 將最新已發布摘要呈現為編輯雜誌風精選卡片，並維持所有摘要共用既有搜尋、分類及排序流程。
+- [x] 首頁 OG 圖使用固定 `1200:630` 展示框與 `object-fit: contain`，不裁切、不拉伸。
+- [x] 完成三／二／一欄響應式排版、可見鍵盤焦點與圖片失敗占位；圖片 fallback 已由 source-contract 測試覆蓋，Edge fallback 獨立模擬仍未執行。
+- [x] 通過相關 Vitest（focused 5 passed）、完整前端測試（6 files, 57 passed）、Astro check、正式 `build:pages`（8 pages、deployment verifier exit 0）及本機 Edge 瀏覽器驗收；所有卡片圖片 `loading="lazy"` 經使用者核准保留。
+- [ ] 執行本次 Task 1 的 GitHub push、Pages workflow 與遠端首頁視覺驗收。
