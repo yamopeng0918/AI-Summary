@@ -342,5 +342,5 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 首頁所有 OG 圖固定為 `1200:630` 展示框並使用 `object-fit: contain`，完整呈現且不裁切、不拉伸；Edge 驗收確認桌面精選區為雙欄、小尺寸堆疊，且無水平溢出。
 - Edge 本機驗收確認搜尋、分類篩選、日期排序、無結果狀態、鍵盤焦點與版型互動；1280/800/390 視窗分別確認 3/2/1 欄，鍵盤焦點可見 3px brick-red 外框。圖片失敗 fallback 僅有 source-contract 與 code review 證據，未在 Edge 獨立模擬。
 - 圖片失敗 fallback 已有 source-contract 覆蓋（包含 listener 綁定前 `complete`/`naturalWidth=0` 與後續 `error` 事件）；尚未在 Edge 獨立模擬 fallback，故不宣稱已完成瀏覽器 fallback 模擬。所有卡片圖片維持 `loading="lazy"`，此為使用者明確核准且符合既有 deployment verifier。
-- 最終 controller 驗證（HEAD `e34fe29`）：`npm.cmd test` 為 6 個檔案、57 tests passed；`npm.cmd run build:pages` 為 Astro check 0 errors/warnings/hints、8 pages，deployment verifier exit 0；`git diff --check 05fb6af..HEAD` clean；工作樹 clean。瀏覽器互動驗收亦確認精選版型、圖片比例約 1200:630、搜尋／分類／最舊排序／無結果流程正確；倒置的無結果狀態已由提交 `7b170f5` 以 TDD 修正。
+- 最終 controller 驗證（HEAD `e34fe29`）：`npm.cmd test` 為 6 個檔案、57 tests passed；`npm.cmd run build:pages` 為 Astro check 0 errors/warnings/hints、8 pages，deployment verifier exit 0；`git diff --check 05fb6af..HEAD` clean。瀏覽器互動驗收亦確認精選版型、圖片比例約 1200:630、搜尋／分類／最舊排序／無結果流程正確；倒置的無結果狀態已由提交 `7b170f5` 以 TDD 修正。
 - 本次僅完成本機實作與驗證；未執行 GitHub push、Pages workflow 或遠端首頁視覺驗收，相關項目不得標記為本次完成。
