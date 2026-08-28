@@ -25,6 +25,16 @@ export interface SummaryCardContainer<Card extends SummaryCard> {
   append(...nodes: Card[]): void;
 }
 
+export function sourceLabel(record: Pick<SummaryRecord, 'author' | 'sourceType'>): string {
+  if (record.author) return record.author;
+
+  return {
+    youtube: 'YouTube',
+    social: '社群貼文',
+    web: '公開網頁',
+  }[record.sourceType];
+}
+
 export function getPublishedSummaries(records: SummaryRecord[]): SummaryRecord[] {
   return records.filter((record) => record.status === 'published');
 }

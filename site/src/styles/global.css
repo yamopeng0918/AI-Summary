@@ -69,8 +69,8 @@ input, select { background: #fffdf8; border: 1px solid #8c968f; border-radius: .
   .summary-card--featured .summary-card-link { grid-template-columns: 1fr; }
   .summary-card--featured .summary-card-image-frame,
   .summary-card--featured .summary-card-content { grid-column: 1; }
-  .summary-card--featured .summary-card-image-frame { grid-row: 1; }
-  .summary-card--featured .summary-card-content { grid-row: 2; }
+  .summary-card--featured .summary-card-image-frame { grid-row: 2; }
+  .summary-card--featured .summary-card-content { grid-row: 1; }
 }
 
 @media (max-width: 42rem) {

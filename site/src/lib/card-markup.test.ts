@@ -30,6 +30,13 @@ describe('editorial homepage cards', () => {
     expect(homepageSource).not.toContain("loading={index === 0 ? 'eager' : 'lazy'}");
   });
 
+  it('uses one source label for each card metadata row and image fallback', () => {
+    expect(homepageSource).toContain("import { serializeSummaryRecords, sourceLabel } from '../lib/summaries';");
+    expect(homepageSource).toContain('const source = sourceLabel(record);');
+    expect(homepageSource).toMatch(/class="summary-card-image-fallback"[^>]*>\s*\{source\}/);
+    expect(homepageSource).toMatch(/class="card-meta"[\s\S]*?<span>\{source\}<\/span>/);
+  });
+
   it('reveals the source fallback when an OG image fails', () => {
     expect(homepageSource).toContain("querySelectorAll<HTMLImageElement>('.summary-card-image')");
     expect(homepageSource).toContain('image.complete && image.naturalWidth === 0');
@@ -49,5 +56,12 @@ describe('editorial homepage cards', () => {
     expect(globalStyles).toMatch(/\.summary-card--featured\s*\{[^}]*grid-column:\s*1\s*\/\s*-1[^}]*\}/);
     expect(globalStyles).toMatch(/@media\s*\(max-width:\s*56rem\)[\s\S]*?\.summary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
     expect(globalStyles).toMatch(/@media\s*\(max-width:\s*42rem\)[\s\S]*?\.summary-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
+  });
+
+  it('stacks featured content before its image on tablet and mobile', () => {
+    const tabletStyles = globalStyles.match(/@media\s*\(max-width:\s*56rem\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(tabletStyles).toMatch(/\.summary-card--featured \.summary-card-image-frame[^}]*grid-row:\s*2/);
+    expect(tabletStyles).toMatch(/\.summary-card--featured \.summary-card-content[^}]*grid-row:\s*1/);
   });
 });

@@ -6,6 +6,7 @@ import {
   filterAndSortSummaries,
   getPublishedSummaries,
   reorderSummaryCards,
+  sourceLabel,
   shouldShowNoResults,
   serializeSummaryRecords,
 } from './summaries';
@@ -57,6 +58,15 @@ const socialRecord = {
 } as const;
 
 describe('summary data', () => {
+  it.each([
+    ['author', { author: 'Editorial Desk', sourceType: 'web' }, 'Editorial Desk'],
+    ['YouTube', { author: null, sourceType: 'youtube' }, 'YouTube'],
+    ['social post', { author: null, sourceType: 'social' }, '社群貼文'],
+    ['public web page', { author: null, sourceType: 'web' }, '公開網頁'],
+  ] as const)('uses the author or source-type fallback for the visible source label: %s', (_case, record, expected) => {
+    expect(sourceLabel(record)).toBe(expected);
+  });
+
   it.each([
     [0, true],
     [1, false],

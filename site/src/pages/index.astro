@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { ogImagePath, summaryPath } from '../lib/paths';
-import { serializeSummaryRecords } from '../lib/summaries';
+import { serializeSummaryRecords, sourceLabel } from '../lib/summaries';
 import { loadPublishedSummaries } from '../lib/summary-loader';
 
 const baseUrl = import.meta.env.BASE_URL;
@@ -44,42 +44,45 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
       <>
         <p class="empty-state" id="no-results" role="status" hidden>找不到符合條件的摘要。</p>
         <section class="summary-grid" id="summary-list" aria-label="摘要列表">
-          {summaries.map((record, index) => (
-            <article
-              class:list={['summary-card', index === 0 && 'summary-card--featured']}
-              data-summary-card={record.id}
-            >
-              <a class="summary-card-link" href={summaryPath(baseUrl, record.id)} aria-label={`閱讀摘要：${record.title}`}>
-                <div class="summary-card-image-frame">
-                  <span class="summary-card-image-fallback" aria-hidden="true">
-                    {record.author ?? (record.sourceType === 'youtube' ? 'YouTube' : record.sourceType === 'social' ? '社群貼文' : '公開網頁')}
-                  </span>
-                  <img
-                    class="summary-card-image"
-                    src={ogImagePath(baseUrl, record.id)}
-                    alt={record.title}
-                    width="1200"
-                    height="630"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
-                <div class="summary-card-content">
-                  {index === 0 && <p class="featured-label">編輯精選</p>}
-                  <div class="card-meta">
-                    <span>{record.category}</span>
-                    <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
+          {summaries.map((record, index) => {
+            const source = sourceLabel(record);
+
+            return (
+              <article
+                class:list={['summary-card', index === 0 && 'summary-card--featured']}
+                data-summary-card={record.id}
+              >
+                <a class="summary-card-link" href={summaryPath(baseUrl, record.id)} aria-label={`閱讀摘要：${record.title}`}>
+                  <div class="summary-card-image-frame">
+                    <span class="summary-card-image-fallback" aria-hidden="true">{source}</span>
+                    <img
+                      class="summary-card-image"
+                      src={ogImagePath(baseUrl, record.id)}
+                      alt={record.title}
+                      width="1200"
+                      height="630"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
-                  <h2>{record.title}</h2>
-                  <p class="card-summary">{record.summary}</p>
-                  <ul class="tag-list" aria-label="標籤">
-                    {record.tags.map((tag) => <li>{tag}</li>)}
-                  </ul>
-                  <span class="card-cta">閱讀完整摘要<span aria-hidden="true"> →</span></span>
-                </div>
-              </a>
-            </article>
-          ))}
+                  <div class="summary-card-content">
+                    {index === 0 && <p class="featured-label">編輯精選</p>}
+                    <div class="card-meta">
+                      <span>{record.category}</span>
+                      <span>{source}</span>
+                      <time datetime={record.createdAt}>{record.createdAt.slice(0, 10)}</time>
+                    </div>
+                    <h2>{record.title}</h2>
+                    <p class="card-summary">{record.summary}</p>
+                    <ul class="tag-list" aria-label="標籤">
+                      {record.tags.map((tag) => <li>{tag}</li>)}
+                    </ul>
+                    <span class="card-cta">閱讀完整摘要<span aria-hidden="true"> →</span></span>
+                  </div>
+                </a>
+              </article>
+            );
+          })}
         </section>
         <script id="summary-records" type="application/json" is:inline set:html={serializeSummaryRecords(summaries)}></script>
       </>
