@@ -343,4 +343,5 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - Edge 本機驗收：1280 視窗 7/7 卡片均可見來源，精選文字在第 1 欄、圖片在第 2 欄，三欄網格且無溢出；390 視窗精選文字為第 1 列（top 624）、圖片為第 2 列（top 1064），`Bluesky` 來源可見、圖片維持 contain 且無溢出。搜尋、分類篩選、日期排序、無結果狀態與鍵盤焦點驗收維持通過。
 - 圖片失敗 fallback 保留 source-contract 覆蓋（listener 綁定前 `complete`/`naturalWidth=0` 與後續 `error` 事件）；尚未在 Edge 獨立模擬 failed-image 路徑，故不宣稱已完成該瀏覽器情境。所有卡片圖片維持 `loading="lazy"`，此為使用者明確核准且符合既有 deployment verifier。
 - 最終驗證（HEAD `058b386`）：focused `npm.cmd test -- src/lib/summaries.test.ts src/lib/card-markup.test.ts` 為 2 個檔案、39 tests passed；完整 `npm.cmd test` 為 6 個檔案、63 tests passed；`npm.cmd run build:pages` 為 Astro check 0 errors/warnings/hints、8 pages，deployment verifier exit 0；`git diff --check` clean（僅 LF/CRLF 工作副本警告）。
-- 本次僅完成本機實作與驗證；未執行 GitHub push、Pages workflow 或遠端首頁視覺驗收，相關項目不得標記為本次完成。
+- 2026-08-29 已將 `feature/homepage-editorial-thumbnails` fast-forward 合併至本機 `master`，合併後重新通過 63/63 Vitest、Astro 0 diagnostics、8 pages、deployment verifier 與 tracked/dist 安全掃描，並成功 push 功能 head `c91cb3f` 至 `origin/master`。
+- Pages workflow 與遠端首頁視覺驗收尚未執行；failed-image 的 Edge 獨立模擬亦仍保留為後續驗證，不得標記為完成。
