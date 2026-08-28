@@ -21,12 +21,13 @@ describe('editorial homepage cards', () => {
       'alt={record.title}',
       'width="1200"',
       'height="630"',
-      'loading={index === 0 ? \'eager\' : \'lazy\'}',
+      'loading="lazy"',
       'decoding="async"',
       'class="summary-card-image-fallback"',
     ]) {
       expect(homepageSource).toContain(markup);
     }
+    expect(homepageSource).not.toContain("loading={index === 0 ? 'eager' : 'lazy'}");
   });
 
   it('reveals the source fallback when an OG image fails', () => {

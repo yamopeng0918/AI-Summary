@@ -60,7 +60,7 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
                     alt={record.title}
                     width="1200"
                     height="630"
-                    loading={index === 0 ? 'eager' : 'lazy'}
+                    loading="lazy"
                     decoding="async"
                   />
                 </div>
