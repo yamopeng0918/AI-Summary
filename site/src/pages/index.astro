@@ -98,11 +98,15 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
   const noResults = document.querySelector<HTMLElement>('#no-results');
   const cards = document.querySelectorAll<HTMLElement>('[data-summary-card]');
   const records: SummaryRecord[] = JSON.parse(recordsElement?.textContent ?? '[]');
+  const hideBrokenImage = (image: HTMLImageElement) => {
+    image.hidden = true;
+  };
 
   document.querySelectorAll<HTMLImageElement>('.summary-card-image').forEach((image) => {
     image.addEventListener('error', () => {
-      image.hidden = true;
+      hideBrokenImage(image);
     }, { once: true });
+    if (image.complete && image.naturalWidth === 0) hideBrokenImage(image);
   });
 
   form?.addEventListener('input', () => {

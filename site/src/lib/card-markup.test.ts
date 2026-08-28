@@ -31,8 +31,10 @@ describe('editorial homepage cards', () => {
 
   it('reveals the source fallback when an OG image fails', () => {
     expect(homepageSource).toContain("querySelectorAll<HTMLImageElement>('.summary-card-image')");
+    expect(homepageSource).toContain('image.complete && image.naturalWidth === 0');
+    expect(homepageSource).toContain('hideBrokenImage(image)');
     expect(homepageSource).toContain("image.addEventListener('error'");
-    expect(homepageSource).toContain('image.hidden = true');
+    expect(homepageSource).toContain('const hideBrokenImage');
   });
 
   it('contains OG images without cropping or distortion', () => {
