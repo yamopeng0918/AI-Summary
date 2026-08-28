@@ -1,6 +1,13 @@
 import pytest
 
-from ai_digest.source_urls import canonicalize_source_url, is_youtube_url
+from ai_digest.domain import DigestError
+from ai_digest.source_urls import (
+    BlueskyPostRef,
+    canonicalize_source_url,
+    is_bluesky_url,
+    is_youtube_url,
+    parse_bluesky_post_url,
+)
 
 
 @pytest.mark.parametrize(
@@ -37,8 +44,6 @@ def test_is_youtube_url_returns_false_for_other_or_invalid_urls(raw_url: str) ->
     ],
 )
 def test_rejects_youtube_urls_that_are_not_valid_single_videos(raw_url: str) -> None:
-    from ai_digest.domain import DigestError
-
     with pytest.raises(DigestError) as raised:
         canonicalize_source_url(raw_url)
 
@@ -48,3 +53,64 @@ def test_rejects_youtube_urls_that_are_not_valid_single_videos(raw_url: str) -> 
         "message": "URL must identify one supported YouTube video",
         "retryable": False,
     }
+
+
+@pytest.mark.parametrize(
+    ("raw_url", "expected"),
+    [
+        (
+            "https://bsky.app/profile/alice.example/post/3social?ref=share#thread",
+            "https://bsky.app/profile/alice.example/post/3social",
+        ),
+        (
+            "https://bsky.app/profile/did:plc:alice/post/3social",
+            "https://bsky.app/profile/did:plc:alice/post/3social",
+        ),
+    ],
+)
+def test_canonicalizes_supported_bluesky_post_urls(raw_url: str, expected: str) -> None:
+    assert is_bluesky_url(raw_url) is True
+    assert canonicalize_source_url(raw_url) == expected
+
+
+def test_parses_bluesky_post_reference() -> None:
+    assert parse_bluesky_post_url("https://bsky.app/profile/alice.example/post/3social") == BlueskyPostRef(
+        actor="alice.example",
+        post_id="3social",
+    )
+
+
+@pytest.mark.parametrize(
+    "raw_url",
+    [
+        "http://bsky.app/profile/alice.example/post/3social",
+        "https://bsky.app/profile/alice.example",
+        "https://bsky.app/profile/alice.example/post",
+        "https://bsky.app/profile/alice.example/post/3social/extra",
+        "https://bsky.app/profile//post/3social",
+        "https://bsky.app/profile/alice.example/post/",
+        "https://bsky.app.evil.example/profile/alice.example/post/3social",
+        "https://user@bsky.app/profile/alice.example/post/3social",
+        "https://bsky.app:444/profile/alice.example/post/3social",
+        "not-a-url",
+    ],
+)
+def test_rejects_nonapproved_bluesky_urls(raw_url: str) -> None:
+    with pytest.raises(DigestError) as raised:
+        canonicalize_source_url(raw_url)
+    assert raised.value.code == "INVALID_URL"
+
+
+@pytest.mark.parametrize(
+    "raw_url",
+    [
+        "https://bsky.app/profile/alice.example",
+        "https://bsky.app/profile/alice.example/post",
+        "https://bsky.app/profile/alice.example/post/3social/extra",
+        "http://bsky.app/profile/alice.example/post/3social",
+        "https://user@bsky.app/profile/alice.example/post/3social",
+        "https://bsky.app:444/profile/alice.example/post/3social",
+    ],
+)
+def test_is_bluesky_url_returns_false_for_invalid_bluesky_posts(raw_url: str) -> None:
+    assert is_bluesky_url(raw_url) is False
