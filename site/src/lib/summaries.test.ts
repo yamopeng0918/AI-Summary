@@ -44,6 +44,17 @@ const olderRecord = {
   updatedAt: '2026-08-01T12:00:00+08:00',
 } as const;
 
+const socialRecord = {
+  ...newerRecord,
+  id: 'social',
+  canonicalUrl: 'https://bsky.app/profile/did:plc:alice/post/3social',
+  sourceType: 'social',
+  title: 'Bluesky 社群貼文標題',
+  summary: '這則 Bluesky 貼文說明社群來源搜尋。',
+  createdAt: '2026-08-09T12:00:00+08:00',
+  updatedAt: '2026-08-09T12:00:00+08:00',
+} as const;
+
 describe('summary data', () => {
   it('resolves the repository summary directory from the site build directory', () => {
     const siteDirectory = resolve('workspace', 'site');
@@ -104,12 +115,30 @@ describe('summary data', () => {
     expect(loaded[0].sourceType).toBe('youtube');
   });
 
-  it('accepts a published social summary', () => {
-    expect(parseSummaryRecord({
-      ...newerRecord,
-      canonicalUrl: 'https://bsky.app/profile/did:plc:alice/post/3social',
-      sourceType: 'social',
-    }).sourceType).toBe('social');
+  it('loads published social summaries and leaves published sorting unchanged', () => {
+    const records = [
+      parseSummaryRecord(olderRecord),
+      parseSummaryRecord(newerRecord),
+      parseSummaryRecord(socialRecord),
+      parseSummaryRecord({ ...socialRecord, id: 'archived-social', status: 'archived' }),
+    ];
+
+    const published = getPublishedSummaries(records);
+
+    expect(published.map((record) => record.id)).toEqual(['older', 'newer', 'social']);
+    expect(filterAndSortSummaries(published, '', '', 'newest').map((record) => record.id)).toEqual([
+      'social',
+      'newer',
+      'older',
+    ]);
+  });
+
+  it.each(['社群貼文標題', '社群來源搜尋'])('finds a social summary by %s', (query) => {
+    const records = [parseSummaryRecord(newerRecord), parseSummaryRecord(socialRecord)];
+
+    expect(filterAndSortSummaries(records, query, '', 'newest').map((record) => record.id)).toEqual([
+      'social',
+    ]);
   });
 
   it('rejects an unknown source type', () => {

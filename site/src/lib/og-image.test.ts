@@ -91,6 +91,14 @@ describe('OG image content', () => {
     expect(createOgImageContent(record)).toMatchObject({ source: '王小明', sourceType: 'WEB' });
   });
 
+  it('labels social sources in uppercase', () => {
+    expect(createOgImageContent({
+      ...record,
+      sourceType: 'social',
+      canonicalUrl: 'https://bsky.app/profile/did:plc:alice/post/3social',
+    })).toMatchObject({ sourceType: 'SOCIAL' });
+  });
+
   it('falls back to canonical hostname when author is absent', () => {
     expect(createOgImageContent({ ...record, author: null }).source).toBe('news.example.com');
   });

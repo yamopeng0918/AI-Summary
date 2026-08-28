@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：YouTube 真實案例與每筆已發布摘要的 OG PNG、metadata、卡片顯示及 GitHub Pages 遠端驗收均已完成
+> 目前階段：Bluesky 公開單篇貼文的本機實作與完整回歸驗證已完成；真實 AppView、付費摘要、push、Pages 部署與遠端驗收尚未授權
 >
-> 下次續作：進入核心 MVP 的公開社群單篇貼文設計；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：取得一個使用者提供或核准的穩定公開、非回覆 Bluesky 貼文 URL，並分別取得付費摘要、push、Pages workflow 與遠端驗收授權；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -29,7 +29,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 公開網頁真實來源驗收 | 已完成 | 使用者核准 `https://pala.tw/python-web-crawler/`；以預設 `gemini-3.6-flash` 完成擷取、摘要、分類、驗證與暫存 JSON 儲存 |
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 已完成 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕與無字幕案例均完整到達 `complete`，通過資料驗證並確認本機／遠端零殘留 |
-| 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
+| 公開社群單篇貼文 | 本機實作與驗證已完成 | Bluesky 獨立解析器、DID canonical URL、AppView 邊界、CLI 路由、資料契約與 Astro 回歸覆蓋已完成；真實來源與遠端驗收仍待明確授權 |
 | GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；既有遠端部署已驗收，本機 `build:pages` 現會為每筆 `published` 摘要產生 OG PNG，並串接卡片與詳情頁 metadata |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
@@ -66,9 +66,19 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；run `33134830540` 已成功部署 commit `c17e3ae`，並通過 workflow 內 smoke 與獨立公開 OG 驗收 |
 | OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併、push 並完成 GitHub Pages 遠端驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
+| Bluesky 真實／遠端驗收 | 本次沒有讀取真實貼文、呼叫付費摘要、push 或部署；需先取得穩定公開非回覆 URL，並逐項取得 AppView、付費摘要、push、Pages workflow 與公開驗收授權 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-28：Bluesky 公開貼文本機驗證
+
+- 已完成 Bluesky 的本機實作範圍：來源 URL 辨識與 DID canonicalization、獨立 AppView client／extractor、回覆拒絕與安全錯誤邊界、CLI 路由與重複 URL 預檢，以及 `sourceType: social` 的 Schema／儲存／Astro 契約。沒有新增其他社群平台、登入處理、完整討論串或常駐服務。
+- 前端回歸測試新增並保留社群已發布載入、archived 過濾、日期排序、標題／摘要搜尋，以及 OG mapper 的 `SOCIAL` 標籤覆蓋。因前序實作已支援 `social`，新增契約首次執行即為 GREEN；focused Vitest 為 `2` 個檔案、`41 passed`，沒有不必要的正式程式修改。
+- 新鮮完整 gates：Python `601 passed, 2 skipped, 1 warning`；兩個 skip 是目前 Windows 帳號無建立 symlink 權限，warning 是第三方 `google-genai` deprecation。完整 Vitest 為 `6` 個檔案、`52 passed`。`npm run build` 與 `npm run build:pages` 均為 Astro `17` 個檢查檔案、`0 errors / 0 warnings / 0 hints`，各建置 `7` 個頁面；Pages build 內嵌 verifier 與獨立 tracked／`site/dist` verifier 均 exit `0`。
+- 安全與交付檢查：`git diff --check` exit `0`。寬鬆的 tracked `git grep` 規則命中 `52` 行既有設定名稱、文件 placeholder 與安全測試 fixture；逐類檢查後皆非真實憑證，且 deployment verifier 對 tracked 檔案與 `site/dist` 的金鑰／token／private-key／`.env` 形狀掃描無違規。未讀取或輸出 `.env`。
+- 本次未進行真實 AppView 呼叫、付費摘要、Git push、Pages workflow、公開列表／搜尋／詳情／來源連結／OG image 遠端驗收；上述項目均保持未驗證，不能因本機 gates 通過而視為完成。
+- 下一步：使用者需提供或核准一個穩定、公開、非回覆的 Bluesky 貼文 URL，並分別授權一次 AppView 驗收、付費摘要、push、Pages workflow 與遠端驗收。
 
 ### 2026-08-28：Pages workflow 與公開 OG 圖遠端驗收
 
