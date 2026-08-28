@@ -105,8 +105,8 @@
 - [x] 擷取無須登入即可讀取的 Bluesky 公開單篇貼文文字、作者、日期與 DID canonical 原始連結。
 - [x] 對私人內容、登入限制、付費內容、回覆或非單篇貼文明確失敗且不繞過限制。
 - [x] 完成 Bluesky 本機 CLI、Schema／儲存與 Astro 搜尋／排序／OG 社群標籤的回歸驗證（Python `601 passed, 2 skipped, 1 warning`；Vitest `52 passed`；兩種 Astro build 均 0 diagnostics／7 pages）。
-- [ ] 使用者提供或核准穩定公開、非回覆 Bluesky 貼文 URL 後，執行一次真實 AppView 擷取驗收。
-- [ ] 取得明確授權後，對核准 Bluesky 貼文執行一次付費摘要並驗證保存 JSON。
+- [x] 使用者核准真實驗收後，以 Bluesky 官方帳號穩定公開、非回覆貼文執行一次 AppView 擷取驗收。
+- [x] 依明確授權對核准 Bluesky 貼文執行一次付費摘要，並驗證 DID canonical URL、`sourceType: social` 與保存 JSON。
 - [ ] 取得明確授權後，提交 Bluesky 驗收記錄並 push 至遠端。
 - [ ] 取得明確授權後，監看 Pages workflow 並驗證公開列表、搜尋、詳情、來源連結與 OG image。
 - [ ] 以使用者核准的真實公開單篇貼文驗收。

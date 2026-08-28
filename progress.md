@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：Bluesky 公開單篇貼文的本機實作與完整回歸驗證已完成；真實 AppView、付費摘要、push、Pages 部署與遠端驗收尚未授權
+> 目前階段：Bluesky 公開單篇貼文的本機實作、真實 AppView 與付費摘要驗收已完成；push、Pages 部署與遠端驗收進行中
 >
-> 下次續作：取得一個使用者提供或核准的穩定公開、非回覆 Bluesky 貼文 URL，並分別取得付費摘要、push、Pages workflow 與遠端驗收授權；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：將真實 Bluesky 摘要與驗收記錄推送至 GitHub，監看 Pages workflow，並驗證公開列表、搜尋、詳情、來源連結及 OG image；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -70,6 +70,15 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-28：Bluesky 真實 AppView 與付費摘要驗收
+
+- 使用 Bluesky 官方帳號的公開、非回覆貼文 `https://bsky.app/profile/bsky.app/post/3mu3jzayuys2k` 執行正式 CLI 驗收；流程依序到達 `input`、`extract`、`summarize`、`classify`、`validate`、`save`、`complete`，只執行一次付費 Gemini 摘要呼叫。
+- 已保存並由 `SummaryRepository` 重新驗證記錄 `20260828-bluesky-bsky-app-的-bluesky-貼文-5f8aee85`：`sourceType: social`、`status: published`、3 個重點、4 個標籤，canonical URL 為 DID 形式 `https://bsky.app/profile/did:plc:z72i7hdynmk6r22z27h6tvur/post/3mu3jzayuys2k`。
+- 以原 handle URL 再次提交時，只到達 `input`、`extract`，隨即回報非可重試 `DUPLICATE_URL`，未再次進入 `summarize`，證實 handle／DID alias 在付費服務前遭拒絕。
+- 真實資料加入後的 gates：Python `601 passed, 2 skipped, 1 warning`；Vitest `52 passed`；Astro `17` 個檔案、`0 errors / 0 warnings / 0 hints`；Pages build 產生 `8` 個頁面，包含新摘要詳情頁與 `1200×630` OG PNG；內嵌及獨立 deployment verifier、`git diff --check` 均通過。
+- Windows PowerShell 預設 CP950 執行 `ai-digest list` 時，會被既有摘要中的簡體中文字元觸發 `UnicodeEncodeError`；設定 `PYTHONUTF8=1` 後可正常列出新記錄。這是既有 CLI 終端編碼風險，不影響 UTF-8 JSON、Astro build 或 Pages artifact，尚未在本次驗收範圍內修改程式。
+- 遠端待辦：提交並 push 新摘要與本紀錄，監看 Pages workflow，驗證公開首頁／搜尋／詳情／官方來源連結／OG image；完成前不得標記遠端驗收成功。
 
 ### 2026-08-28：Bluesky 功能整合至 master
 
