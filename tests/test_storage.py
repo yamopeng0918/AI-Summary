@@ -85,6 +85,19 @@ def test_get_returns_saved_record(tmp_path) -> None:
     assert repository.get("example") == saved
 
 
+def test_repository_persists_a_social_record(tmp_path) -> None:
+    repository = SummaryRepository(tmp_path)
+    record = make_record(
+        "social-post",
+        canonicalUrl="https://bsky.app/profile/did:plc:alice/post/3social",
+        sourceType="social",
+    )
+
+    repository.save(record)
+
+    assert repository.get("social-post").source_type == "social"
+
+
 def test_production_records_round_trip_from_list_to_get() -> None:
     repository = SummaryRepository(Path(__file__).parents[1] / "data" / "summaries")
 

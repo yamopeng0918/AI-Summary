@@ -104,6 +104,18 @@ describe('summary data', () => {
     expect(loaded[0].sourceType).toBe('youtube');
   });
 
+  it('accepts a published social summary', () => {
+    expect(parseSummaryRecord({
+      ...newerRecord,
+      canonicalUrl: 'https://bsky.app/profile/did:plc:alice/post/3social',
+      sourceType: 'social',
+    }).sourceType).toBe('social');
+  });
+
+  it('rejects an unknown source type', () => {
+    expect(() => parseSummaryRecord({ ...newerRecord, sourceType: 'podcast' })).toThrow();
+  });
+
   it('sorts newest records first', () => {
     const records = [parseSummaryRecord(olderRecord), parseSummaryRecord(newerRecord)];
 

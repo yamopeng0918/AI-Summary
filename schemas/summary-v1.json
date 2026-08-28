@@ -19,7 +19,8 @@
     "sourceType": {
       "enum": [
         "web",
-        "youtube"
+        "youtube",
+        "social"
       ],
       "title": "Sourcetype",
       "type": "string"

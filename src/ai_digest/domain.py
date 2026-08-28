@@ -65,7 +65,7 @@ class DomainModel(BaseModel):
 
 class ExtractedArticle(DomainModel):
     canonical_url: HttpUrl
-    source_type: Literal["web", "youtube"] = "web"
+    source_type: Literal["web", "youtube", "social"] = "web"
     title: str
     author: str | None = None
     published_at: datetime | None = None
@@ -91,7 +91,7 @@ class SummaryRecord(DomainModel):
     schema_version: Literal[1] = Field(alias="schemaVersion")
     id: str
     canonical_url: HttpUrl = Field(alias="canonicalUrl")
-    source_type: Literal["web", "youtube"] = Field(alias="sourceType")
+    source_type: Literal["web", "youtube", "social"] = Field(alias="sourceType")
     title: str
     author: str | None
     source_published_at: datetime | None = Field(alias="sourcePublishedAt")

@@ -2,7 +2,7 @@ export interface SummaryRecord {
   schemaVersion: 1;
   id: string;
   canonicalUrl: string;
-  sourceType: 'web' | 'youtube';
+  sourceType: 'web' | 'youtube' | 'social';
   title: string;
   author: string | null;
   sourcePublishedAt: string | null;

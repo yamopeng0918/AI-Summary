@@ -57,6 +57,24 @@ def test_summary_and_extracted_article_accept_youtube_source_type() -> None:
     assert valid_record(sourceType="youtube").source_type == "youtube"
 
 
+def test_summary_and_extracted_article_accept_social_source_type() -> None:
+    article = ExtractedArticle(
+        canonicalUrl="https://bsky.app/profile/did:plc:alice/post/3social",
+        sourceType="social",
+        title="Alice's Bluesky post",
+        author="Alice",
+        publishedAt="2026-08-28T01:02:03Z",
+        text="Post content",
+    )
+    record = valid_record(
+        canonicalUrl="https://bsky.app/profile/did:plc:alice/post/3social",
+        sourceType="social",
+    )
+
+    assert article.source_type == "social"
+    assert record.source_type == "social"
+
+
 def test_summary_record_rejects_two_key_points() -> None:
     with pytest.raises(ValidationError):
         valid_record(keyPoints=["重點一", "重點二"])
