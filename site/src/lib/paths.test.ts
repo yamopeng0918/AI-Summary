@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { homePath, summaryPath } from './paths';
+import { homePath, ogImagePath, summaryPath } from './paths';
 
 describe('Pages paths', () => {
   it('normalizes the project base to one trailing slash', () => {
@@ -14,5 +14,13 @@ describe('Pages paths', () => {
 
   it('builds a summary path below the configured base', () => {
     expect(summaryPath('/AI-Summary/', 'demo-id')).toBe('/AI-Summary/summaries/demo-id/');
+  });
+
+  it('builds an encoded OG image path below the configured base', () => {
+    expect(ogImagePath('/AI-Summary/', '中文 id')).toBe('/AI-Summary/og/%E4%B8%AD%E6%96%87%20id.png');
+  });
+
+  it('builds an OG image path for a root deployment', () => {
+    expect(ogImagePath('/', 'demo')).toBe('/og/demo.png');
   });
 });

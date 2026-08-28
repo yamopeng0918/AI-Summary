@@ -19,9 +19,9 @@
 - 標題下方顯示摘要前 1～2 行。
 - 底部優先顯示非空作者；沒有作者時顯示 `canonicalUrl` 的 hostname，旁邊顯示 `WEB`、`YOUTUBE` 或 `SOCIAL`。
 
-標題與摘要使用確定性的換行、字級級距及最大行數。超過安全上限時以省略號截斷，不得溢出 1200 × 630 畫布。首頁卡片以完整文章標題作為圖片 `alt`。
+標題與摘要使用確定性的換行、字級級距及最大行數：標題最多三行、每行最多 18 個全形等價字元；摘要最多兩行、每行最多 40 個全形等價字元。來源標籤最多 36 個字元。超過安全上限時只在最後一個可見字元位置加入省略號，所有預先切好的行與 footer 標籤都強制 `nowrap`，不得溢出 1200 × 630 畫布。首頁卡片以完整文章標題作為圖片 `alt`。
 
-為避免 Windows 與 GitHub Actions 的字型差異，repository 在 `site/src/assets/fonts/` 納管一份 OFL-1.1 授權、涵蓋所需字重的 Noto Serif TC 可變字重 TTF 及其授權文件。渲染器只能讀取該專案內字型，不依賴作業系統字型或建置時網路下載。
+為避免 Windows 與 GitHub Actions 的字型差異，repository 在 `site/src/assets/fonts/` 納管 OFL-1.1 授權、官方完整 Pan-CJK `NotoSerifCJKtc-Regular.otf`（400）及 `NotoSerifCJKtc-Bold.otf`（700）兩個繁體中文靜態 OTF 與其授權文件。渲染器只能使用該專案內字型，不依賴作業系統字型或執行期／建置時網路下載。每次渲染前必須以字型 cmap 對實際要顯示的品牌、分類、標題行、摘要行、截短後來源及來源類型逐字驗證；任何字重缺少字形都必須 fail closed，不能交由 `.notdef`／tofu 代替。
 
 ## 3. 架構與元件
 
@@ -39,7 +39,7 @@
 
 新增獨立 TypeScript 模組，接收已驗證的摘要顯示資料並回傳 PNG bytes。模組使用 Satori 將版型與已載入的 Noto Serif TC 字型轉為 SVG，再使用專案直接依賴的 Sharp 轉為 1200 × 630 PNG。
 
-渲染器只負責排版及編碼，不讀取摘要目錄、不判斷發布狀態，也不建立頁面 URL。文字正規化、來源標籤、換行及截斷須為可獨立測試的純函式；新增的每個正式函式都必須有測試。
+渲染器只負責排版及編碼，不讀取摘要目錄、不判斷發布狀態，也不建立頁面 URL。文字正規化、來源標籤、換行、截斷及 cmap 覆蓋檢查須為可獨立測試的純函式；新增的每個正式函式都必須有測試。
 
 ### 3.3 路徑與 metadata
 
@@ -88,6 +88,7 @@ data/summaries/*.json
 圖片生成採 fail-closed：
 
 - 字型檔缺失或無法載入。
+- Regular 或 Bold 字型 cmap 缺少任何實際顯示字元。
 - 摘要資料未通過既有 Schema 驗證。
 - Satori 或 Sharp 渲染失敗。
 - 輸出不是非空 PNG，或尺寸不是 1200 × 630。
@@ -104,7 +105,9 @@ data/summaries/*.json
 
 - OG 圖路徑在 `/` 與 `/AI-Summary/` base 下均正確。
 - 只為 `published` 摘要建立圖片路由。
-- 標題與摘要的換行、縮放、截斷、繁體中文及 XML 特殊字元處理。
+- 標題 18 字、摘要 40 字及來源 36 字的邊界、截斷、強制單行、繁體／簡體中文及 XML 特殊字元處理。
+- 兩個字重對目前所有顯示文字的 cmap 覆蓋，並以 `级`、`战`、`术`、`来` 作為精確回歸字元；缺字時必須在 Satori 渲染前失敗。
+- 分類實際位於右上角，footer 實際包含來源及大寫來源類型；相同輸入必須產生位元組相同的 PNG。
 - 回應 MIME 為 `image/png`、內容非空、PNG 尺寸為 1200 × 630。
 - 摘要詳情頁包含完整、絕對且 base-aware 的 Open Graph、Twitter Card 與 canonical metadata。
 - 首頁卡片圖片包含正確 `src`、`alt`、尺寸、lazy loading 與詳情連結。
@@ -116,9 +119,9 @@ data/summaries/*.json
 2. 完整前端測試。
 3. `astro check`。
 4. 正式 Pages build。
-5. deployment verifier 與 `site/dist` 敏感資料掃描。
+5. deployment verifier 在任何 `site/dist` 敏感資料掃描或 HTML verifier 讀檔前，先建立排序且 fail-closed 的全樹 inventory：解析 resolved root 與每個 candidate、確認 containment，之後才可 `is_file()` 或讀檔；保留 candidate 名稱供 `.env` 與錯誤訊息使用，任一 escape／inspection／read violation 都先中止後續讀取。圖片 URL 另以同一個 resolver 執行 percent／反斜線正規化、`resolve()` 與 `dist_root` containment 檢查；PNG 驗證使用最多七組 `(row_bytes, row_count)` scanline runs 與解壓前算術上限檢查，再執行有界 chunk、CRC、IHDR／IDAT／IEND、截斷、row filter 與解碼檢查，並驗證建置後 metadata／卡片 artifact。
 6. `git diff --check`。
-7. 人工檢視至少一張包含中文長標題的實際 PNG，確認沒有缺字、裁切、溢出或低對比。
+7. 以原始解析度人工檢視目前全部六張實際 PNG，逐張確認沒有缺字、裁切、溢出或低對比，且分類在右上、來源與來源類型在 footer。
 
 ## 8. 非目標
 

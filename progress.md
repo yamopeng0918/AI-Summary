@@ -1,10 +1,10 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-26
+> 最後更新：2026-08-27
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：YouTube provider-aligned 實作、自動化 gates，以及核准的有字幕／無字幕真實案例驗收均已完成
+> 目前階段：YouTube 真實案例驗收與每筆已發布摘要的 OG PNG 產生、metadata、卡片顯示均已完成本機驗證
 >
 > 下次續作：進入核心 MVP 的公開社群單篇貼文設計；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 已完成 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕與無字幕案例均完整到達 `complete`，通過資料驗證並確認本機／遠端零殘留 |
 | 公開社群單篇貼文 | 尚未開始 | 不繞過登入、存取控制或私有內容限制 |
-| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；commit `b139f862553a65396c50eae5377cfbdddc86c4f2` 已由 workflow run `31767893009` 成功部署，公開首頁與新增摘要詳情頁均通過驗收 |
+| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；既有遠端部署已驗收，本機 `build:pages` 現會為每筆 `published` 摘要產生 OG PNG，並串接卡片與詳情頁 metadata |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -64,10 +64,25 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
 | YouTube 本機工具與手動驗收 | 2026-08-26 已使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、`gemini-3.6-flash` 與使用者核准的有字幕／無字幕公開影片完成兩案驗收；兩案均 exit 0、到達 `complete`、通過資料驗證，且本機媒體與 Gemini Files 均為 0 |
 | GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 run `31767893009` 成功部署 Unicode 路徑驗證修正與新摘要，並通過 workflow 內及獨立公開驗收 |
+| OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。本次 OG 變更只完成本機驗證，尚未 push 或遠端部署 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | 摘要或分類正確性 | 保留原文連結，分類器完成前不宣稱模型效能 |
 
 ## 進度紀錄
+
+### 2026-08-27：每筆摘要 OG PNG 最終驗收
+
+- 每筆 `published` 摘要的 `1200×630` PNG、首頁卡片顯示，以及詳情頁 `og:image`／`twitter:image` metadata 已完成；`site/dist/og/` 保持為建置 artifact，不納入追蹤內容。
+- 字型已改為官方完整 Pan-CJK `NotoSerifCJKtc-Regular.otf`（400）與 `NotoSerifCJKtc-Bold.otf`（700），保留 OFL-1.1 且不在正常測試／建置下載；渲染前逐字檢查 assigned-weight cmap，精確回歸字元 `级`、`战`、`术`、`来` 均有字形。標題／摘要／來源分別採 `18`／`40`／`36` 個全形等價字元上限，fitted 行強制 `nowrap`；分類位於右上，footer 只保留有界來源與大寫來源類型。
+- 完整 gates：focused frontend `4` 個測試檔、`20 passed`；focused deployment verifier `53 passed`；完整 Python `488 passed, 1 warning`（既有 `google.genai` deprecation）；完整 Vitest `6` 個測試檔、`47 passed`；Astro check `17 files`、`0 errors / 0 warnings / 0 hints`；Pages build `7 pages`；獨立 tracked／dist deployment verifier 與 `git diff --check` 均 exit `0`。
+- Final re-review 已將 generic image 與 summary-card 解析集中至同一個 fail-closed resolver：percent／反斜線正規化與 `resolve()` 後，必須先通過 resolved `dist_root` containment 才可探測或開啟檔案，因此 traversal、encoded absolute path 與 symlink escape 都不會讀取外部目標。PNG scanline bookkeeping 改為非交錯一組、Adam7 最多七組 `(row_bytes, row_count)`，並在解壓前以算術上限拒絕 `height=0xffffffff` 等惡意 IHDR；另以真實 CRC／zlib fixture 覆蓋非連續 IDAT、錯誤 scanline 長度與非法 row filter。
+- Re-review gates：focused deployment verifier `60 passed, 1 skipped`（目前 Windows 帳號無建立 symlink 權限，支援 symlink 的環境會執行該測試）；完整 Python `495 passed, 1 skipped, 1 warning`；完整 Vitest `6` 個測試檔、`47 passed`；Astro check `17 files`、`0 errors / 0 warnings / 0 hints`；Pages build `7 pages`；獨立 tracked／dist verifier、六筆 metadata/card mapping、Sharp `6/6` PNG `1200×630` audit 與 `git diff --check` 均 exit `0`。
+- 最終 whole-branch follow-up 將 `main --dist` 的敏感資料掃描也納入 containment-first 全樹 inventory：每個 candidate 在 `is_file()`／`read_bytes()`／HTML `read_text()` 前先解析並證明位於 resolved `dist_root` 內；escape、root／entry inspection 或 read failure 都回傳穩定 violation 並中止後續讀取。掃描同時保留 lexical candidate 名稱，因此指向內部安全 target 的 `.env` alias 仍會被拒絕。
+- Follow-up gates：focused deployment verifier `66 passed, 2 skipped`；完整 Python `501 passed, 2 skipped, 1 warning`；完整 Vitest `6` 個測試檔、`47 passed`；Astro check `17 files`、`0 errors / 0 warnings / 0 hints`；Pages build `7 pages`；embedded 與獨立 tracked／dist verifier 均 exit `0`；六筆 metadata/card mapping 全部為 `2/1`，Sharp `6/6` PNG 均為 `1200×630`；獨立 code re-review 結論為 Ready，沒有剩餘 Critical／Important finding。兩個 skip 都是目前 Windows 帳號 WinError 1314 無 symlink 權限，支援環境會正常執行。
+- Artifact audit：`6` 筆 published 對應 `6` 張 PNG；`6/6` PNG signature、Sharp format 與 `1200×630` 尺寸正確；`6/6` 詳情頁兩種圖片 metadata 均解析至對應 PNG；archived 記錄 `0`、archived PNG `0`。
+- 全部 `6/6` 實際 PNG 均以原始解析度逐張檢視，必要時另以完整畫布檢視確認邊界：米白／珊瑚／深綠編輯色與文字對比清楚，所有中英文字形可讀，沒有 tofu、裁切或溢出；每張分類均在右上，來源在左下，大寫來源類型在右下。
+- 風險：本次只驗證本機 branch，未 push、未觸發遠端 Pages 部署；未來替換字型時必須維持兩個完整 Pan-CJK 靜態 OTF、OFL-1.1 與 cmap regression 成對更新。
+- 下一步：依既定核心 MVP 順序進入無須登入的公開社群單篇貼文設計，不擴張至登入／私人內容、完整討論串或網站後台。
 
 ### 2026-08-26：CLI 重複 URL 與記錄查詢診斷
 

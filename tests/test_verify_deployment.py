@@ -1,14 +1,98 @@
+from collections.abc import Iterator
+import errno
 from pathlib import Path
+import struct
 import subprocess
+import zlib
 
 import pytest
+
+import scripts.verify_deployment as deployment
 
 from scripts.verify_deployment import (
     main,
     scan_sensitive_files,
     tracked_paths,
     verify_generated_links,
+    verify_generated_summary_artifacts,
 )
+
+
+def _png_chunk(chunk_type: bytes, data: bytes = b"") -> bytes:
+    return (
+        struct.pack(">I", len(data))
+        + chunk_type
+        + data
+        + struct.pack(">I", zlib.crc32(chunk_type + data))
+    )
+
+
+def _png_ihdr(width: int, height: int) -> bytes:
+    return _png_chunk(
+        b"IHDR",
+        struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0),
+    )
+
+
+def _png(width: int, height: int) -> bytes:
+    scanlines = (b"\x00" + bytes(width)) * height
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_ihdr(width, height)
+        + _png_chunk(b"IDAT", zlib.compress(scanlines))
+        + _png_chunk(b"IEND")
+    )
+
+
+def _symlink_to_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target)
+    except NotImplementedError as error:
+        pytest.skip(f"symlink creation is not supported: {error}")
+    except OSError as error:
+        unsupported_errors = {errno.EACCES, errno.ENOSYS, errno.ENOTSUP, errno.EPERM}
+        if (
+            error.errno in unsupported_errors
+            or getattr(error, "winerror", None) == 1314
+        ):
+            pytest.skip(f"symlink creation is not supported: {error}")
+        raise
+
+
+def _summary_detail_artifact_html() -> str:
+    return (
+        '<link rel="canonical" '
+        'href="https://yamopeng0918.github.io/AI-Summary/summaries/demo/">'
+        '<meta property="og:title" content="AI &amp; &quot;ML&quot; &lt;速報&gt;｜AI Digest">'
+        '<meta property="og:description" content="Research &amp; results">'
+        '<meta property="og:type" content="article">'
+        '<meta property="og:url" '
+        'content="https://yamopeng0918.github.io/AI-Summary/summaries/demo/">'
+        '<meta property="og:image" '
+        'content="https://yamopeng0918.github.io/AI-Summary/og/demo.png">'
+        '<meta property="og:image:width" content="1200">'
+        '<meta property="og:image:height" content="630">'
+        '<meta property="og:image:alt" content="AI &amp; &quot;ML&quot; &lt;速報&gt;">'
+        '<meta name="twitter:card" content="summary_large_image">'
+        '<meta name="twitter:title" content="AI &amp; &quot;ML&quot; &lt;速報&gt;｜AI Digest">'
+        '<meta name="twitter:description" content="Research &amp; results">'
+        '<meta name="twitter:image" '
+        'content="https://yamopeng0918.github.io/AI-Summary/og/demo.png">'
+    )
+
+
+def _summary_card_artifact_html(
+    *,
+    image_src: str = "/AI-Summary/og/demo.png",
+    loading: str = "lazy",
+) -> str:
+    return (
+        '<a href="/AI-Summary/summaries/demo/">'
+        '<img class="summary-card-image" '
+        f'src="{image_src}" alt="AI &amp; &quot;ML&quot; &lt;速報&gt;" '
+        f'width="1200" height="630" loading="{loading}" decoding="async">'
+        "</a>"
+    )
 
 
 def test_tracked_paths_supports_utf8_filenames(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -152,6 +236,568 @@ def test_generated_links_reports_a_missing_dist_directory(tmp_path: Path) -> Non
     ]
 
 
+def test_generated_links_rejects_missing_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png is missing"
+    ]
+
+
+def test_generated_links_rejects_malformed_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        '<meta property="og:image" content="/AI-Summary/og/demo.png">',
+        encoding="utf-8",
+    )
+    image.write_bytes(b"not a PNG")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png is not a PNG"
+    ]
+
+
+def test_generated_links_rejects_wrong_sized_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        '<meta name="twitter:image" content="/AI-Summary/og/demo.png">',
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 629))
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png must be 1200x630 PNG (found 1200x629)"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_with_truncated_ihdr(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x04\xb0")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png has a truncated PNG IHDR"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_without_ihdr_crc(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(b"\x89PNG\r\n\x1a\n" + _png_ihdr(1200, 630)[:-4])
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png has a truncated PNG IHDR"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_with_invalid_ihdr_layout(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0cIHDR" + b"\x00" * 17)
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png has an invalid PNG IHDR"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("png_bytes", "violation"),
+    [
+        (
+            b"\x89PNG\r\n\x1a\n" + _png_ihdr(1200, 630) + _png_chunk(b"IEND"),
+            "PNG has no IDAT chunk",
+        ),
+        (
+            _png(1200, 630)[:-12],
+            "PNG has no terminal IEND chunk",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1200, 630)
+            + _png_ihdr(1200, 630)
+            + _png_chunk(b"IDAT", zlib.compress(b""))
+            + _png_chunk(b"IEND"),
+            "PNG must contain exactly one IHDR first",
+        ),
+        (
+            _png(1200, 630)[:-1] + bytes([_png(1200, 630)[-1] ^ 0xFF]),
+            "PNG CRC mismatch in IEND",
+        ),
+        (
+            _png(1200, 630)[:-2],
+            "has a truncated PNG chunk",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1200, 630)
+            + _png_chunk(b"IDAT", b"not zlib")
+            + _png_chunk(b"IEND"),
+            "has undecodable PNG image data",
+        ),
+        (
+            _png(1200, 630) + b"trailing",
+            "PNG has data after IEND",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_chunk(b"IDAT", zlib.compress(b""))
+            + _png_ihdr(1200, 630)
+            + _png_chunk(b"IEND"),
+            "PNG must contain exactly one IHDR first",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1200, 630)
+            + struct.pack(">I", 16_777_217)
+            + b"IDAT",
+            "PNG chunk exceeds 16777216-byte limit",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1, 1)
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00\x00")[:5])
+            + _png_chunk(b"tEXt", b"key\x00value")
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00\x00")[5:])
+            + _png_chunk(b"IEND"),
+            "PNG IDAT chunks must be consecutive",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1, 1)
+            + _png_chunk(b"IDAT", zlib.compress(b"\x00"))
+            + _png_chunk(b"IEND"),
+            "has undecodable PNG image data",
+        ),
+        (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_ihdr(1, 1)
+            + _png_chunk(b"IDAT", zlib.compress(b"\x05\x00"))
+            + _png_chunk(b"IEND"),
+            "has an invalid PNG row filter",
+        ),
+    ],
+    ids=[
+        "missing-idat",
+        "missing-iend",
+        "duplicate-ihdr",
+        "bad-crc",
+        "truncated-chunk",
+        "undecodable-idat",
+        "data-after-iend",
+        "ihdr-not-first",
+        "oversized-chunk",
+        "non-consecutive-idat",
+        "incorrect-scanline-length",
+        "invalid-row-filter",
+    ],
+)
+def test_generated_links_rejects_incomplete_or_undecodable_png_structure(
+    tmp_path: Path,
+    png_bytes: bytes,
+    violation: str,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(png_bytes)
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png {violation}"
+    ]
+
+
+def test_png_scanline_runs_remain_compact_for_maximum_dimensions() -> None:
+    from scripts.verify_deployment import _png_scanline_runs
+
+    assert _png_scanline_runs(1, 0xFFFFFFFF, 8, 0) == ((1, 0xFFFFFFFF),)
+    adam7_runs = _png_scanline_runs(0xFFFFFFFF, 0xFFFFFFFF, 32, 1)
+    assert 1 <= len(adam7_runs) <= 7
+    assert all(row_bytes > 0 and row_count > 0 for row_bytes, row_count in adam7_runs)
+
+
+def test_generated_links_rejects_maximum_height_before_scanline_allocation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/demo.png">', encoding="utf-8")
+    image.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + _png_ihdr(1, 0xFFFFFFFF)
+        + _png_chunk(b"IEND")
+    )
+
+    def fail_materialized_scanline_list(*_args: object) -> list[int]:
+        pytest.fail("attempted to materialize one entry per PNG scanline")
+
+    monkeypatch.setattr(
+        deployment,
+        "_png_scanline_lengths",
+        fail_materialized_scanline_list,
+        raising=False,
+    )
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/demo.png "
+        "has oversized decoded PNG image data"
+    ]
+
+
+def test_generated_links_rejects_referenced_og_image_path_traversal(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="/AI-Summary/../outside.png">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/../outside.png escapes distribution directory"
+    ]
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "/AI-Summary%2f..%2foutside.png",
+        "/AI-Summary%5c..%5coutside.png",
+        "https://yamopeng0918.github.io/AI-Summary\\..\\outside.png",
+        "https://yamopeng0918.github.io\\AI-Summary\\..\\outside.png",
+        "https://yamopeng0918.github.io/AI-Summary/og/%2e%2e/%2e%2e/outside.png",
+    ],
+)
+def test_generated_links_rejects_encoded_or_backslash_og_image_traversal(
+    tmp_path: Path,
+    reference: str,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(f'<img src="{reference}">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image {reference} escapes distribution directory"
+    ]
+
+
+def test_generated_links_collects_each_relevant_image_attribute(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(
+        '<img src="/AI-Summary/og/first.png" src="/AI-Summary/og/second.png">',
+        encoding="utf-8",
+    )
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/first.png is missing",
+        f"{detail}: local image /AI-Summary/og/second.png is missing",
+    ]
+
+
+def test_generated_links_collects_each_relevant_meta_content_attribute(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(
+        '<meta property="og:image" content="/AI-Summary/og/first.png" '
+        'content="/AI-Summary/og/second.png">',
+        encoding="utf-8",
+    )
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image /AI-Summary/og/first.png is missing",
+        f"{detail}: local image /AI-Summary/og/second.png is missing",
+    ]
+
+
+def test_generated_links_collects_same_site_absolute_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    reference = "https://yamopeng0918.github.io/AI-Summary/og/demo.png"
+    detail.write_text(f'<img src="{reference}">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: local image {reference} is missing"
+    ]
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "/og/demo.png",
+        "https://yamopeng0918.github.io/og/demo.png",
+    ],
+    ids=["root-relative", "same-site-absolute"],
+)
+def test_generated_links_rejects_image_urls_outside_the_approved_base(
+    tmp_path: Path,
+    reference: str,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(f'<img src="{reference}">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: image reference {reference} misses /AI-Summary/"
+    ]
+
+
+def test_generated_links_accepts_percent_encoded_unicode_og_image_path(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "中文" / "index.html"
+    image = tmp_path / "og" / "中文.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text('<img src="/AI-Summary/og/%E4%B8%AD%E6%96%87.png">', encoding="utf-8")
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_generated_links_ignores_external_origin_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="https://example.com/og/demo.png">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_generated_links_ignores_data_url_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="data:image/png;base64,AAAA">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_generated_links_reports_malformed_og_image_url_without_raising(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    detail.parent.mkdir(parents=True)
+    detail.write_text('<img src="https://[bad">', encoding="utf-8")
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == [
+        f"{detail}: malformed image reference"
+    ]
+
+
+def test_generated_links_accepts_valid_referenced_og_image(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        '<img src="https://yamopeng0918.github.io/AI-Summary/og/demo.png">'
+        '<meta property="og:image" content="/AI-Summary/og/demo.png">'
+        '<meta name="twitter:image" content="/AI-Summary/og/demo.png">',
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_links(tmp_path, "/AI-Summary/") == []
+
+
+def test_summary_artifacts_accept_escaped_https_metadata_and_resolved_card_image(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    (tmp_path / "index.html").write_text(
+        _summary_card_artifact_html(),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == []
+
+
+@pytest.mark.parametrize(
+    "image_src",
+    [
+        "/AI-Summary/%2e%2e/outside.png",
+        "/AI-Summary/%2Foutside.png",
+    ],
+    ids=["encoded-traversal", "encoded-absolute-path"],
+)
+def test_summary_artifacts_reject_outside_card_path_before_filesystem_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    image_src: str,
+) -> None:
+    dist_root = tmp_path / "dist"
+    detail = dist_root / "summaries" / "demo" / "index.html"
+    homepage = dist_root / "index.html"
+    outside = tmp_path / "outside.png"
+    detail.parent.mkdir(parents=True)
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    homepage.write_text(
+        _summary_card_artifact_html(image_src=image_src),
+        encoding="utf-8",
+    )
+    outside.write_bytes(_png(1200, 630))
+
+    resolved_dist_root = dist_root.resolve()
+    original_is_file = Path.is_file
+
+    def guarded_is_file(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside path was probed: {path.resolve()}")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+
+    assert verify_generated_summary_artifacts(dist_root, "/AI-Summary/") == [
+        f"{homepage}: card image {image_src} escapes distribution directory",
+        f"{homepage}: card image {image_src} does not match a published summary",
+        f"{detail}: published summary has no matching homepage card image",
+    ]
+
+
+def test_summary_artifacts_reject_symlink_escape_before_filesystem_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    detail = dist_root / "summaries" / "demo" / "index.html"
+    homepage = dist_root / "index.html"
+    outside = tmp_path / "outside.png"
+    symlink = dist_root / "og" / "escape.png"
+    detail.parent.mkdir(parents=True)
+    symlink.parent.mkdir()
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    image_src = "/AI-Summary/og/escape.png"
+    homepage.write_text(
+        _summary_card_artifact_html(image_src=image_src),
+        encoding="utf-8",
+    )
+    outside.write_bytes(_png(1200, 630))
+    _symlink_to_or_skip(symlink, outside)
+
+    resolved_dist_root = dist_root.resolve()
+    original_is_file = Path.is_file
+
+    def guarded_is_file(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside path was probed: {path.resolve()}")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+
+    assert verify_generated_summary_artifacts(dist_root, "/AI-Summary/") == [
+        f"{homepage}: card image {image_src} escapes distribution directory",
+        f"{homepage}: card image {image_src} does not match a published summary",
+        f"{detail}: published summary has no matching homepage card image",
+    ]
+
+
+def test_summary_artifacts_reject_an_unescaped_metadata_attribute(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        _summary_detail_artifact_html().replace(
+            'property="og:title" content="AI &amp;',
+            'property="og:title" content="AI &',
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "index.html").write_text(
+        _summary_card_artifact_html(),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == [
+        f"{detail}: metadata og:title content is not safely HTML-escaped"
+    ]
+
+
+def test_summary_artifacts_reject_non_https_image_metadata(tmp_path: Path) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(
+        _summary_detail_artifact_html().replace(
+            'property="og:image" content="https://',
+            'property="og:image" content="http://',
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "index.html").write_text(
+        _summary_card_artifact_html(),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == [
+        f"{detail}: metadata og:image must be an absolute HTTPS URL"
+    ]
+
+
+def test_summary_artifacts_reject_unresolved_or_misconfigured_card_image(
+    tmp_path: Path,
+) -> None:
+    detail = tmp_path / "summaries" / "demo" / "index.html"
+    image = tmp_path / "og" / "demo.png"
+    homepage = tmp_path / "index.html"
+    detail.parent.mkdir(parents=True)
+    image.parent.mkdir()
+    detail.write_text(_summary_detail_artifact_html(), encoding="utf-8")
+    homepage.write_text(
+        _summary_card_artifact_html(
+            image_src="/AI-Summary/og/missing.png",
+            loading="eager",
+        ),
+        encoding="utf-8",
+    )
+    image.write_bytes(_png(1200, 630))
+
+    assert verify_generated_summary_artifacts(tmp_path, "/AI-Summary/") == [
+        f"{homepage}: card image /AI-Summary/og/missing.png is missing",
+        f"{homepage}: card image /AI-Summary/og/missing.png must use loading=lazy",
+        f"{homepage}: card image /AI-Summary/og/missing.png does not match a published summary",
+        f"{detail}: published summary has no matching homepage card image",
+    ]
+
+
 @pytest.mark.parametrize(
     ("relative_path", "contents", "violation"),
     [
@@ -190,3 +836,228 @@ def test_dist_cli_recursively_rejects_sensitive_generated_files(
 
     assert main(["--dist", str(tmp_path), "--base", "/AI-Summary/"]) == 1
     assert capsys.readouterr().err == f"{leaked}: {violation}\n"
+
+
+def test_dist_cli_rejects_symlink_escape_before_file_probe(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    outside = tmp_path / "outside.html"
+    symlink = dist_root / "outside-link.html"
+    dist_root.mkdir()
+    outside.write_text("sk-proj-" + "A" * 32, encoding="utf-8")
+    _symlink_to_or_skip(symlink, outside)
+
+    resolved_dist_root = dist_root.resolve()
+    original_is_file = Path.is_file
+    original_read_bytes = Path.read_bytes
+    original_read_text = Path.read_text
+
+    def guarded_is_file(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside distribution path was probed: {path}")
+        return original_is_file(path)
+
+    def guarded_read_bytes(path: Path) -> bytes:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside distribution path was read: {path}")
+        return original_read_bytes(path)
+
+    def guarded_read_text(path: Path, *args: object, **kwargs: object) -> str:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside distribution path was read as text: {path}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+    monkeypatch.setattr(Path, "read_bytes", guarded_read_bytes)
+    monkeypatch.setattr(Path, "read_text", guarded_read_text)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == (
+        f"{symlink}: distribution entry escapes distribution directory\n"
+    )
+
+
+def test_dist_cli_rejects_outside_enumeration_candidate_before_file_probe(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    outside = tmp_path / "outside.html"
+    dist_root.mkdir()
+    outside.write_text("sk-proj-" + "A" * 32, encoding="utf-8")
+
+    resolved_dist_root = dist_root.resolve()
+    original_rglob = Path.rglob
+    original_is_file = Path.is_file
+    original_read_bytes = Path.read_bytes
+    original_read_text = Path.read_text
+
+    def injected_rglob(path: Path, pattern: str) -> Iterator[Path]:
+        if path == dist_root and pattern in {"*", "*.html"}:
+            yield outside
+            return
+        yield from original_rglob(path, pattern)
+
+    def guarded_is_file(path: Path) -> bool:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside distribution path was probed: {path}")
+        return original_is_file(path)
+
+    def guarded_read_bytes(path: Path) -> bytes:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside distribution path was read: {path}")
+        return original_read_bytes(path)
+
+    def guarded_read_text(path: Path, *args: object, **kwargs: object) -> str:
+        try:
+            path.resolve().relative_to(resolved_dist_root)
+        except ValueError:
+            pytest.fail(f"outside distribution path was read as text: {path}")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "rglob", injected_rglob)
+    monkeypatch.setattr(Path, "is_file", guarded_is_file)
+    monkeypatch.setattr(Path, "read_bytes", guarded_read_bytes)
+    monkeypatch.setattr(Path, "read_text", guarded_read_text)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == (
+        f"{outside}: distribution entry escapes distribution directory\n"
+    )
+
+
+def test_dist_cli_reports_unresolvable_distribution_entry_stably(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    candidate = dist_root / "asset.txt"
+    dist_root.mkdir()
+    candidate.write_text("safe", encoding="utf-8")
+
+    original_resolve = Path.resolve
+
+    def failing_resolve(path: Path, *args: object, **kwargs: object) -> Path:
+        if path == candidate:
+            raise OSError("platform-specific resolution detail")
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", failing_resolve)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == (
+        f"{candidate}: distribution entry could not be resolved\n"
+    )
+
+
+def test_dist_cli_reports_uninspectable_distribution_directory_stably(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    dist_root.mkdir()
+
+    original_is_dir = Path.is_dir
+
+    def failing_is_dir(path: Path) -> bool:
+        if path == dist_root:
+            raise OSError("platform-specific directory inspection detail")
+        return original_is_dir(path)
+
+    monkeypatch.setattr(Path, "is_dir", failing_is_dir)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == (
+        f"{dist_root}: distribution directory could not be inspected\n"
+    )
+
+
+def test_dist_cli_reports_uninspectable_internal_entry_stably(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    candidate = dist_root / "asset.txt"
+    dist_root.mkdir()
+    candidate.write_text("safe", encoding="utf-8")
+
+    original_is_file = Path.is_file
+
+    def failing_is_file(path: Path) -> bool:
+        if path == candidate:
+            raise OSError("platform-specific inspection detail")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", failing_is_file)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == (
+        f"{candidate}: distribution entry could not be inspected\n"
+    )
+
+
+def test_dist_cli_reports_unreadable_internal_entry_stably(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    candidate = dist_root / "asset.txt"
+    dist_root.mkdir()
+    candidate.write_text("safe", encoding="utf-8")
+
+    original_read_bytes = Path.read_bytes
+
+    def failing_read_bytes(path: Path) -> bytes:
+        if path == candidate:
+            raise OSError("platform-specific read detail")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", failing_read_bytes)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == (
+        f"{candidate}: distribution entry could not be read\n"
+    )
+
+
+def test_dist_cli_preserves_dot_env_name_for_resolved_internal_alias(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dist_root = tmp_path / "dist"
+    alias = dist_root / ".env"
+    target = dist_root / "safe.txt"
+    dist_root.mkdir()
+    alias.write_text("safe", encoding="utf-8")
+    target.write_text("safe", encoding="utf-8")
+
+    original_resolve = Path.resolve
+
+    def resolve_alias(path: Path, *args: object, **kwargs: object) -> Path:
+        if path == alias:
+            return target
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve_alias)
+
+    assert main(["--dist", str(dist_root), "--base", "/AI-Summary/"]) == 1
+    assert capsys.readouterr().err == f"{alias}: tracked .env file\n"

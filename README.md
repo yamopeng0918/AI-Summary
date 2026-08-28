@@ -186,6 +186,10 @@ Set-Location site
 npm.cmd run build:pages
 ```
 
+`npm.cmd run build:pages` 會為每筆 `published` 摘要自動建立一張 PNG，輸出至 `site/dist/og/`，供首頁卡片及摘要詳情頁的 Open Graph／Twitter metadata 使用。這些 PNG 與 `site/dist` 的其他內容都是建置 artifact，不是要加入 Git 追蹤的內容；每次部署應由來源資料重新產生。
+
+OG 圖固定使用 repository 內的官方完整 Pan-CJK `NotoSerifCJKtc-Regular.otf`（400）與 `NotoSerifCJKtc-Bold.otf`（700），並保留 OFL-1.1 授權；正常測試與建置不會下載字型。渲染前會對所有顯示字串執行 fail-closed cmap 覆蓋檢查，避免缺字被靜默替換；標題、摘要與來源分別使用保守的 `18`／`40`／`36` 個全形等價字元界限，所有 fitted 行均保持不換行。替換字型時必須同時提供兩個完整靜態 OTF、更新授權文件，並通過完整字串覆蓋測試。
+
 兩種建置的輸出都位於 `site/dist`。部署前也可在 repository 根目錄掃描追蹤檔案與建置輸出：
 
 ```powershell

@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { homePath } from '../../lib/paths';
+import { homePath, ogImagePath, summaryPath } from '../../lib/paths';
 import type { SummaryRecord } from '../../lib/summaries';
 import { loadPublishedSummaries } from '../../lib/summary-loader';
 
@@ -18,9 +18,23 @@ interface Props {
 
 const { record } = Astro.props;
 const baseUrl = import.meta.env.BASE_URL;
+
+if (!Astro.site) {
+  throw new Error('Astro.site must be configured to generate summary metadata URLs.');
+}
+
+const canonicalUrl = new URL(summaryPath(baseUrl, record.id), Astro.site);
+const ogImageUrl = new URL(ogImagePath(baseUrl, record.id), Astro.site);
 ---
 
-<BaseLayout title={`${record.title}｜AI Digest`}>
+<BaseLayout
+  title={`${record.title}｜AI Digest`}
+  description={record.summary}
+  canonicalUrl={canonicalUrl.href}
+  ogImageUrl={ogImageUrl.href}
+  ogImageAlt={record.title}
+  pageType="article"
+>
   <article class="detail">
     <a class="back-link" href={homePath(baseUrl)}>← 返回摘要列表</a>
     <header class="detail-header">

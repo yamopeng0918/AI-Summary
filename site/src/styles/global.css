@@ -25,6 +25,7 @@ a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid 
 input, select { background: #fffdf8; border: 1px solid #8c968f; border-radius: .35rem; color: inherit; font: inherit; padding: .65rem; }
 .summary-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
 .summary-card { background: #fffdf8; border: 1px solid #d7d5cc; border-radius: .5rem; display: flex; flex-direction: column; padding: 1.25rem; }
+.summary-card-image { aspect-ratio: 1200 / 630; border-radius: .3rem; display: block; object-fit: cover; width: 100%; }
 .summary-card h2 { font-size: 1.25rem; line-height: 1.4; margin: .65rem 0; }
 .summary-card h2 a { color: inherit; }
 .summary-card p { color: #4a554d; flex-grow: 1; margin: 0 0 1rem; }

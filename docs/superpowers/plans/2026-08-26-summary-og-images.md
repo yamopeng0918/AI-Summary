@@ -6,16 +6,18 @@
 
 **Architecture:** The existing validated published-summary loader remains the only data source. A focused TypeScript renderer converts display-safe summary fields to Satori SVG and then Sharp PNG; an Astro static endpoint exposes those bytes under the existing Pages base path. Shared path helpers feed both page metadata and card markup, while the deployment verifier confirms that generated HTML references real, valid PNG assets.
 
-**Tech Stack:** Astro 7.2, TypeScript 5.8, Vitest 3.2, Satori, Sharp 0.35.3, Python 3 deployment verifier, Noto Serif TC under OFL-1.1.
+**Tech Stack:** Astro 7.2, TypeScript 5.8, Vitest 3.2, Satori, Sharp 0.35.3, `@shuding/opentype.js` cmap parser, Python 3 deployment verifier, full Pan-CJK Noto Serif CJK TC static OTFs under OFL-1.1.
 
 ## Global Constraints
 
 - Generate only from records returned by `loadPublishedSummaries()`; invalid and archived records remain fail-closed.
 - Output must be a non-empty PNG with exact dimensions 1200 × 630.
 - Use the approved editorial layout: warm white `#f7f2e7`, dark green `#17352d`, orange `#ef6a47`.
-- Show `AI DIGEST`, category, title, one-to-two summary lines, source label, and uppercase source type.
+- Show `AI DIGEST` at upper-left, category at upper-right, title, one-to-two summary lines, and a footer containing a bounded source label plus uppercase source type.
 - Source label is the non-blank author when available; otherwise it is `new URL(canonicalUrl).hostname`.
-- Bundle Noto Serif TC variable TTF and OFL-1.1 license in the repository; no runtime or build-time font download is allowed.
+- Fit title lines at 18 full-width-equivalent glyphs, summary lines at 40 glyphs, and the source label at 36 glyphs; fitted lines are `nowrap` and only truncated final lines receive one ellipsis.
+- Bundle official full Pan-CJK static `NotoSerifCJKtc-Regular.otf` (400), `NotoSerifCJKtc-Bold.otf` (700), and the OFL-1.1 license in the repository; no runtime or build-time font download is allowed.
+- Before Satori runs, parse both bundled cmaps and fail closed if any actual displayed string lacks a glyph in its assigned weight.
 - Do not change the summary JSON Schema or write generated PNG files into `data/summaries`.
 - Generated PNG files live only in `site/dist/og/`; do not track build output.
 - Homepage cards display the image; detail-page body does not.
@@ -30,14 +32,16 @@
 **Files:**
 - Modify: `site/package.json`
 - Modify: `site/package-lock.json`
-- Create: `site/src/assets/fonts/NotoSerifTC-VariableFont_wght.ttf`
+- Create: `site/src/assets/fonts/NotoSerifCJKtc-Regular.otf`
+- Create: `site/src/assets/fonts/NotoSerifCJKtc-Bold.otf`
 - Create: `site/src/assets/fonts/OFL.txt`
 - Create: `site/src/lib/og-image.ts`
 - Create: `site/src/lib/og-image.test.ts`
+- Create: `site/src/types/shuding-opentype.d.ts`
 
 **Interfaces:**
 - Consumes: `SummaryRecord` from `site/src/lib/summaries.ts`.
-- Produces: `OgImageContent`, `createOgImageContent(record: SummaryRecord): OgImageContent`, and `fitOgText(text: string, limits: readonly number[]): string[]`.
+- Produces: `OgImageContent`, `OgImageLayout`, `createOgImageContent(record)`, `createOgImageLayout(record)`, `fitOgText(text, limits)`, and `assertFontCoversStrings(font, strings, label)`.
 
 - [ ] **Step 1: Write failing tests for source selection, source type, line fitting, and hostile text**
 
@@ -103,11 +107,10 @@ Run from `site/` after network approval:
 
 ```powershell
 npm.cmd install --save-exact satori sharp@0.35.3
-Invoke-WebRequest 'https://raw.githubusercontent.com/google/fonts/main/ofl/notoseriftc/NotoSerifTC%5Bwght%5D.ttf' -OutFile 'src/assets/fonts/NotoSerifTC-VariableFont_wght.ttf'
-Invoke-WebRequest 'https://raw.githubusercontent.com/google/fonts/main/ofl/notoseriftc/OFL.txt' -OutFile 'src/assets/fonts/OFL.txt'
+Add the official full Pan-CJK static `NotoSerifCJKtc-Regular.otf` (400), `NotoSerifCJKtc-Bold.otf` (700), and `OFL.txt` to `src/assets/fonts/`. Add `@shuding/opentype.js` as a direct exact dependency because production code uses its cmap parser.
 ```
 
-Confirm both downloaded files are non-empty and `OFL.txt` contains `SIL OPEN FONT LICENSE Version 1.1`. Do not execute either download during normal tests or builds.
+Confirm both static OTFs start with `OTTO`, cover every current display string including exact regression characters `级`、`战`、`术`、`来`, and retain the OFL Version 1.1 text. Do not download fonts during normal tests or builds, and remove the obsolete subset TTFs.
 
 - [ ] **Step 4: Implement the minimal pure display model**
 
@@ -172,7 +175,7 @@ git commit -m "feat: add OG image content model"
 - Modify: `site/src/lib/og-image.ts`
 - Modify: `site/src/lib/og-image.test.ts`
 - Create: `site/src/pages/og/[id].png.ts`
-- Create: `site/src/pages/og/og-route.test.ts`
+- Create: `site/src/pages/og/_og-route.test.ts`
 
 **Interfaces:**
 - Consumes: `createOgImageContent(record)` from Task 1 and `loadPublishedSummaries()` from `summary-loader.ts`.
@@ -202,7 +205,7 @@ Expected: FAIL because `renderOgImage` is not exported.
 
 - [ ] **Step 3: Implement the approved editorial renderer**
 
-In `og-image.ts`, load the font once with `readFile` and `new URL('../assets/fonts/NotoSerifTC-VariableFont_wght.ttf', import.meta.url)`. Implement `renderOgImage` by passing a Satori element tree with fixed `width: 1200`, `height: 630`, approved colors, title lines from `fitOgText(content.title, [22, 22, 22])`, and summary lines from `fitOgText(content.summary, [46, 46])`; convert the SVG with:
+In `og-image.ts`, load both full static OTF assets once through module-relative imports. Build a deterministic layout with title lines limited to `[18, 18, 18]` full-width-equivalent glyphs, summary lines limited to `[40, 40]`, and a source label limited to `36`; every fitted line is `nowrap`, and only a truncated final line receives an ellipsis. Place `AI DIGEST` at upper-left, category at upper-right, and source plus uppercase source type in the footer. Before Satori runs, parse both bundled cmaps and fail closed if any displayed string is not covered; convert the SVG with:
 
 ```ts
 const png = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -213,7 +216,7 @@ if (metadata.format !== 'png' || metadata.width !== 1200 || metadata.height !== 
 return png;
 ```
 
-Register the bundled font in Satori as `Noto Serif TC`, data `fontData`, weight `400`, style `normal`; use the same font at higher CSS weights so the single variable file supplies the approved hierarchy. Keep all record strings as React/Satori text children, never as raw HTML.
+Register `NotoSerifCJKtc-Regular.otf` in Satori as `Noto Serif TC`, weight `400`, style `normal`, and `NotoSerifCJKtc-Bold.otf` under the same family, weight `700`, style `normal`. Use Regular for summary/supporting text and Bold for `AI DIGEST`, category, title, source, and source type. Keep all record strings as React/Satori text children, never as raw HTML.
 
 - [ ] **Step 4: Run the renderer test and confirm GREEN**
 
@@ -223,7 +226,7 @@ Expected: all OG content and PNG tests PASS.
 
 - [ ] **Step 5: Write a failing static-route test**
 
-Create `site/src/pages/og/og-route.test.ts` that imports the endpoint module and asserts:
+Create `site/src/pages/og/_og-route.test.ts` that imports the endpoint module and asserts. The leading underscore is intentional: Astro excludes underscore-prefixed files from page routing, so Vitest can colocate this test without accidentally generating a public test route.
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -249,7 +252,7 @@ describe('OG PNG route', () => {
 
 - [ ] **Step 6: Run the route test and confirm RED**
 
-Run: `npm.cmd test -- src/pages/og/og-route.test.ts`
+Run: `npm.cmd test -- src/pages/og/_og-route.test.ts`
 
 Expected: FAIL because `[id].png.ts` does not exist.
 
@@ -271,7 +274,7 @@ export async function GET({ props }: APIContext<Props>): Promise<Response> {
 Run:
 
 ```powershell
-npm.cmd test -- src/lib/og-image.test.ts src/pages/og/og-route.test.ts
+npm.cmd test -- src/lib/og-image.test.ts src/pages/og/_og-route.test.ts
 npm.cmd test
 ```
 
@@ -280,7 +283,7 @@ Expected: focused OG tests and the complete Vitest suite PASS.
 - [ ] **Step 9: Commit the PNG generation unit**
 
 ```powershell
-git add -- site/src/lib/og-image.ts site/src/lib/og-image.test.ts 'site/src/pages/og/[id].png.ts' site/src/pages/og/og-route.test.ts
+git add -- site/src/lib/og-image.ts site/src/lib/og-image.test.ts 'site/src/pages/og/[id].png.ts' site/src/pages/og/_og-route.test.ts
 git commit -m "feat: generate summary OG images"
 ```
 
@@ -439,11 +442,11 @@ git commit -m "feat: show OG images on summary cards"
 
 **Interfaces:**
 - Consumes: built `site/dist`, approved base path, local `<img src>`, `og:image`, and `twitter:image` references.
-- Produces: deployment violations for missing, malformed, or incorrectly sized local OG PNG files.
+- Produces: deployment violations for missing, malformed, undecodable, incorrectly sized, wrong-base, or inconsistent metadata/card OG assets.
 
 - [ ] **Step 1: Write failing verifier tests**
 
-Add tests that create a temporary `dist` containing a detail HTML file referencing `/AI-Summary/og/demo.png`. Cover four cases: missing PNG, wrong PNG signature, valid PNG with dimensions other than 1200 × 630, and a valid 1200 × 630 PNG. Use a tiny helper in the test to construct PNG IHDR bytes with `struct.pack('>II', width, height)`; no Pillow dependency is needed.
+Add tests that create a temporary `dist` containing detail and homepage HTML referencing `/AI-Summary/og/demo.png`. Build genuine minimal decodable PNG fixtures from signed chunks and compressed scanlines. Cover missing files, wrong signature/dimensions, truncated or oversized chunks, CRC failure, IHDR ordering/uniqueness, absent/non-terminal IEND, absent/non-consecutive IDAT, invalid decompressed scanlines, data after IEND, both root-relative and same-site absolute wrong-base URLs, escaped absolute HTTPS detail metadata, and resolved lazy homepage card images.
 
 - [ ] **Step 2: Run focused verifier tests and confirm RED**
 
@@ -455,9 +458,9 @@ Run from repository root:
 
 Expected: the new missing/malformed/dimension cases FAIL because generated image references are not inspected.
 
-- [ ] **Step 3: Implement local image-reference and PNG-header verification**
+- [ ] **Step 3: Implement complete local image, PNG, metadata, and card verification**
 
-Extend the HTML parser to collect `img src`, `meta[property="og:image"] content`, and `meta[name="twitter:image"] content`. Convert absolute URLs on `yamopeng0918.github.io` and root-relative values under the approved base into paths below `dist_root`; reject path traversal, missing files, non-PNG signatures, truncated IHDR data, and dimensions other than `(1200, 630)`. Ignore external origins and data URLs. Return deterministic violation strings without reading environment variables.
+Extend the HTML parser to collect local images, canonical links, Open Graph/Twitter metadata, summary-card links, and card image attributes. Before the `--dist` sensitive scan or either HTML verifier can read anything, build one sorted distribution inventory: resolve the root and every candidate, prove candidate containment before `is_file()`, retain both lexical candidate and resolved read target, and abort downstream reads on any deterministic resolution, escape, inspection, or read violation. Route both generic image references and summary cards through one resolver that normalizes percent escapes and backslashes, calls `resolve()`, and proves the result is below the resolved `dist_root` before any `is_file()`, read, or open; reject traversal, encoded absolute paths, and symlink escapes deterministically. Any root-relative or same-site absolute image URL outside `/AI-Summary/` is a deterministic violation, while external origins, data URLs, and supported relative forms remain ignored/resolved as specified. Parse PNG chunks with fixed file/chunk/count bounds, CRC validation, exactly one first `IHDR`, at least one consecutive `IDAT`, terminal `IEND`, no trailing/truncated data, and bounded zlib scanline decoding; represent non-interlaced/Adam7 scanlines as at most seven `(row_bytes, row_count)` runs and reject oversized decoded dimensions arithmetically before decompression. Require `(1200, 630)`, legal row filters, and exact decoded scanline length. Verify escaped absolute HTTPS metadata and that each published homepage card resolves to its matching image/detail artifact. Return deterministic violation strings without reading environment variables or downloading data.
 
 - [ ] **Step 4: Run focused verifier tests and confirm GREEN**
 
@@ -486,7 +489,7 @@ git commit -m "test: verify generated OG assets"
 
 - [ ] **Step 1: Add operator documentation**
 
-Document that `npm.cmd run build:pages` automatically creates one PNG per published summary under `site/dist/og/`, that generated files are build artifacts rather than tracked content, and that font replacement requires an OFL-compatible local TTF plus its license.
+Document that `npm.cmd run build:pages` automatically creates one PNG per published summary under `site/dist/og/`, that generated files are build artifacts rather than tracked content, and that the renderer bundles the two official full Pan-CJK `NotoSerifCJKtc-Regular.otf`/`NotoSerifCJKtc-Bold.otf` files with OFL-1.1. Record the fail-closed cmap check, no-download rule, and deterministic 18/40/36 fitting limits.
 
 - [ ] **Step 2: Run the complete automated gates**
 
@@ -516,9 +519,9 @@ every detail page og:image and twitter:image resolves to its PNG
 
 Expected: every assertion passes and no archived record has a PNG.
 
-- [ ] **Step 4: Perform visual acceptance on a real Chinese long-title image**
+- [ ] **Step 4: Perform visual acceptance on every generated image**
 
-Open the generated PNG for `20260814-always-be-coding-工程師面試必讀-techorange-科技報橘-7374d398` with the local image viewer. Confirm the approved editorial colors, readable Traditional Chinese glyphs, title and two-line summary hierarchy, source/type footer, no overflow, no clipping, and no tofu glyphs.
+Open all six current generated PNGs at original resolution with the local image viewer. For every record, confirm readable CJK glyphs (including `级`、`战`、`术`、`来` where present), no tofu, no clipping or overflow, category at upper-right, bounded source plus uppercase source type in the footer, and sufficient foreground/background contrast. Record a per-record result rather than extrapolating from one representative image.
 
 - [ ] **Step 5: Synchronize project status only after all gates pass**
 
