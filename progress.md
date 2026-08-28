@@ -71,6 +71,13 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
+### 2026-08-28：Bluesky 功能整合至 master
+
+- `feature/bluesky-social-post` 已以 fast-forward 整合至本機 `master`，功能整合提交為 `e31ab4b`；全分支最終審查確認無 Critical、Important 或 Minor finding，判定可合併。
+- 合併後重新執行完整 gates：Python `601 passed, 2 skipped, 1 warning`；兩個 skip 仍為 Windows 帳號缺少 symlink 建立權限，warning 仍為第三方 `google-genai` deprecation。Vitest 為 `6` 個檔案、`52 passed`。
+- `npm run build` 與 `npm run build:pages` 均通過 Astro `17` 個檔案、`0 errors / 0 warnings / 0 hints`，各建置 `7` 個頁面；Pages build 內嵌 verifier 與獨立 `scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` 均 exit `0`，`git diff --check` 亦通過。
+- 本次整合不包含真實 Bluesky 貼文、付費摘要或遠端公開驗收資料；這些項目仍依下方待辦維持未驗證。下一個 Git 動作是將已驗證的 `master` 提交推送至 `origin/master`。
+
 ### 2026-08-28：Bluesky 公開貼文本機驗證
 
 - 已完成 Bluesky 的本機實作範圍：來源 URL 辨識與 DID canonicalization、獨立 AppView client／extractor、回覆拒絕與安全錯誤邊界、CLI 路由與重複 URL 預檢，以及 `sourceType: social` 的 Schema／儲存／Astro 契約。沒有新增其他社群平台、登入處理、完整討論串或常駐服務。
