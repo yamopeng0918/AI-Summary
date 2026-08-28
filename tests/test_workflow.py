@@ -208,6 +208,47 @@ def test_workflow_rejects_existing_canonical_url_before_any_remote_stage(monkeyp
     assert repository.saved == []
 
 
+def test_workflow_rejects_bluesky_did_alias_after_extraction_before_summary() -> None:
+    events: list[str] = []
+    existing = SummaryRecord(
+        schemaVersion=1,
+        id="existing-social-post",
+        canonicalUrl="https://bsky.app/profile/did:plc:alice/post/3social",
+        sourceType="social",
+        title="Existing Bluesky post",
+        author=None,
+        sourcePublishedAt=None,
+        createdAt=NOW,
+        updatedAt=NOW,
+        summary="Summary",
+        keyPoints=["One", "Two", "Three"],
+        category=CATEGORY,
+        tags=["Bluesky"],
+        editorial="Editorial",
+        status="published",
+    )
+    article = make_article(source_type="social").model_copy(
+        update={"canonical_url": "https://bsky.app/profile/did:plc:alice/post/3social"}
+    )
+    workflow, repository, classifier = make_workflow(events, article=article, existing=[existing])
+
+    with pytest.raises(DigestError) as raised:
+        workflow.run("https://bsky.app/profile/alice.example/post/3social", NOW)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "input",
+        "DUPLICATE_URL",
+        False,
+    )
+    assert events == [
+        "preflight",
+        "extract:https://bsky.app/profile/alice.example/post/3social",
+        "preflight",
+    ]
+    assert classifier.inputs == []
+    assert repository.saved == []
+
+
 @pytest.mark.parametrize(
     ("summarizer_error", "classifier_error", "category", "stage"),
     [

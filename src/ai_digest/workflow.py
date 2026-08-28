@@ -32,6 +32,10 @@ def _record_id(title: str, canonical_url: str, now: datetime) -> str:
     return f"{date}-{_title_slug(title)}-{suffix}"
 
 
+def _has_canonical_url(repository: SummaryRepository, canonical_url: str) -> bool:
+    return any(str(record.canonical_url) == canonical_url for record in repository.list())
+
+
 class AddArticleWorkflow:
     """Coordinate preflight, extraction, summarization, classification, and saving."""
 
@@ -53,11 +57,14 @@ class AddArticleWorkflow:
         """Create and atomically save a published summary record."""
         self._on_progress("input")
         canonical_url = canonicalize_source_url(raw_url)
-        if any(str(record.canonical_url) == canonical_url for record in self._repository.list()):
+        if _has_canonical_url(self._repository, canonical_url):
             raise DigestError("input", "DUPLICATE_URL", "A summary already exists for this URL", False)
 
         self._on_progress("extract")
         article = self._extractor.extract(canonical_url)
+        resolved_url = str(article.canonical_url)
+        if resolved_url != canonical_url and _has_canonical_url(self._repository, resolved_url):
+            raise DigestError("input", "DUPLICATE_URL", "A summary already exists for this URL", False)
         self._on_progress("summarize")
         draft = self._summarizer.summarize(article)
         classifier_text = "\n\n".join([article.title, draft.summary, "\n".join(draft.key_points)])

@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from ai_digest.classifiers.fixed import FixedClassifier
-from ai_digest.domain import DigestError, ExtractedArticle, SummaryDraft, SummaryRecord
+from ai_digest.domain import DigestError, ExtractedArticle, SummaryDraft, SummaryRecord, VALID_CATEGORIES
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
@@ -26,6 +26,18 @@ class DeterministicSummarizer:
             keyPoints=["公共服務採用人工智慧", "導入過程重視資料品質", "應持續評估實際成效"],
             tags=["人工智慧", "公共服務"],
             editorial="技術效益應與透明治理一併檢視。",
+        )
+
+
+class FakeBlueskyExtractor:
+    def extract(self, url: str) -> ExtractedArticle:
+        return ExtractedArticle(
+            canonicalUrl="https://bsky.app/profile/did:plc:alice/post/3social",
+            sourceType="social",
+            title="Alice's Bluesky post",
+            author="Alice",
+            publishedAt="2026-08-08T10:00:00+08:00",
+            text="A public Bluesky post from the local fixture path.",
         )
 
 
@@ -67,6 +79,37 @@ def test_local_fixture_runs_through_real_extractor_to_valid_published_json(
 
     with pytest.raises(DigestError) as raised:
         workflow.run("https://example.com/article", NOW)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "input",
+        "DUPLICATE_URL",
+        False,
+    )
+    assert list(tmp_path.glob("*.json")) == paths
+
+
+def test_local_bluesky_handle_alias_writes_only_one_did_social_record(tmp_path: Path) -> None:
+    repository = SummaryRepository(tmp_path)
+    workflow = AddArticleWorkflow(
+        FakeBlueskyExtractor(),
+        DeterministicSummarizer(),
+        FixedClassifier(next(iter(VALID_CATEGORIES))),
+        repository,
+    )
+
+    record = workflow.run("https://bsky.app/profile/did:plc:alice/post/3social", NOW)
+
+    paths = list(tmp_path.glob("*.json"))
+    assert len(paths) == 1
+    saved = SummaryRecord.model_validate(json.loads(paths[0].read_text(encoding="utf-8")))
+    assert saved == record
+    assert str(saved.canonical_url) == "https://bsky.app/profile/did:plc:alice/post/3social"
+    assert saved.source_type == "social"
+    assert repository.list() == [record]
+    assert repository.get(record.id) == record
+
+    with pytest.raises(DigestError) as raised:
+        workflow.run("https://bsky.app/profile/alice.example/post/3social", NOW)
 
     assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
         "input",
