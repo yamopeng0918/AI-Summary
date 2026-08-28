@@ -17,6 +17,7 @@ from ai_digest.classifiers.base import Classifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.classifiers.trained import TrainedClassifier
 from ai_digest.domain import DigestError, SummaryRecord
+from ai_digest.extractors.bluesky import BlueskyAppViewClient, BlueskyExtractor
 from ai_digest.extractors.router import ExtractorRouter, LazyExtractor
 from ai_digest.extractors.web import WebExtractor
 from ai_digest.extractors.youtube import (
@@ -145,6 +146,7 @@ def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWor
         extractor=ExtractorRouter(
             WebExtractor(client_factory=_web_client_factory),
             LazyExtractor(lambda: _youtube_extractor(provider)),
+            BlueskyExtractor(BlueskyAppViewClient(client_factory=_web_client_factory)),
         ),
         summarizer=_summarizer(provider),
         classifier=_classifier(),

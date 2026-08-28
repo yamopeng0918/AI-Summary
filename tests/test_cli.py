@@ -522,6 +522,77 @@ def test_production_defaults_to_gemini_and_wires_source_router(monkeypatch) -> N
     assert captured["classifier"] == "trained-classifier"
 
 
+def test_production_wires_bluesky_extractor_with_the_web_client_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+    class FakeAppViewClient:
+        def __init__(self, *, client_factory: object) -> None:
+            captured["appview_client_factory"] = client_factory
+
+    class FakeBlueskyExtractor:
+        def __init__(self, appview: object) -> None:
+            captured["appview"] = appview
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(cli, "AddArticleWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "BlueskyAppViewClient", FakeAppViewClient, raising=False)
+    monkeypatch.setattr(cli, "BlueskyExtractor", FakeBlueskyExtractor, raising=False)
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+
+    cli._workflow()
+
+    router = captured["extractor"]
+    assert isinstance(router, cli.ExtractorRouter)
+    assert isinstance(router._bluesky, FakeBlueskyExtractor)
+    assert isinstance(captured["appview"], FakeAppViewClient)
+    assert captured["appview_client_factory"] is cli._web_client_factory
+
+
+def test_ordinary_web_route_does_not_call_bluesky_appview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class Web:
+        def __init__(self, *, client_factory: object) -> None:
+            pass
+
+        def extract(self, url: str) -> str:
+            return "web-result"
+
+    class FakeAppViewClient:
+        def __init__(self, *, client_factory: object) -> None:
+            calls.append("construct")
+
+        def resolve_handle(self, handle: str) -> str:
+            calls.append("resolve_handle")
+            raise AssertionError("ordinary web must not resolve a Bluesky handle")
+
+        def get_post(self, uri: str) -> dict[str, object]:
+            calls.append("get_post")
+            raise AssertionError("ordinary web must not fetch a Bluesky post")
+
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(cli, "WebExtractor", Web)
+    monkeypatch.setattr(cli, "BlueskyAppViewClient", FakeAppViewClient, raising=False)
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+
+    workflow = cli._workflow()
+
+    assert workflow._extractor.extract("https://example.com/article") == "web-result"
+    assert calls == ["construct"]
+
+
 @pytest.mark.parametrize(
     ("provider", "key_name", "model_name", "default_model"),
     [
