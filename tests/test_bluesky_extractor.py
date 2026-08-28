@@ -762,6 +762,27 @@ def test_appview_rejects_invalid_json_without_exposing_body() -> None:
     assert "SECRET_NOT_JSON" not in rendered_exception(raised.value)
 
 
+def test_appview_rejects_overdeep_json_without_retrying() -> None:
+    overdeep_json = b"[" * 100_000 + b"0" + b"]" * 100_000
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=overdeep_json,
+        )
+    )
+
+    with pytest.raises(DigestError) as raised:
+        BlueskyAppViewClient(client_for(transport)).resolve_handle("alice.example")
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "INVALID_SOURCE_RESPONSE",
+        "message": "Bluesky returned an invalid response",
+        "retryable": False,
+    }
+
+
 @pytest.mark.parametrize(
     "payload",
     [

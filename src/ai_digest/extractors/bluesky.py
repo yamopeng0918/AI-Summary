@@ -224,7 +224,7 @@ class BlueskyAppViewClient:
                 body.extend(chunk)
             try:
                 return json.loads(bytes(body))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+            except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
                 raise _invalid_response() from None
         except DigestError:
             raise
