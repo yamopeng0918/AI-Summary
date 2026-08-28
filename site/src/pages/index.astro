@@ -88,7 +88,7 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
 </BaseLayout>
 
 <script>
-  import { reorderSummaryCards, type SummaryRecord } from '../lib/summaries';
+  import { reorderSummaryCards, shouldShowNoResults, type SummaryRecord } from '../lib/summaries';
 
   const form = document.querySelector<HTMLFormElement>('#summary-filters');
   const query = document.querySelector<HTMLInputElement>('#summary-query');
@@ -120,7 +120,7 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
       category?.value ?? '',
       order?.value === 'oldest' ? 'oldest' : 'newest',
     );
-    if (noResults) noResults.hidden = [...cards].every((card) => card.hidden);
+    if (noResults) noResults.hidden = !shouldShowNoResults([...cards].filter((card) => !card.hidden).length);
   });
 
   form?.addEventListener('change', () => form.dispatchEvent(new Event('input')));

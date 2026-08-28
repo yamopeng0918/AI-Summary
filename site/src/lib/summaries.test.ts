@@ -6,6 +6,7 @@ import {
   filterAndSortSummaries,
   getPublishedSummaries,
   reorderSummaryCards,
+  shouldShowNoResults,
   serializeSummaryRecords,
 } from './summaries';
 import { getSummariesDirectory, parseSummaryRecord } from './summary-loader';
@@ -56,6 +57,13 @@ const socialRecord = {
 } as const;
 
 describe('summary data', () => {
+  it.each([
+    [0, true],
+    [1, false],
+  ])('shows no-results only when there are no visible cards', (visibleCount, expected) => {
+    expect(shouldShowNoResults(visibleCount)).toBe(expected);
+  });
+
   it('resolves the repository summary directory from the site build directory', () => {
     const siteDirectory = resolve('workspace', 'site');
 

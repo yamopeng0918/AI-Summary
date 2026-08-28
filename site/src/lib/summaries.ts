@@ -57,6 +57,10 @@ export function serializeSummaryRecords(records: SummaryRecord[]): string {
   return JSON.stringify(records).replaceAll('<', '\\u003c');
 }
 
+export function shouldShowNoResults(visibleCardCount: number): boolean {
+  return visibleCardCount === 0;
+}
+
 export function reorderSummaryCards<Card extends SummaryCard>(
   container: SummaryCardContainer<Card>,
   cards: Card[],
