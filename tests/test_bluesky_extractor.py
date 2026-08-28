@@ -74,6 +74,37 @@ def rendered_exception(error: BaseException) -> str:
     return "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
 
+class CountingStream(httpx.SyncByteStream):
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+        self.iterations = 0
+
+    def __iter__(self):
+        self.iterations += 1
+        yield from self._chunks
+
+    def close(self) -> None:
+        pass
+
+
+class StreamableMockTransport(httpx.BaseTransport):
+    """Expose preloaded MockTransport bodies through the raw streaming interface."""
+
+    def __init__(self, transport: httpx.BaseTransport) -> None:
+        self._transport = transport
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        response = self._transport.handle_request(request)
+        if hasattr(response, "_content"):
+            response.stream = httpx.ByteStream(response.content)
+            response.is_stream_consumed = False
+            response.is_closed = False
+        return response
+
+    def close(self) -> None:
+        self._transport.close()
+
+
 def test_extracts_only_approved_bluesky_text() -> None:
     article = BlueskyExtractor(FakeAppView()).extract(BLUESKY_URL)
 
@@ -253,6 +284,25 @@ def test_rejects_author_did_mismatch() -> None:
     )
 
 
+@pytest.mark.parametrize("record_type", [None, "app.bsky.feed.repost"])
+def test_rejects_missing_or_wrong_post_record_discriminator(record_type: object) -> None:
+    post = fixture_post()
+    if record_type is None:
+        record(post).pop("$type")
+    else:
+        record(post)["$type"] = record_type
+
+    with pytest.raises(DigestError) as raised:
+        BlueskyExtractor(StaticAppView(post)).extract(BLUESKY_URL)
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "INVALID_SOURCE_RESPONSE",
+        "message": "Bluesky returned an invalid response",
+        "retryable": False,
+    }
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
@@ -379,7 +429,7 @@ def client_for(
     cookies: dict[str, str] | None = None,
 ) -> callable:
     return lambda: httpx.Client(
-        transport=transport,
+        transport=StreamableMockTransport(transport),
         headers=headers,
         cookies=cookies,
         follow_redirects=True,
@@ -400,7 +450,7 @@ def test_appview_uses_only_fixed_xrpc_requests_without_credentials_or_embeds() -
 
     def factory() -> httpx.Client:
         client = httpx.Client(
-            transport=httpx.MockTransport(handler),
+            transport=StreamableMockTransport(httpx.MockTransport(handler)),
             headers={"Authorization": "Bearer SECRET_TOKEN"},
             cookies={"session": "SECRET_COOKIE"},
             follow_redirects=True,
@@ -430,6 +480,67 @@ def test_appview_uses_only_fixed_xrpc_requests_without_credentials_or_embeds() -
         }
     assert len(clients) == 2
     assert all(client.is_closed for client in clients)
+
+
+def test_appview_discards_factory_headers_and_query_parameters() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"did": "did:plc:alice"})
+
+    def factory() -> httpx.Client:
+        return httpx.Client(
+            transport=StreamableMockTransport(httpx.MockTransport(handler)),
+            headers={
+                "Authorization": "Bearer SECRET_TOKEN",
+                "Proxy-Authorization": "Basic SECRET_PROXY",
+                "X-Api-Key": "SECRET_API_KEY",
+                "X-Custom-Token": "SECRET_CUSTOM_TOKEN",
+            },
+            params={"leaked": "SECRET_QUERY"},
+            cookies={"session": "SECRET_COOKIE"},
+        )
+
+    assert BlueskyAppViewClient(factory).resolve_handle("alice.example") == "did:plc:alice"
+
+    assert len(requests) == 1
+    request = requests[0]
+    assert str(request.url) == (
+        "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=alice.example"
+    )
+    assert request.headers["accept"] == "application/json"
+    assert request.headers["user-agent"] == "AI-Digest/0.1 (+https://github.com/ai-digest)"
+    assert request.headers["accept-encoding"] == "identity"
+    assert set(request.headers) == {"host", "accept", "user-agent", "accept-encoding"}
+
+
+@pytest.mark.parametrize("content_encoding", ["gzip", "br"])
+def test_appview_rejects_encoded_bodies_before_stream_read(
+    content_encoding: str,
+) -> None:
+    stream = CountingStream([b"SECRET_ENCODED_BODY"])
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            headers={
+                "content-type": "application/json",
+                "content-encoding": content_encoding,
+            },
+            stream=stream,
+        )
+    )
+
+    with pytest.raises(DigestError) as raised:
+        BlueskyAppViewClient(client_for(transport)).resolve_handle("alice.example")
+
+    assert raised.value.as_dict() == {
+        "stage": "extract",
+        "code": "INVALID_SOURCE_RESPONSE",
+        "message": "Bluesky returned an invalid response",
+        "retryable": False,
+    }
+    assert stream.iterations == 0
 
 
 def test_appview_does_not_follow_redirects() -> None:

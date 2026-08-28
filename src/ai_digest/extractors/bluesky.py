@@ -188,18 +188,24 @@ class BlueskyAppViewClient:
         response: httpx.Response | None = None
         try:
             client = self._client_factory()
-            request = client.build_request(
+            request = httpx.Request(
                 "GET",
                 f"{_APPVIEW_ROOT}{path}",
                 params=params,
                 headers={
                     "Accept": "application/json",
                     "User-Agent": _USER_AGENT,
+                    "Accept-Encoding": "identity",
                 },
-                timeout=_TIMEOUT_SECONDS,
+                extensions={
+                    "timeout": {
+                        "connect": _TIMEOUT_SECONDS,
+                        "read": _TIMEOUT_SECONDS,
+                        "write": _TIMEOUT_SECONDS,
+                        "pool": _TIMEOUT_SECONDS,
+                    }
+                },
             )
-            request.headers.pop("authorization", None)
-            request.headers.pop("cookie", None)
             response = client.send(
                 request,
                 stream=True,
@@ -209,9 +215,10 @@ class BlueskyAppViewClient:
             self._raise_for_status(response.status_code, author_lookup=author_lookup)
             self._validate_content_type(response)
             self._validate_content_length(response)
+            self._validate_content_encoding(response)
 
             body = bytearray()
-            for chunk in response.iter_bytes():
+            for chunk in response.iter_raw():
                 if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
                     raise _invalid_response()
                 body.extend(chunk)
@@ -300,6 +307,12 @@ class BlueskyAppViewClient:
         if declared_size < 0 or declared_size > _MAX_RESPONSE_BYTES:
             raise _invalid_response()
 
+    @staticmethod
+    def _validate_content_encoding(response: httpx.Response) -> None:
+        content_encoding = response.headers.get("content-encoding")
+        if content_encoding is not None and content_encoding.strip().lower() != "identity":
+            raise _invalid_response()
+
 
 class BlueskyExtractor:
     """Map one public, non-reply Bluesky post to shared article data."""
@@ -341,6 +354,8 @@ class BlueskyExtractor:
         author_did = _required_text(author, "did")
         handle = _required_text(author, "handle")
         if author_did != did:
+            raise _invalid_response()
+        if record.get("$type") != "app.bsky.feed.post":
             raise _invalid_response()
         display_name = _optional_text(author, "displayName") or handle
 
