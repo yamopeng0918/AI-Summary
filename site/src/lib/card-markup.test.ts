@@ -29,6 +29,12 @@ describe('editorial homepage cards', () => {
     }
   });
 
+  it('reveals the source fallback when an OG image fails', () => {
+    expect(homepageSource).toContain("querySelectorAll<HTMLImageElement>('.summary-card-image')");
+    expect(homepageSource).toContain("image.addEventListener('error'");
+    expect(homepageSource).toContain('image.hidden = true');
+  });
+
   it('contains OG images without cropping or distortion', () => {
     expect(globalStyles).toMatch(/\.summary-card-image-frame\s*\{[^}]*aspect-ratio:\s*1200\s*\/\s*630[^}]*\}/);
     expect(globalStyles).toMatch(/\.summary-card-image\s*\{[^}]*height:\s*100%[^}]*object-fit:\s*contain[^}]*width:\s*100%[^}]*\}/);

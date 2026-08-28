@@ -99,6 +99,12 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
   const cards = document.querySelectorAll<HTMLElement>('[data-summary-card]');
   const records: SummaryRecord[] = JSON.parse(recordsElement?.textContent ?? '[]');
 
+  document.querySelectorAll<HTMLImageElement>('.summary-card-image').forEach((image) => {
+    image.addEventListener('error', () => {
+      image.hidden = true;
+    }, { once: true });
+  });
+
   form?.addEventListener('input', () => {
     const summaryList = document.querySelector<HTMLElement>('#summary-list');
     if (!summaryList) return;
