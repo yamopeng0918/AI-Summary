@@ -119,12 +119,38 @@ def test_windows_tty_with_uninspectable_state_is_ignored() -> None:
             raise OSError("stream closed")
 
     cli._configure_windows_utf8(UninspectableStream(), platform="win32")  # type: ignore[arg-type]
+
+
+def test_list_and_show_preserve_unicode_after_windows_tty_configuration(
+    tmp_path, monkeypatch
+) -> None:
+    record = make_record().model_copy(update={"title": "Unicode 级 title"})
+    app, repository = make_app(tmp_path, FakeWorkflow(record))
+    repository.save(record)
+    console = RecordingTextStream(tty=True)
+    emitted: list[str] = []
+    cli._configure_windows_utf8(console, platform="win32")
+
+    def encoded_echo(message: str, *, err: bool = False) -> None:
+        str(message).encode(console.encoding)
+        emitted.append(str(message))
+
+    monkeypatch.setattr(cli.typer, "echo", encoded_echo)
+    runner = CliRunner()
+
+    listed = runner.invoke(app, ["list"])
+    shown = runner.invoke(app, ["show", record.id])
+
+    assert listed.exit_code == 0
+    assert shown.exit_code == 0
+    assert "Unicode 级 title" in emitted[0]
+    assert json.loads(emitted[1])["title"] == "Unicode 级 title"
 ```
 
 Run:
 
 ```powershell
-& '.\.venv\Scripts\python.exe' -m pytest tests/test_cli.py -k "windows_interactive_stream or non_windows_stream or redirected_windows_stream or without_reconfigure or uninspectable_state" -q
+& '.\.venv\Scripts\python.exe' -m pytest tests/test_cli.py -k "windows_interactive_stream or non_windows_stream or redirected_windows_stream or without_reconfigure or uninspectable_state or preserve_unicode_after_windows_tty" -q
 ```
 
 Expected: all new tests FAIL because the helper is absent.
@@ -156,7 +182,7 @@ Run the Step 3 focused command again.
 
 Expected: all selected tests PASS.
 
-- [ ] **Step 6: Write failing entry-point ordering and Unicode command tests**
+- [ ] **Step 6: Write the failing entry-point ordering test**
 
 Add an entry-point test:
 
@@ -184,42 +210,13 @@ def test_main_configures_both_streams_before_invoking_app(monkeypatch) -> None:
     ]
 ```
 
-Add a real-command regression using a record whose title includes CP950-unrepresentable `级`:
-
-```python
-def test_list_and_show_preserve_unicode_after_windows_tty_configuration(
-    tmp_path, monkeypatch
-) -> None:
-    record = make_record().model_copy(update={"title": "Unicode 级 title"})
-    app, repository = make_app(tmp_path, FakeWorkflow(record))
-    repository.save(record)
-    console = RecordingTextStream(tty=True)
-    emitted: list[str] = []
-    cli._configure_windows_utf8(console, platform="win32")
-
-    def encoded_echo(message: str, *, err: bool = False) -> None:
-        str(message).encode(console.encoding)
-        emitted.append(str(message))
-
-    monkeypatch.setattr(cli.typer, "echo", encoded_echo)
-    runner = CliRunner()
-
-    listed = runner.invoke(app, ["list"])
-    shown = runner.invoke(app, ["show", record.id])
-
-    assert listed.exit_code == 0
-    assert shown.exit_code == 0
-    assert "Unicode 级 title" in emitted[0]
-    assert json.loads(emitted[1])["title"] == "Unicode 级 title"
-```
-
 Run:
 
 ```powershell
-& '.\.venv\Scripts\python.exe' -m pytest tests/test_cli.py -k "main_configures_both_streams or preserve_unicode_after_windows_tty" -q
+& '.\.venv\Scripts\python.exe' -m pytest tests/test_cli.py::test_main_configures_both_streams_before_invoking_app -q
 ```
 
-Expected: entry-point test FAIL because `main` is absent; the Unicode test passes only after the helper from Step 4 is present and proves no content is escaped or dropped.
+Expected: FAIL because `main` is absent.
 
 - [ ] **Step 7: Implement the console entry point and package mapping**
 
