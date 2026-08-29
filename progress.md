@@ -349,4 +349,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 遠端互動驗收通過：搜尋 `Codex` 顯示 2 筆、科技產業篩選顯示 2 筆、最早建立排序由 `2026-08-09` 至 `2026-08-28`、無結果狀態正確顯示，Tab 焦點具 3px 可見外框。
 - 2026-08-29 改用 Chrome 並由使用者在公開 Pages 分頁封鎖圖片後完成 failed-image 遠端視覺驗收；結果未通過。7 張 `.summary-card-image` 均為 `naturalWidth=0`、`complete=false`、`hidden=false`，畫面顯示破圖圖示與 alt 文字，而非來源 fallback。Chrome 封鎖圖片時未觸發目前程式依賴的 `error`，且載入時的 `complete && naturalWidth === 0` 條件亦不成立；既有 source-contract 測試不足以涵蓋此真實情境，需另行修正後重驗。
 - 2026-08-29 failed-image fallback 本機修正已完成驗證（程式 head `9c89afb`）：完整 `npm.cmd test` 為 7 個 Vitest 檔案、67 tests passed；`npm.cmd run build:pages` 的 Astro check 為 19 個檔案、0 errors／0 warnings／0 hints，靜態建置為 8 pages，內部 deployment verifier exit 0。另從 repository root 執行 `python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` 與 `git diff --check` 均 exit 0。
-- 狀態為 **local fix verified; remote deployment and Chrome failed-image retest pending**：本次沒有部署、推送或執行公開 Chrome 重驗，故不得將本機 build verifier 視為遠端成功證據。
+- 2026-08-29 已將 failed-image fallback 的部署修正 commit `fa002771aba4086be73526311b00fd0ab260e01f` fast-forward push 至 `origin/master`；對應的 GitHub Pages Run #37（`33237024886`）使用相同 SHA 且 completed successfully。
+- 遠端 Chrome 正常圖片驗收通過：7/7 圖片皆到達 `data-image-state="loaded"`、`naturalWidth=1200` 且可見，頁面沒有水平溢出。
+- 使用者封鎖公開 Pages origin 的圖片後，以 cache-busting URL `?acceptance=fa00277` 重新載入；7/7 圖片皆維持 `data-image-state="pending"`、`complete=false`、`naturalWidth=0`、`currentSrc=""`，computed `display="none"`，同時 7/7 來源 fallback 可見、`brokenAltVisible=false`，頁面沒有水平溢出。viewport screenshot 僅顯示米色圖片框與置中的來源標示 `Bluesky`，未出現破圖圖示或 alt 文字 UI。
+- 狀態為 **remote failed-image fallback accepted**：正常圖片與封鎖圖片兩種公開 Chrome 情境均已完成驗收。
