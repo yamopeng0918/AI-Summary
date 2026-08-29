@@ -38,7 +38,7 @@ input, select { background: #fffdf8; border: 1px solid #8c968f; border-radius: .
 .summary-card-image-frame { aspect-ratio: 1200 / 630; background: #e7ded0; display: grid; overflow: hidden; place-items: center; position: relative; }
 .summary-card-image-fallback { color: var(--muted); font-size: .82rem; font-weight: 700; inset: 0; letter-spacing: .08em; padding: 1rem; position: absolute; text-align: center; }
 .summary-card-image { background: #e7ded0; display: block; height: 100%; object-fit: contain; position: relative; width: 100%; }
-.summary-card-image[data-image-state]:not([data-image-state="loaded"]) { visibility: hidden; }
+.summary-card-image[data-image-state]:not([data-image-state="loaded"]) { display: none; }
 .summary-card-content { display: flex; flex: 1; flex-direction: column; padding: 1.25rem; }
 .summary-card h2 { font-size: 1.35rem; line-height: 1.35; margin: .65rem 0; }
 .card-summary { color: var(--muted); flex-grow: 1; margin: 0 0 1rem; }

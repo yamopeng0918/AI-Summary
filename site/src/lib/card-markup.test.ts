@@ -41,7 +41,7 @@ describe('editorial homepage cards', () => {
     expect(homepageSource).toContain("import { initializeSummaryImage } from '../lib/summary-image-state';");
     expect(homepageSource).toContain("querySelectorAll<HTMLImageElement>('.summary-card-image')");
     expect(homepageSource).toContain('initializeSummaryImage(image)');
-    expect(globalStyles).toContain('.summary-card-image[data-image-state]:not([data-image-state="loaded"]) { visibility: hidden; }');
+    expect(globalStyles).toContain('.summary-card-image[data-image-state]:not([data-image-state="loaded"]) { display: none; }');
   });
 
   it('contains OG images without cropping or distortion', () => {
