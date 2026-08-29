@@ -344,4 +344,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 圖片失敗 fallback 保留 source-contract 覆蓋（listener 綁定前 `complete`/`naturalWidth=0` 與後續 `error` 事件）；尚未在 Edge 獨立模擬 failed-image 路徑，故不宣稱已完成該瀏覽器情境。所有卡片圖片維持 `loading="lazy"`，此為使用者明確核准且符合既有 deployment verifier。
 - 最終驗證（HEAD `058b386`）：focused `npm.cmd test -- src/lib/summaries.test.ts src/lib/card-markup.test.ts` 為 2 個檔案、39 tests passed；完整 `npm.cmd test` 為 6 個檔案、63 tests passed；`npm.cmd run build:pages` 為 Astro check 0 errors/warnings/hints、8 pages，deployment verifier exit 0；`git diff --check` clean（僅 LF/CRLF 工作副本警告）。
 - 2026-08-29 已將 `feature/homepage-editorial-thumbnails` fast-forward 合併至本機 `master`，合併後重新通過 63/63 Vitest、Astro 0 diagnostics、8 pages、deployment verifier 與 tracked/dist 安全掃描，並成功 push 功能 head `c91cb3f` 至 `origin/master`。
-- Pages workflow 與遠端首頁視覺驗收尚未執行；failed-image 的 Edge 獨立模擬亦仍保留為後續驗證，不得標記為完成。
+- 2026-08-29 已完成本次首頁變更的 Pages workflow 驗收：Run #35（`33210585948`）對應 `caa9df6`，GitHub Actions 顯示 completed successfully，耗時 2 分 15 秒。
+- 遠端 Edge 驗收通過：1280px 為精選文字左／完整 OG 小圖右及其餘三欄；800px 為兩欄且精選文字先於圖片；390px 為單欄且精選文字先於圖片。三種尺寸皆顯示 7 筆摘要、來源標示可見、圖片 `object-fit: contain`，且無水平溢出。
+- 遠端互動驗收通過：搜尋 `Codex` 顯示 2 筆、科技產業篩選顯示 2 筆、最早建立排序由 `2026-08-09` 至 `2026-08-28`、無結果狀態正確顯示，Tab 焦點具 3px 可見外框。
+- failed-image 的遠端 Edge 獨立模擬未完成：瀏覽器安全政策禁止自動化改寫圖片 URL，且明確禁止以低階操作繞過；既有 source-contract 測試仍通過，但不得據此宣稱遠端視覺情境已驗收。

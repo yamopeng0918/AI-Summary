@@ -161,5 +161,6 @@
 - [x] 通過相關 Vitest（focused 2 files, 39 passed；完整 6 files, 63 passed）、Astro check、正式 `build:pages`（8 pages、deployment verifier exit 0）及本機 Edge 瀏覽器驗收；程式 head `058b386`，所有卡片圖片 `loading="lazy"` 經使用者核准保留。
 - [x] 圖片 fallback 保留既有 source-contract 覆蓋；Edge failed-image 獨立模擬尚未執行，不宣稱已完成該瀏覽器情境。
 - [x] 將首頁功能 fast-forward 合併至本機 `master`，並成功 push 功能 head `c91cb3f` 至 `origin/master`。
-- [ ] 執行本次首頁變更的 Pages workflow 驗收。
-- [ ] 執行遠端首頁響應式、互動與 failed-image 視覺驗收。
+- [x] 完成本次首頁變更的 Pages workflow 驗收：Run #35（`33210585948`）對應 `caa9df6`，completed successfully。
+- [x] 完成遠端首頁 1280／800／390px 響應式、OG 小圖 contain、來源顯示、搜尋、分類、排序、無結果與鍵盤焦點驗收。
+- [ ] 完成遠端 Edge failed-image 獨立視覺驗收；目前受瀏覽器安全政策阻擋，既有 source-contract 測試不取代此項驗收。
