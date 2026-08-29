@@ -5,7 +5,8 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
-from typing import Literal
+import sys
+from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -163,6 +164,20 @@ def _emit(payload: dict[str, object], *, err: bool = False) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=True), err=err)
 
 
+def _configure_windows_utf8(stream: TextIO, *, platform: str) -> None:
+    if platform != "win32":
+        return
+    try:
+        if not stream.isatty():
+            return
+        reconfigure = getattr(stream, "reconfigure", None)
+        if not callable(reconfigure):
+            return
+        reconfigure(encoding="utf-8")
+    except (OSError, ValueError):
+        return
+
+
 def create_app(
     workflow_factory: Callable[[Callable[[str], None]], AddArticleWorkflow],
     repository_factory: Callable[[], SummaryRepository],
@@ -238,3 +253,9 @@ def create_app(
 
 
 app = create_app(_workflow, _repository, _now)
+
+
+def main() -> None:
+    _configure_windows_utf8(sys.stdout, platform=sys.platform)
+    _configure_windows_utf8(sys.stderr, platform=sys.platform)
+    app()

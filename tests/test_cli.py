@@ -26,6 +26,114 @@ NOW = datetime(2026, 8, 9, 14, 0, tzinfo=TAIPEI)
 CATEGORY = next(iter(VALID_CATEGORIES))
 
 
+class RecordingTextStream:
+    def __init__(self, *, tty: bool, supports_reconfigure: bool = True) -> None:
+        self.tty = tty
+        self.encoding = "cp950"
+        self.reconfigure_calls: list[dict[str, str]] = []
+        if not supports_reconfigure:
+            self.reconfigure = None  # type: ignore[assignment]
+
+    def isatty(self) -> bool:
+        return self.tty
+
+    def reconfigure(self, **kwargs: str) -> None:
+        self.reconfigure_calls.append(kwargs)
+        self.encoding = kwargs["encoding"]
+
+
+def test_windows_interactive_stream_is_reconfigured_to_utf8() -> None:
+    stream = RecordingTextStream(tty=True)
+
+    cli._configure_windows_utf8(stream, platform="win32")
+
+    assert stream.encoding == "utf-8"
+    assert stream.reconfigure_calls == [{"encoding": "utf-8"}]
+
+
+def test_non_windows_stream_is_not_reconfigured() -> None:
+    stream = RecordingTextStream(tty=True)
+
+    cli._configure_windows_utf8(stream, platform="linux")
+
+    assert stream.encoding == "cp950"
+    assert stream.reconfigure_calls == []
+
+
+def test_redirected_windows_stream_is_not_reconfigured() -> None:
+    stream = RecordingTextStream(tty=False)
+
+    cli._configure_windows_utf8(stream, platform="win32")
+
+    assert stream.encoding == "cp950"
+    assert stream.reconfigure_calls == []
+
+
+def test_windows_tty_without_reconfigure_is_ignored() -> None:
+    stream = RecordingTextStream(tty=True, supports_reconfigure=False)
+
+    cli._configure_windows_utf8(stream, platform="win32")
+
+    assert stream.encoding == "cp950"
+
+
+def test_windows_tty_with_uninspectable_state_is_ignored() -> None:
+    class UninspectableStream:
+        def isatty(self) -> bool:
+            raise OSError("stream closed")
+
+    cli._configure_windows_utf8(UninspectableStream(), platform="win32")  # type: ignore[arg-type]
+
+
+def test_list_and_show_preserve_unicode_after_windows_tty_configuration(
+    tmp_path, monkeypatch
+) -> None:
+    record = make_record().model_copy(update={"title": "Unicode 蝥?title"})
+    app, repository = make_app(tmp_path, FakeWorkflow(record))
+    repository.save(record)
+    console = RecordingTextStream(tty=True)
+    emitted: list[str] = []
+    cli._configure_windows_utf8(console, platform="win32")
+
+    def encoded_echo(message: str, *, err: bool = False) -> None:
+        str(message).encode(console.encoding)
+        emitted.append(str(message))
+
+    monkeypatch.setattr(cli.typer, "echo", encoded_echo)
+    runner = CliRunner()
+
+    listed = runner.invoke(app, ["list"])
+    shown = runner.invoke(app, ["show", record.id])
+
+    assert listed.exit_code == 0
+    assert shown.exit_code == 0
+    assert "Unicode 蝥?title" in emitted[0]
+    assert json.loads(emitted[1])["title"] == "Unicode 蝥?title"
+
+
+def test_main_configures_both_streams_before_invoking_app(monkeypatch) -> None:
+    events: list[tuple[object, ...]] = []
+    stdout = object()
+    stderr = object()
+    monkeypatch.setattr(cli.sys, "stdout", stdout)
+    monkeypatch.setattr(cli.sys, "stderr", stderr)
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(
+        cli,
+        "_configure_windows_utf8",
+        lambda stream, *, platform: events.append(("configure", stream, platform)),
+    )
+    monkeypatch.setattr(cli, "app", lambda: events.append(("app",)))
+
+    cli.main()
+
+    assert events == [
+        ("configure", stdout, "win32"),
+        ("configure", stderr, "win32"),
+        ("app",),
+    ]
+
+
 def make_record(record_id: str = "example") -> SummaryRecord:
     return SummaryRecord(
         schemaVersion=1,
