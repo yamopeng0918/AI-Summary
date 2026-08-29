@@ -163,4 +163,4 @@
 - [x] 將首頁功能 fast-forward 合併至本機 `master`，並成功 push 功能 head `c91cb3f` 至 `origin/master`。
 - [x] 完成本次首頁變更的 Pages workflow 驗收：Run #35（`33210585948`）對應 `caa9df6`，completed successfully。
 - [x] 完成遠端首頁 1280／800／390px 響應式、OG 小圖 contain、來源顯示、搜尋、分類、排序、無結果與鍵盤焦點驗收。
-- [ ] 完成遠端 Edge failed-image 獨立視覺驗收；目前受瀏覽器安全政策阻擋，既有 source-contract 測試不取代此項驗收。
+- [ ] 修正並重新驗收遠端 failed-image fallback；2026-08-29 Chrome 封鎖圖片驗收顯示 7 張圖片皆為 `naturalWidth=0`、`complete=false`、`hidden=false`，目前呈現破圖 alt 文字而非來源 fallback。
