@@ -76,6 +76,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 已以 CP950 輸出替身重現 `ai-digest list` 與 `ai-digest show` 均因未經調整的 Unicode 文字寫入而拋出 `UnicodeEncodeError`；ASCII-safe 的 `_emit()` 結構化事件不受影響。
 - 使用者核准只在 Windows 互動式 TTY 將 stdout／stderr 重新設定為 UTF-8；pipe、重新導向、非 Windows 平台、命令格式與資料格式均維持原狀，不使用文字忽略或替換。
 - 設計規格記錄於 `docs/superpowers/specs/2026-08-29-windows-cli-utf8-design.md`；下一步是在規格複核通過後撰寫 TDD 實作計畫，尚未修改正式 CLI 程式。
+- 使用者已確認書面規格；TDD 實作計畫記錄於 `docs/superpowers/plans/2026-08-29-windows-cli-utf8.md`，等待選擇執行方式。
 
 ### 2026-08-29：failed-image fallback 最終遠端驗收與進度同步
 
