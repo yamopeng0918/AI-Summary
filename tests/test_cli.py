@@ -88,7 +88,11 @@ def test_windows_tty_with_uninspectable_state_is_ignored() -> None:
 def test_list_and_show_preserve_unicode_after_windows_tty_configuration(
     tmp_path, monkeypatch
 ) -> None:
-    record = make_record().model_copy(update={"title": "Unicode 蝥?title"})
+    title = "Unicode \u7ea7 title"
+    with pytest.raises(UnicodeEncodeError):
+        title.encode("cp950")
+
+    record = make_record().model_copy(update={"title": title})
     app, repository = make_app(tmp_path, FakeWorkflow(record))
     repository.save(record)
     console = RecordingTextStream(tty=True)
@@ -107,8 +111,8 @@ def test_list_and_show_preserve_unicode_after_windows_tty_configuration(
 
     assert listed.exit_code == 0
     assert shown.exit_code == 0
-    assert "Unicode 蝥?title" in emitted[0]
-    assert json.loads(emitted[1])["title"] == "Unicode 蝥?title"
+    assert title in emitted[0]
+    assert json.loads(emitted[1])["title"] == title
 
 
 def test_main_configures_both_streams_before_invoking_app(monkeypatch) -> None:
