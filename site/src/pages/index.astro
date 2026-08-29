@@ -91,6 +91,7 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
 </BaseLayout>
 
 <script>
+  import { initializeSummaryImage } from '../lib/summary-image-state';
   import { reorderSummaryCards, shouldShowNoResults, type SummaryRecord } from '../lib/summaries';
 
   const form = document.querySelector<HTMLFormElement>('#summary-filters');
@@ -101,15 +102,8 @@ const categories = [...new Set(summaries.map((record) => record.category))].toSo
   const noResults = document.querySelector<HTMLElement>('#no-results');
   const cards = document.querySelectorAll<HTMLElement>('[data-summary-card]');
   const records: SummaryRecord[] = JSON.parse(recordsElement?.textContent ?? '[]');
-  const hideBrokenImage = (image: HTMLImageElement) => {
-    image.hidden = true;
-  };
-
   document.querySelectorAll<HTMLImageElement>('.summary-card-image').forEach((image) => {
-    image.addEventListener('error', () => {
-      hideBrokenImage(image);
-    }, { once: true });
-    if (image.complete && image.naturalWidth === 0) hideBrokenImage(image);
+    initializeSummaryImage(image);
   });
 
   form?.addEventListener('input', () => {
