@@ -74,9 +74,11 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 ### 2026-08-29：Windows CLI UTF-8 相容性實作、文件與驗證完成
 
 - Task 1 已由 commit `d8ed9ae`（`fix: enable UTF-8 Windows CLI output`）完成：`main() -> None` 在 Windows 互動式 TTY 啟動時設定 stdout／stderr 為 UTF-8；非互動式 pipe／重新導向及非 Windows 平台維持既有編碼。
+- 最終 whole-branch 審查曾發現原 regression fixture 在來源檔中遭轉碼而可被 CP950 編碼；commit `13ad440` 改用 ASCII source 的 `\u7ea7`，並先明確驗證 CP950 編碼必須拋出 `UnicodeEncodeError`，再檢查 UTF-8 設定後 `list`／`show` 內容完整。修正後 focused regression、完整 CLI tests 與最終重審均通過，最終審查無 Critical、Important 或 Minor finding，判定 Ready to merge。
 - Task 1 controller 驗證：editable install exit `0`；移除 `PYTHONUTF8` 後，以 PTY 執行 `ai-digest.exe list` 與 `ai-digest.exe show` 均 exit `0`。`list` 正確顯示 7 筆資料及其中的簡體中文，`show` 完整輸出 JSON，沒有 `UnicodeEncodeError`。
 - focused CLI 測試為 `47 passed`；Task 2 的完整 Python suite 為 `608 passed, 2 skipped, 1 warning`。兩個 skip 均為 Windows 帳號缺少 symlink 建立權限；唯一 warning 為第三方 `google-genai` 的 deprecation warning。
 - `scripts/verify_deployment.py --tracked` exit `0`，`git diff --check` exit `0`。README 已說明 Windows PowerShell／Windows Terminal 的自動互動式 UTF-8 行為，不要求設定 `PYTHONUTF8=1`，也不要求修改全域 code page、Execution Policy、PowerShell profile 或持久環境。
+- `feature/windows-cli-utf8` 已 fast-forward 合併至本機 `master`；主工作樹 `.venv` 已重新 editable install 指向 `D:\Project\AI-Summary`。合併後重新驗證為 Python `608 passed, 2 skipped, 1 warning`、tracked verifier 與 `git diff --check` exit `0`；移除 `PYTHONUTF8` 與 `PYTHONIOENCODING` 後的主工作樹 PTY `list`／`show` smoke 亦 exit `0`。此紀錄建立時尚待依使用者授權 push 至 GitHub。
 - 限制仍依設計保留：只有 Windows 互動式 TTY 會重新設定編碼；pipe、重新導向與非 Windows 的既有編碼不變。下一步只剩本機編輯／重新產生摘要與 `build-site` 的決策。
 
 ### 2026-08-29：Windows CLI UTF-8 相容性設計核准
