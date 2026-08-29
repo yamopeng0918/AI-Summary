@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；GitHub Pages、OG 圖與 failed-image fallback 已完成遠端驗收
+> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；GitHub Pages、OG 圖與 failed-image fallback 已完成遠端驗收；Windows 互動式 CLI UTF-8 相容性已完成驗證
 >
-> 下次續作：優先決定是否修正 Windows CP950 的 CLI 輸出相容性，再評估本機編輯／重新產生摘要與 `build-site` CLI；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：決定本機編輯／重新產生摘要與 `build-site` CLI 的優先順序；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -71,19 +71,27 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ## 進度紀錄
 
+### 2026-08-29：Windows CLI UTF-8 相容性實作、文件與驗證完成
+
+- Task 1 已由 commit `d8ed9ae`（`fix: enable UTF-8 Windows CLI output`）完成：`main() -> None` 在 Windows 互動式 TTY 啟動時設定 stdout／stderr 為 UTF-8；非互動式 pipe／重新導向及非 Windows 平台維持既有編碼。
+- Task 1 controller 驗證：editable install exit `0`；移除 `PYTHONUTF8` 後，以 PTY 執行 `ai-digest.exe list` 與 `ai-digest.exe show` 均 exit `0`。`list` 正確顯示 7 筆資料及其中的簡體中文，`show` 完整輸出 JSON，沒有 `UnicodeEncodeError`。
+- focused CLI 測試為 `47 passed`；Task 2 的完整 Python suite 為 `608 passed, 2 skipped, 1 warning`。兩個 skip 均為 Windows 帳號缺少 symlink 建立權限；唯一 warning 為第三方 `google-genai` 的 deprecation warning。
+- `scripts/verify_deployment.py --tracked` exit `0`，`git diff --check` exit `0`。README 已說明 Windows PowerShell／Windows Terminal 的自動互動式 UTF-8 行為，不要求設定 `PYTHONUTF8=1`，也不要求修改全域 code page、Execution Policy、PowerShell profile 或持久環境。
+- 限制仍依設計保留：只有 Windows 互動式 TTY 會重新設定編碼；pipe、重新導向與非 Windows 的既有編碼不變。下一步只剩本機編輯／重新產生摘要與 `build-site` 的決策。
+
 ### 2026-08-29：Windows CLI UTF-8 相容性設計核准
 
 - 已以 CP950 輸出替身重現 `ai-digest list` 與 `ai-digest show` 均因未經調整的 Unicode 文字寫入而拋出 `UnicodeEncodeError`；ASCII-safe 的 `_emit()` 結構化事件不受影響。
 - 使用者核准只在 Windows 互動式 TTY 將 stdout／stderr 重新設定為 UTF-8；pipe、重新導向、非 Windows 平台、命令格式與資料格式均維持原狀，不使用文字忽略或替換。
-- 設計規格記錄於 `docs/superpowers/specs/2026-08-29-windows-cli-utf8-design.md`；下一步是在規格複核通過後撰寫 TDD 實作計畫，尚未修改正式 CLI 程式。
-- 使用者已確認書面規格；TDD 實作計畫記錄於 `docs/superpowers/plans/2026-08-29-windows-cli-utf8.md`，等待選擇執行方式。
+- 設計規格記錄於 `docs/superpowers/specs/2026-08-29-windows-cli-utf8-design.md`。下兩點是實作前的歷史狀態；後續實作與驗證結果見上方 2026-08-29 紀錄。
+- 使用者已確認書面規格；TDD 實作計畫記錄於 `docs/superpowers/plans/2026-08-29-windows-cli-utf8.md`，當時等待選擇執行方式。
 
 ### 2026-08-29：failed-image fallback 最終遠端驗收與進度同步
 
 - `display:none` 會阻止 `loading="lazy"` 啟動的回歸已由 commit `338b17f` 改為保留 `display:block` 並以 `opacity` 隱藏 pending／failed 圖片；修正隨 commit `f8658c5` 由 Pages Run #38（`33238303280`）成功部署。
 - Chrome 封鎖圖片驗收確認 7/7 圖片維持 `pending`、`display:block`、`opacity:0`，7/7 來源 fallback 可見，沒有破圖圖示或水平溢位；恢復圖片權限並重整後，7/7 圖片均為 `loaded`、`1200×630`、有效 `currentSrc`、`opacity:1` 與 `object-fit: contain`。
 - 最終文件提交 `1d56037` 已 fast-forward 合併並 push 至 `origin/master`；GitHub Pages Run #39（`33241201006`）顯示 `completed successfully`。本機 `master` 與 `origin/master` 同步，failed-image 功能工作樹與已合併分支已清理。
-- 核心三來源 MVP 均已有真實端到端證據；目前剩餘核心相關工作為 Windows CP950 CLI 相容性決策、本機編輯／重新產生摘要，以及 `build-site`／後續獨立 `deploy` CLI。
+- 核心三來源 MVP 均已有真實端到端證據；Windows CP950 CLI 相容性已由後續 2026-08-29 UTF-8 實作與驗證解決，目前剩餘核心相關工作為本機編輯／重新產生摘要，以及 `build-site`／後續獨立 `deploy` CLI。
 
 ### 2026-08-28：Bluesky GitHub Pages 遠端驗收
 
@@ -99,7 +107,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 已保存並由 `SummaryRepository` 重新驗證記錄 `20260828-bluesky-bsky-app-的-bluesky-貼文-5f8aee85`：`sourceType: social`、`status: published`、3 個重點、4 個標籤，canonical URL 為 DID 形式 `https://bsky.app/profile/did:plc:z72i7hdynmk6r22z27h6tvur/post/3mu3jzayuys2k`。
 - 以原 handle URL 再次提交時，只到達 `input`、`extract`，隨即回報非可重試 `DUPLICATE_URL`，未再次進入 `summarize`，證實 handle／DID alias 在付費服務前遭拒絕。
 - 真實資料加入後的 gates：Python `601 passed, 2 skipped, 1 warning`；Vitest `52 passed`；Astro `17` 個檔案、`0 errors / 0 warnings / 0 hints`；Pages build 產生 `8` 個頁面，包含新摘要詳情頁與 `1200×630` OG PNG；內嵌及獨立 deployment verifier、`git diff --check` 均通過。
-- Windows PowerShell 預設 CP950 執行 `ai-digest list` 時，會被既有摘要中的簡體中文字元觸發 `UnicodeEncodeError`；設定 `PYTHONUTF8=1` 後可正常列出新記錄。這是既有 CLI 終端編碼風險，不影響 UTF-8 JSON、Astro build 或 Pages artifact，尚未在本次驗收範圍內修改程式。
+- 歷史記錄（後續已由 2026-08-29 Windows 互動式 UTF-8 實作解決）：當時 Windows PowerShell 預設 CP950 執行 `ai-digest list` 時，會被既有摘要中的簡體中文字元觸發 `UnicodeEncodeError`；設定 `PYTHONUTF8=1` 後可正常列出新記錄。此問題不影響 UTF-8 JSON、Astro build 或 Pages artifact。
 - 遠端待辦：提交並 push 新摘要與本紀錄，監看 Pages workflow，驗證公開首頁／搜尋／詳情／官方來源連結／OG image；完成前不得標記遠端驗收成功。
 
 ### 2026-08-28：Bluesky 功能整合至 master

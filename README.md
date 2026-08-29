@@ -31,6 +31,8 @@ python -m pip install -e ".[dev]"
 & '.\.venv\Scripts\ai-digest.exe' list
 ```
 
+在 Windows PowerShell 或 Windows Terminal 執行 `ai-digest` 時，CLI 會自動將互動式 stdout 與 stderr 設為 UTF-8，讓 `list` 與 `show` 能完整顯示繁體中文、簡體中文及其他 Unicode 內容，不必預先設定 `PYTHONUTF8=1`。這項設定只作用於互動式終端；pipe 或重新導向時，CLI 會維持呼叫端既有的編碼。
+
 若要在目前 PowerShell 視窗使用裸 `ai-digest`，可只調整目前 process 的 `PATH`，不修改系統設定：
 
 ```powershell

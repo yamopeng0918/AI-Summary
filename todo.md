@@ -113,8 +113,8 @@
 
 ### 內容管理與部署
 
-- [x] 完成 Windows 互動式終端 UTF-8 相容性根因診斷與設計核准；實作尚未開始。
-- [ ] 依核准規格以 TDD 修正 Windows CP950 下 `list`／`show` 的 Unicode 輸出，並完成完整 Python 與安全驗證。
+- [x] 完成 Windows 互動式終端 UTF-8 相容性根因診斷與設計核准。
+- [x] 依核准規格以 TDD 修正 Windows CP950 下 `list`／`show` 的 Unicode 輸出，並完成完整 Python 與安全驗證（Task 1 `d8ed9ae`；Python `608 passed, 2 skipped, 1 warning`；tracked verifier 與 `git diff --check` exit `0`）。
 - [ ] 支援本機編輯與重新產生摘要。
 - [x] 支援下架與重新發布，並保留建立與更新時間。
 - [x] 實作 `evaluate-classifier` 指令。
