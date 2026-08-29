@@ -164,4 +164,4 @@
 - [x] 完成本次首頁變更的 Pages workflow 驗收：Run #35（`33210585948`）對應 `caa9df6`，completed successfully。
 - [x] 完成遠端首頁 1280／800／390px 響應式、OG 小圖 contain、來源顯示、搜尋、分類、排序、無結果與鍵盤焦點驗收。
 - [x] 修正 failed-image fallback 的本機實作並完成驗證：完整 Vitest 為 7 個檔案、67 tests passed；Astro check 0 diagnostics、靜態建置 8 pages，內部與 tracked/dist deployment verifier 均 exit 0。
-- [ ] 部署最新 failed-image fallback 修正並重新完成正常／封鎖圖片遠端驗收：`fa00277`／Run #37（`33237024886`）的封鎖圖片 fallback 通過，但 `display:none` 使 Chrome 與 Edge 的 7/7 正常 `loading="lazy"` 圖片停滯為 `pending`、`currentSrc=""` 且未顯示；本機修正 `338b17f` 已改用 `opacity:0` 並保留 `display:block`，focused 11/11、完整 Vitest 67/67、`build:pages` 與獨立 review 通過，仍待 Pages 部署及兩種瀏覽器情境重驗。
+- [x] 部署並驗收最新 failed-image fallback 修正：保留 `fa00277`／Run #37 曾以 `display:none` 阻止 Chrome 與 Edge lazy-load 的回歸紀錄；`338b17f` 改用 `opacity:0` 且保留 `display:block`，包含該修正的 `f8658c5` 已由 Pages Run #38（`33238303280`）成功部署。遠端 Chrome 封鎖圖片時 7/7 圖片為 `pending`、0×0、`currentSrc=""`、`display="block"`、`opacity=0`，7/7 fallback 可見、全頁截圖無破圖、1920 viewport 無水平溢出；恢復權限並重整後 7/7 圖片為 `loaded`、1200×630、`currentSrc` 有效、`display="block"`、`opacity=1`、`object-fit: contain`，且無水平溢出。
