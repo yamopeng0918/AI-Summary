@@ -164,4 +164,4 @@
 - [x] 完成本次首頁變更的 Pages workflow 驗收：Run #35（`33210585948`）對應 `caa9df6`，completed successfully。
 - [x] 完成遠端首頁 1280／800／390px 響應式、OG 小圖 contain、來源顯示、搜尋、分類、排序、無結果與鍵盤焦點驗收。
 - [x] 修正 failed-image fallback 的本機實作並完成驗證：完整 Vitest 為 7 個檔案、67 tests passed；Astro check 0 diagnostics、靜態建置 8 pages，內部與 tracked/dist deployment verifier 均 exit 0。
-- [x] 部署 failed-image fallback 至公開 GitHub Pages，並以 Chrome 重新驗收正常與封鎖圖片情境：部署修正 commit `fa002771aba4086be73526311b00fd0ab260e01f` 對應 Run #37（`33237024886`）且 completed successfully；正常狀態 7/7 圖片為 `loaded`、`naturalWidth=1200` 且可見；封鎖圖片並以 `?acceptance=fa00277` 重載後，7/7 圖片為 `pending`、`complete=false`、`naturalWidth=0`、`currentSrc=""`、computed `display="none"`，7/7 來源 fallback 可見、無破圖 alt UI 且無水平溢出，viewport screenshot 僅顯示米色框與置中的 `Bluesky` 來源標示。
+- [ ] 部署最新 failed-image fallback 修正並重新完成正常／封鎖圖片遠端驗收：`fa00277`／Run #37（`33237024886`）的封鎖圖片 fallback 通過，但 `display:none` 使 Chrome 與 Edge 的 7/7 正常 `loading="lazy"` 圖片停滯為 `pending`、`currentSrc=""` 且未顯示；本機修正 `338b17f` 已改用 `opacity:0` 並保留 `display:block`，focused 11/11、完整 Vitest 67/67、`build:pages` 與獨立 review 通過，仍待 Pages 部署及兩種瀏覽器情境重驗。
