@@ -348,3 +348,5 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 遠端 Edge 驗收通過：1280px 為精選文字左／完整 OG 小圖右及其餘三欄；800px 為兩欄且精選文字先於圖片；390px 為單欄且精選文字先於圖片。三種尺寸皆顯示 7 筆摘要、來源標示可見、圖片 `object-fit: contain`，且無水平溢出。
 - 遠端互動驗收通過：搜尋 `Codex` 顯示 2 筆、科技產業篩選顯示 2 筆、最早建立排序由 `2026-08-09` 至 `2026-08-28`、無結果狀態正確顯示，Tab 焦點具 3px 可見外框。
 - 2026-08-29 改用 Chrome 並由使用者在公開 Pages 分頁封鎖圖片後完成 failed-image 遠端視覺驗收；結果未通過。7 張 `.summary-card-image` 均為 `naturalWidth=0`、`complete=false`、`hidden=false`，畫面顯示破圖圖示與 alt 文字，而非來源 fallback。Chrome 封鎖圖片時未觸發目前程式依賴的 `error`，且載入時的 `complete && naturalWidth === 0` 條件亦不成立；既有 source-contract 測試不足以涵蓋此真實情境，需另行修正後重驗。
+- 2026-08-29 failed-image fallback 本機修正已完成驗證（程式 head `9c89afb`）：完整 `npm.cmd test` 為 7 個 Vitest 檔案、67 tests passed；`npm.cmd run build:pages` 的 Astro check 為 19 個檔案、0 errors／0 warnings／0 hints，靜態建置為 8 pages，內部 deployment verifier exit 0。另從 repository root 執行 `python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summary/` 與 `git diff --check` 均 exit 0。
+- 狀態為 **local fix verified; remote deployment and Chrome failed-image retest pending**：本次沒有部署、推送或執行公開 Chrome 重驗，故不得將本機 build verifier 視為遠端成功證據。

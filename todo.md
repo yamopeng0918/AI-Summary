@@ -163,4 +163,5 @@
 - [x] 將首頁功能 fast-forward 合併至本機 `master`，並成功 push 功能 head `c91cb3f` 至 `origin/master`。
 - [x] 完成本次首頁變更的 Pages workflow 驗收：Run #35（`33210585948`）對應 `caa9df6`，completed successfully。
 - [x] 完成遠端首頁 1280／800／390px 響應式、OG 小圖 contain、來源顯示、搜尋、分類、排序、無結果與鍵盤焦點驗收。
-- [ ] 修正並重新驗收遠端 failed-image fallback；2026-08-29 Chrome 封鎖圖片驗收顯示 7 張圖片皆為 `naturalWidth=0`、`complete=false`、`hidden=false`，目前呈現破圖 alt 文字而非來源 fallback。
+- [x] 修正 failed-image fallback 的本機實作並完成驗證：完整 Vitest 為 7 個檔案、67 tests passed；Astro check 0 diagnostics、靜態建置 8 pages，內部與 tracked/dist deployment verifier 均 exit 0。
+- [ ] 部署 failed-image fallback 至公開 GitHub Pages，並以 Chrome 重新驗收封鎖圖片情境；2026-08-29 的失敗基準為 7 張圖片皆為 `naturalWidth=0`、`complete=false`、`hidden=false` 且顯示破圖 alt 文字而非來源 fallback。
