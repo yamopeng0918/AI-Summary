@@ -47,13 +47,19 @@ class SummaryRepository:
     def replace(self, record_id: str, updated_record: SummaryRecord) -> Path:
         """Atomically replace one existing record after identity and URL checks."""
         self.get(record_id)
-        if updated_record.id != record_id:
+        try:
+            validated_record = SummaryRecord.model_validate(
+                updated_record.model_dump(mode="json", by_alias=True)
+            )
+        except ValidationError as error:
+            raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False) from error
+        if validated_record.id != record_id:
             raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False)
         for existing in self._load_all():
-            if existing.id != record_id and str(existing.canonical_url) == str(updated_record.canonical_url):
+            if existing.id != record_id and str(existing.canonical_url) == str(validated_record.canonical_url):
                 raise DigestError("save", "DUPLICATE_URL", "A summary already exists for this URL", False)
         destination = self._record_path(record_id)
-        self._write(destination, updated_record)
+        self._write(destination, validated_record)
         return destination
 
     def set_status(
