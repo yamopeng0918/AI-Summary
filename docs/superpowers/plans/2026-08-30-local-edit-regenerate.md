@@ -43,9 +43,9 @@
 - Consumes: `SummaryRepository.get(record_id: str) -> SummaryRecord`, `_write(destination: Path, record: SummaryRecord) -> None`.
 - Produces: `SummaryRepository.replace(record_id: str, updated_record: SummaryRecord) -> Path`.
 
-- [ ] **Step 1: Add failing happy-path and identity tests**
+- [ ] **Step 1: Add all failing replacement-contract tests**
 
-Append tests that save an original record, replace it with `model_copy(update={...})`, and assert the returned path and persisted record. Add a second test passing a different `updated_record.id` and assert `("save", "INVALID_RECORD", False)` while the original remains unchanged.
+Append tests that save an original record, replace it with `model_copy(update={...})`, and assert the returned path and persisted record. Add tests for a different `updated_record.id`, a canonical URL collision with a different record, and an `os.replace` failure. Every failure test must assert the original remains unchanged; the write-failure test must also assert `save / WRITE_FAILED / True` and no `*.tmp` remains.
 
 ```python
 def test_replace_atomically_overwrites_an_existing_valid_record(tmp_path) -> None:
@@ -77,9 +77,9 @@ def test_replace_rejects_a_record_id_mismatch_without_changing_data(tmp_path) ->
 
 - [ ] **Step 2: Run the tests and verify RED**
 
-Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_storage.py::test_replace_atomically_overwrites_an_existing_valid_record tests/test_storage.py::test_replace_rejects_a_record_id_mismatch_without_changing_data -v`
+Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_storage.py -k "replace" -v`
 
-Expected: FAIL because `SummaryRepository` has no `replace` method.
+Expected: all new tests FAIL because `SummaryRepository` has no `replace` method. No production implementation may be added until this RED result is recorded.
 
 - [ ] **Step 3: Implement the minimal replacement boundary**
 
@@ -105,17 +105,7 @@ Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_storag
 
 Expected: all storage tests PASS.
 
-- [ ] **Step 5: Add failing conflict and write-failure preservation tests**
-
-Add tests that: (a) save `first` and `second`, try replacing `second` with `first`'s canonical URL, and assert `save / DUPLICATE_URL`; (b) monkeypatch `storage.os.replace` to raise `OSError`, assert `save / WRITE_FAILED / True`, assert the original JSON still loads, and assert no `*.tmp` remains.
-
-- [ ] **Step 6: Run the new tests and verify their expected state**
-
-Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_storage.py -v`
-
-Expected: conflict test PASS from Step 3; write-failure preservation test PASS through existing `_write()` semantics. If either fails, change only `replace()`/`_write()` enough to satisfy the repository contract and rerun until GREEN.
-
-- [ ] **Step 7: Commit Task 1**
+- [ ] **Step 5: Commit Task 1**
 
 ```powershell
 git add -- src/ai_digest/storage.py tests/test_storage.py
@@ -320,9 +310,9 @@ git commit -m "feat: edit local summary records safely"
 - Consumes: `Extractor.extract(url)`, `Summarizer.summarize(article)`, `Classifier.predict(text)`, `SummaryRepository.get/list/replace`.
 - Produces: `RegenerateSummaryWorkflow(..., on_progress=None).run(record_id: str, now: datetime) -> SummaryRecord`.
 
-- [ ] **Step 1: Write the failing orchestration test**
+- [ ] **Step 1: Write all failing regeneration behavior tests**
 
-Build focused fakes like `tests/test_workflow.py`. Save an archived existing record, return a changed `ExtractedArticle` and `SummaryDraft`, and assert event order, progress order, classifier input, and all field invariants.
+Build focused fakes like `tests/test_workflow.py`. Save an archived existing record, return a changed `ExtractedArticle` and `SummaryDraft`, and assert event order, progress order, classifier input, and all field invariants. Before any production implementation, also add missing-target, extractor failure, resolved canonical collision, summarizer failure, invalid classifier category, classifier failure, Pydantic validation failure, and repository failure tests. For the collision case assert extraction and repository preflight occur but `summarize` does not; for every failure assert the original record remains unchanged.
 
 ```python
 assert progress == ["input", "extract", "summarize", "classify", "validate", "save"]
@@ -339,7 +329,7 @@ assert repository.get(original.id) == result
 
 Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_regeneration.py -v`
 
-Expected: collection FAIL because `ai_digest.regeneration` does not exist.
+Expected: collection FAIL because `ai_digest.regeneration` does not exist, proving every listed behavior starts RED.
 
 - [ ] **Step 3: Implement the minimum regeneration workflow**
 
@@ -424,23 +414,19 @@ Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_regene
 
 Expected: PASS.
 
-- [ ] **Step 5: Add failing boundary tests**
-
-Cover missing target, extractor failure, resolved canonical collision, summarizer failure, invalid classifier category, classifier failure, Pydantic validation failure, and repository failure. For the collision case assert the event list contains extraction and repository preflight but no `summarize`; for every failure assert the original repository record is unchanged.
-
-- [ ] **Step 6: Run boundary tests and complete minimal error mapping**
+- [ ] **Step 5: Run all regeneration tests and complete minimal error mapping**
 
 Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_regeneration.py -v`
 
-Expected: tests initially identify any missing boundary behavior; add only the same `INVALID_CATEGORY`, `INVALID_RECORD`, and `DUPLICATE_URL` mappings already used by `AddArticleWorkflow`, then rerun to PASS.
+Expected: tests identify any missing boundary behavior; add only the same `INVALID_CATEGORY`, `INVALID_RECORD`, and `DUPLICATE_URL` mappings already used by `AddArticleWorkflow`, then rerun to PASS.
 
-- [ ] **Step 7: Run both workflow suites**
+- [ ] **Step 6: Run both workflow suites**
 
 Run: `D:\Project\AI-Summary\.venv\Scripts\python.exe -m pytest tests/test_workflow.py tests/test_regeneration.py -v`
 
 Expected: PASS, proving creation behavior remains unchanged.
 
-- [ ] **Step 8: Commit Task 3**
+- [ ] **Step 7: Commit Task 3**
 
 ```powershell
 git add -- src/ai_digest/regeneration.py tests/test_regeneration.py
