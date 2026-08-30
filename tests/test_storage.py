@@ -208,3 +208,72 @@ def test_save_reports_write_failure(tmp_path, monkeypatch) -> None:
         True,
     )
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_replace_atomically_overwrites_an_existing_valid_record(tmp_path) -> None:
+    repository = SummaryRepository(tmp_path)
+    original = make_record("example")
+    repository.save(original)
+    updated = original.model_copy(update={"summary": "Updated summary."})
+
+    path = repository.replace("example", updated)
+
+    assert path == tmp_path / "example.json"
+    assert repository.get("example") == updated
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_replace_rejects_a_record_id_mismatch_without_changing_data(tmp_path) -> None:
+    repository = SummaryRepository(tmp_path)
+    original = make_record("example")
+    repository.save(original)
+
+    with pytest.raises(DigestError) as raised:
+        repository.replace("example", make_record("other"))
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "save", "INVALID_RECORD", False
+    )
+    assert repository.get("example") == original
+
+
+def test_replace_rejects_a_canonical_url_collision_without_changing_data(tmp_path) -> None:
+    repository = SummaryRepository(tmp_path)
+    original = make_record("example")
+    other = make_record("other")
+    repository.save(original)
+    repository.save(other)
+    updated = original.model_copy(update={"canonical_url": other.canonical_url})
+
+    with pytest.raises(DigestError) as raised:
+        repository.replace("example", updated)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "save", "DUPLICATE_URL", False
+    )
+    assert repository.get("example") == original
+    assert repository.get("other") == other
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_replace_reports_write_failure_without_changing_data_or_leaving_temporary_file(
+    tmp_path, monkeypatch
+) -> None:
+    repository = SummaryRepository(tmp_path)
+    original = make_record("example")
+    repository.save(original)
+    updated = original.model_copy(update={"summary": "Updated summary."})
+
+    def fail_replace(source, destination) -> None:
+        raise OSError("write failed")
+
+    monkeypatch.setattr(storage.os, "replace", fail_replace)
+
+    with pytest.raises(DigestError) as raised:
+        repository.replace("example", updated)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "save", "WRITE_FAILED", True
+    )
+    assert repository.get("example") == original
+    assert not list(tmp_path.glob("*.tmp"))

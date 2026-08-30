@@ -44,6 +44,18 @@ class SummaryRepository:
             raise DigestError("save", "RECORD_NOT_FOUND", "Summary record was not found", False)
         return self._load_path(path)
 
+    def replace(self, record_id: str, updated_record: SummaryRecord) -> Path:
+        """Atomically replace one existing record after identity and URL checks."""
+        self.get(record_id)
+        if updated_record.id != record_id:
+            raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False)
+        for existing in self._load_all():
+            if existing.id != record_id and str(existing.canonical_url) == str(updated_record.canonical_url):
+                raise DigestError("save", "DUPLICATE_URL", "A summary already exists for this URL", False)
+        destination = self._record_path(record_id)
+        self._write(destination, updated_record)
+        return destination
+
     def set_status(
         self,
         record_id: str,
