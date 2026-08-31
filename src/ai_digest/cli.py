@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
@@ -18,6 +19,7 @@ from ai_digest.classifiers.base import Classifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.classifiers.trained import TrainedClassifier
 from ai_digest.domain import DigestError, SummaryRecord
+from ai_digest.editing import EditorRunner, EditSummaryWorkflow
 from ai_digest.extractors.bluesky import BlueskyAppViewClient, BlueskyExtractor
 from ai_digest.extractors.router import ExtractorRouter, LazyExtractor
 from ai_digest.extractors.web import WebExtractor
@@ -27,6 +29,7 @@ from ai_digest.extractors.youtube import (
     YtDlpMetadataProbe,
 )
 from ai_digest.extractors.youtube_media import CommandRunner, YouTubeMediaPipeline
+from ai_digest.regeneration import RegenerateSummaryWorkflow
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
 from ai_digest.summarizers.gemini import GeminiSummarizer
@@ -156,6 +159,34 @@ def _workflow(on_progress: Callable[[str], None] | None = None) -> AddArticleWor
     )
 
 
+def _editor_runner() -> EditorRunner:
+    return EditorRunner(os.environ, platform=sys.platform, command_runner=subprocess.run)
+
+
+def _edit_workflow() -> EditSummaryWorkflow:
+    return EditSummaryWorkflow(_repository(), _editor_runner(), _now)
+
+
+def _regenerate_workflow(
+    on_progress: Callable[[str], None] | None = None,
+    *,
+    repository_factory: Callable[[], SummaryRepository] | None = None,
+) -> RegenerateSummaryWorkflow:
+    provider = _provider()
+    selected_repository_factory = repository_factory or _repository
+    return RegenerateSummaryWorkflow(
+        extractor=ExtractorRouter(
+            WebExtractor(client_factory=_web_client_factory),
+            LazyExtractor(lambda: _youtube_extractor(provider)),
+            BlueskyExtractor(BlueskyAppViewClient(client_factory=_web_client_factory)),
+        ),
+        summarizer=_summarizer(provider),
+        classifier=_classifier(),
+        repository=selected_repository_factory(),
+        on_progress=on_progress,
+    )
+
+
 def _evaluation_service() -> ClassifierEvaluationService:
     return ClassifierEvaluationService(clock=_now)
 
@@ -183,12 +214,25 @@ def create_app(
     repository_factory: Callable[[], SummaryRepository],
     clock: Callable[[], datetime],
     evaluation_service_factory: Callable[[], ClassifierEvaluationService] | None = None,
+    edit_workflow_factory: Callable[[], EditSummaryWorkflow] | None = None,
+    regenerate_workflow_factory: Callable[
+        [Callable[[str], None]], RegenerateSummaryWorkflow
+    ]
+    | None = None,
 ) -> typer.Typer:
     """Create the CLI with dependencies supplied by the caller."""
     application = typer.Typer(no_args_is_help=True)
     evaluation_factory = evaluation_service_factory
     if evaluation_factory is None:
         evaluation_factory = lambda: ClassifierEvaluationService(clock=clock)
+    edit_factory = edit_workflow_factory
+    if edit_factory is None:
+        edit_factory = lambda: EditSummaryWorkflow(repository_factory(), _editor_runner(), clock)
+    regenerate_factory = regenerate_workflow_factory
+    if regenerate_factory is None:
+        regenerate_factory = lambda on_progress: _regenerate_workflow(
+            on_progress, repository_factory=repository_factory
+        )
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)
@@ -199,6 +243,27 @@ def create_app(
         """Extract, summarize, classify, and save one public article URL."""
         try:
             record = workflow_factory(lambda stage: _emit({"stage": stage})).run(url, clock())
+            path = repository_factory().root / f"{record.id}.json"
+            _emit({"stage": "complete", "id": record.id, "path": str(path)})
+        except DigestError as error:
+            report_error(error)
+
+    @application.command()
+    def edit(record_id: str) -> None:
+        """Edit one locally stored summary in a configured text editor."""
+        try:
+            record = edit_factory().run(record_id)
+            path = repository_factory().root / f"{record.id}.json"
+            _emit({"stage": "complete", "id": record.id, "path": str(path)})
+        except DigestError as error:
+            report_error(error)
+
+    @application.command()
+    def regenerate(record_id: str) -> None:
+        """Regenerate one stored summary from its public source."""
+        try:
+            workflow = regenerate_factory(lambda stage: _emit({"stage": stage}))
+            record = workflow.run(record_id, clock())
             path = repository_factory().root / f"{record.id}.json"
             _emit({"stage": "complete", "id": record.id, "path": str(path)})
         except DigestError as error:
@@ -252,7 +317,13 @@ def create_app(
     return application
 
 
-app = create_app(_workflow, _repository, _now)
+app = create_app(
+    _workflow,
+    _repository,
+    _now,
+    edit_workflow_factory=_edit_workflow,
+    regenerate_workflow_factory=_regenerate_workflow,
+)
 
 
 def main() -> None:

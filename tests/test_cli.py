@@ -1,4 +1,5 @@
 import json
+import os
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -182,6 +183,48 @@ class FakeWorkflow:
         return self.result
 
 
+class FakeEditWorkflow:
+    def __init__(
+        self,
+        result: SummaryRecord | None = None,
+        error: DigestError | None = None,
+    ) -> None:
+        self.result = result
+        self.error = error
+        self.record_ids: list[str] = []
+
+    def run(self, record_id: str) -> SummaryRecord:
+        self.record_ids.append(record_id)
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+
+class FakeRegenerateWorkflow:
+    def __init__(
+        self,
+        result: SummaryRecord | None = None,
+        error: DigestError | None = None,
+        stages: tuple[str, ...] = ("input", "extract", "summarize", "classify", "validate", "save"),
+    ) -> None:
+        self.result = result
+        self.error = error
+        self.stages = stages
+        self.calls: list[tuple[str, datetime]] = []
+        self.on_progress = None
+
+    def run(self, record_id: str, now: datetime) -> SummaryRecord:
+        self.calls.append((record_id, now))
+        for stage in self.stages:
+            if self.on_progress is not None:
+                self.on_progress(stage)
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+
 def make_app(tmp_path: Path, workflow: FakeWorkflow):
     repository = SummaryRepository(tmp_path)
     def workflow_factory(on_progress):
@@ -189,6 +232,26 @@ def make_app(tmp_path: Path, workflow: FakeWorkflow):
         return workflow
 
     return create_app(workflow_factory, lambda: repository, lambda: NOW), repository
+
+
+def make_editing_app(
+    tmp_path: Path,
+    edit_workflow: FakeEditWorkflow,
+    regenerate_workflow: FakeRegenerateWorkflow,
+):
+    repository = SummaryRepository(tmp_path)
+
+    def regenerate_factory(on_progress):
+        regenerate_workflow.on_progress = on_progress
+        return regenerate_workflow
+
+    return create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        edit_workflow_factory=lambda: edit_workflow,
+        regenerate_workflow_factory=regenerate_factory,
+    )
 
 
 def make_evaluation_result() -> EvaluationResult:
@@ -254,6 +317,64 @@ def test_add_reports_all_pipeline_stages_and_saved_location(tmp_path) -> None:
         assert f'"stage": "{stage}"' in result.stdout
     assert "example" in result.stdout
     assert json.loads(result.stdout.splitlines()[-1])["path"] == str(tmp_path / "example.json")
+
+
+def test_edit_runs_injected_workflow_and_reports_saved_location(tmp_path) -> None:
+    edit_workflow = FakeEditWorkflow(make_record("edited"))
+    app = make_editing_app(tmp_path, edit_workflow, FakeRegenerateWorkflow(make_record()))
+
+    result = CliRunner().invoke(app, ["edit", "edited"])
+
+    assert result.exit_code == 0
+    assert edit_workflow.record_ids == ["edited"]
+    assert json.loads(result.stdout) == {
+        "stage": "complete",
+        "id": "edited",
+        "path": str(tmp_path / "edited.json"),
+    }
+
+
+def test_regenerate_runs_injected_workflow_with_progress_and_reports_saved_location(
+    tmp_path,
+) -> None:
+    regenerate_workflow = FakeRegenerateWorkflow(make_record("regenerated"))
+    app = make_editing_app(tmp_path, FakeEditWorkflow(make_record()), regenerate_workflow)
+
+    result = CliRunner().invoke(app, ["regenerate", "regenerated"])
+
+    assert result.exit_code == 0
+    assert regenerate_workflow.calls == [("regenerated", NOW)]
+    payloads = [json.loads(line) for line in result.stdout.splitlines()]
+    assert [payload["stage"] for payload in payloads] == [
+        "input",
+        "extract",
+        "summarize",
+        "classify",
+        "validate",
+        "save",
+        "complete",
+    ]
+    assert payloads[-1] == {
+        "stage": "complete",
+        "id": "regenerated",
+        "path": str(tmp_path / "regenerated.json"),
+    }
+
+
+@pytest.mark.parametrize("command", ["edit", "regenerate"])
+def test_edit_and_regenerate_report_domain_errors_to_stderr(tmp_path, command: str) -> None:
+    error = DigestError("save", "INVALID_RECORD", "Summary record is invalid", False)
+    app = make_editing_app(
+        tmp_path,
+        FakeEditWorkflow(error=error),
+        FakeRegenerateWorkflow(error=error, stages=()),
+    )
+
+    result = CliRunner().invoke(app, [command, "example"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert json.loads(result.stderr) == error.as_dict()
 
 
 def test_json_events_are_safe_for_non_utf8_windows_consoles(monkeypatch) -> None:
@@ -571,6 +692,180 @@ def test_production_evaluate_classifier_is_key_free_and_does_not_construct_provi
     assert result.exit_code == 0
     assert captured["clock"] is cli._now
     assert evaluation_service.run_calls == 1
+
+
+def test_production_edit_is_key_free_and_constructs_no_source_or_provider_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", str(tmp_path))
+    SummaryRepository(tmp_path).save(make_record())
+
+    class NoOpEditor:
+        def edit(self, path: Path) -> None:
+            assert path.suffix == ".json"
+
+    def unexpected_dependency(*args, **kwargs):
+        raise AssertionError("edit must not construct source or provider dependencies")
+
+    monkeypatch.setattr(cli, "_provider", unexpected_dependency)
+    monkeypatch.setattr(cli, "_summarizer", unexpected_dependency)
+    monkeypatch.setattr(cli, "_classifier", unexpected_dependency)
+    monkeypatch.setattr(cli, "ExtractorRouter", unexpected_dependency)
+    monkeypatch.setattr(cli, "WebExtractor", unexpected_dependency)
+    monkeypatch.setattr(cli, "OpenAI", unexpected_dependency)
+    monkeypatch.setattr(cli.genai, "Client", unexpected_dependency)
+    monkeypatch.setattr(cli, "_editor_runner", lambda: NoOpEditor())
+
+    result = CliRunner().invoke(cli.app, ["edit", "example"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "stage": "complete",
+        "id": "example",
+        "path": str(tmp_path / "example.json"),
+    }
+
+
+def test_editor_runner_injects_process_environment_platform_and_subprocess_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeEditorRunner:
+        def __init__(self, environment, *, platform, command_runner) -> None:
+            captured.update(
+                environment=environment,
+                platform=platform,
+                command_runner=command_runner,
+            )
+
+    def fake_run(*args, **kwargs):
+        raise AssertionError("runner must not execute during composition")
+
+    monkeypatch.setattr(cli, "EditorRunner", FakeEditorRunner)
+    monkeypatch.setattr(cli.sys, "platform", "test-platform")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    runner = cli._editor_runner()
+
+    assert isinstance(runner, FakeEditorRunner)
+    assert captured == {
+        "environment": os.environ,
+        "platform": "test-platform",
+        "command_runner": fake_run,
+    }
+
+
+def test_production_regenerate_defaults_to_gemini_and_wires_add_source_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AI_DIGEST_PROVIDER", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    captured: dict[str, object] = {}
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+    class FakeGeminiClient:
+        def __init__(self, *, api_key: str) -> None:
+            captured["api_key"] = api_key
+
+    class FakeGeminiSummarizer:
+        def __init__(self, client: object, model: str) -> None:
+            captured["summarizer_client"] = client
+            captured["summarizer_model"] = model
+
+    monkeypatch.setattr(cli, "RegenerateSummaryWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_classifier", lambda: "trained-classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+    monkeypatch.setattr(cli.genai, "Client", FakeGeminiClient)
+    monkeypatch.setattr(cli, "GeminiSummarizer", FakeGeminiSummarizer)
+
+    cli._regenerate_workflow(on_progress=lambda stage: None)
+
+    router = captured["extractor"]
+    assert isinstance(router, cli.ExtractorRouter)
+    assert isinstance(router._web, cli.WebExtractor)
+    assert router._web._client_factory is cli._web_client_factory
+    assert isinstance(router._youtube, cli.LazyExtractor)
+    assert isinstance(router._bluesky, cli.BlueskyExtractor)
+    assert captured["api_key"] == "gemini-key"
+    assert captured["summarizer_model"] == "gemini-3.6-flash"
+    assert captured["classifier"] == "trained-classifier"
+    assert captured["repository"] == "repository"
+    assert callable(captured["on_progress"])
+
+
+def test_production_regenerate_openai_constructs_only_openai_provider_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key-must-not-be-used")
+    captured: dict[str, object] = {}
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+    class FakeOpenAISummarizer:
+        def __init__(self, client: object, model: str) -> None:
+            captured["summarizer_client"] = client
+            captured["summarizer_model"] = model
+
+    def unexpected_gemini(*args, **kwargs):
+        raise AssertionError("OpenAI selection must not construct Gemini dependencies")
+
+    monkeypatch.setattr(cli, "RegenerateSummaryWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "OpenAI", lambda *, api_key: captured.update(api_key=api_key))
+    monkeypatch.setattr(cli, "OpenAISummarizer", FakeOpenAISummarizer)
+    monkeypatch.setattr(cli.genai, "Client", unexpected_gemini)
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", lambda: "repository")
+    monkeypatch.setattr(
+        cli,
+        "_youtube_extractor",
+        lambda provider: captured.update(youtube_provider=provider) or "youtube-extractor",
+    )
+
+    cli._regenerate_workflow()
+    youtube = captured["extractor"]._youtube._factory()
+
+    assert captured["api_key"] == "openai-key"
+    assert captured["summarizer_model"] == "gpt-5-mini"
+    assert captured["youtube_provider"] == "openai"
+    assert youtube == "youtube-extractor"
+
+
+def test_production_regenerate_missing_selected_key_fails_before_workflow_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflow_started = False
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            nonlocal workflow_started
+            workflow_started = True
+
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", "openai")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "other-provider-key")
+    monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", str(tmp_path))
+    monkeypatch.setattr(cli, "RegenerateSummaryWorkflow", FakeWorkflow)
+
+    result = CliRunner().invoke(cli.app, ["regenerate", "example"])
+
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == {
+        "stage": "input",
+        "code": "MISSING_API_KEY",
+        "message": "OPENAI_API_KEY is required for add",
+        "retryable": False,
+    }
+    assert workflow_started is False
 
 
 def test_create_app_default_evaluation_service_uses_its_injected_clock(monkeypatch) -> None:
