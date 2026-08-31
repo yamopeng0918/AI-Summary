@@ -72,17 +72,23 @@ def _provider() -> Literal["gemini", "openai"]:
     return provider
 
 
-def _summarizer(provider: Literal["gemini", "openai"]) -> Summarizer:
+def _summarizer(
+    provider: Literal["gemini", "openai"], *, operation: Literal["add", "regenerate"] = "add"
+) -> Summarizer:
     if provider == "gemini":
         api_key = os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            raise DigestError("input", "MISSING_API_KEY", "GEMINI_API_KEY is required for add", False)
+            raise DigestError(
+                "input", "MISSING_API_KEY", f"GEMINI_API_KEY is required for {operation}", False
+            )
         return GeminiSummarizer(
             genai.Client(api_key=api_key), os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
         )
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        raise DigestError("input", "MISSING_API_KEY", "OPENAI_API_KEY is required for add", False)
+        raise DigestError(
+            "input", "MISSING_API_KEY", f"OPENAI_API_KEY is required for {operation}", False
+        )
     return OpenAISummarizer(OpenAI(api_key=api_key), os.environ.get("OPENAI_MODEL", "gpt-5-mini"))
 
 
@@ -180,7 +186,7 @@ def _regenerate_workflow(
             LazyExtractor(lambda: _youtube_extractor(provider)),
             BlueskyExtractor(BlueskyAppViewClient(client_factory=_web_client_factory)),
         ),
-        summarizer=_summarizer(provider),
+        summarizer=_summarizer(provider, operation="regenerate"),
         classifier=_classifier(),
         repository=selected_repository_factory(),
         on_progress=on_progress,

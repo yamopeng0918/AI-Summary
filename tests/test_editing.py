@@ -456,6 +456,82 @@ def test_edit_workflow_does_not_replace_when_temporary_file_cannot_be_removed(
             original_unlink(path, missing_ok=True)
 
 
+def test_edit_workflow_reports_cleanup_failure_after_editor_error(tmp_path, monkeypatch) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    original = make_record()
+    repository.save(original)
+    editor = JsonEditingFake(lambda payload: None)
+    original_unlink = Path.unlink
+    unlink_calls: list[Path] = []
+
+    def fail_editor(path: Path) -> None:
+        editor.paths.append(path)
+        raise DigestError("input", "EDITOR_FAILED", "The text editor could not be run", False)
+
+    def fail_temporary_unlink(self: Path, *, missing_ok: bool = False) -> None:
+        if self in editor.paths:
+            unlink_calls.append(self)
+            raise OSError("temporary file is locked")
+        original_unlink(self, missing_ok=missing_ok)
+
+    editor.edit = fail_editor  # type: ignore[method-assign]
+    monkeypatch.setattr(Path, "unlink", fail_temporary_unlink)
+
+    try:
+        with pytest.raises(DigestError) as raised:
+            EditSummaryWorkflow(repository, editor, lambda: NOW).run(original.id)
+
+        assert raised.value.as_dict() == {
+            "stage": "save",
+            "code": "WRITE_FAILED",
+            "message": "Summary record could not be saved",
+            "retryable": True,
+        }
+        assert repository.get(original.id) == original
+        assert unlink_calls == editor.paths
+    finally:
+        for path in editor.paths:
+            original_unlink(path, missing_ok=True)
+
+
+def test_edit_workflow_reports_cleanup_failure_after_invalid_json(tmp_path, monkeypatch) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    original = make_record()
+    repository.save(original)
+    editor = JsonEditingFake(lambda payload: None)
+    original_unlink = Path.unlink
+    unlink_calls: list[Path] = []
+
+    def write_invalid_json(path: Path) -> None:
+        editor.paths.append(path)
+        path.write_text("{", encoding="utf-8")
+
+    def fail_temporary_unlink(self: Path, *, missing_ok: bool = False) -> None:
+        if self in editor.paths:
+            unlink_calls.append(self)
+            raise OSError("temporary file is locked")
+        original_unlink(self, missing_ok=missing_ok)
+
+    editor.edit = write_invalid_json  # type: ignore[method-assign]
+    monkeypatch.setattr(Path, "unlink", fail_temporary_unlink)
+
+    try:
+        with pytest.raises(DigestError) as raised:
+            EditSummaryWorkflow(repository, editor, lambda: NOW).run(original.id)
+
+        assert raised.value.as_dict() == {
+            "stage": "save",
+            "code": "WRITE_FAILED",
+            "message": "Summary record could not be saved",
+            "retryable": True,
+        }
+        assert repository.get(original.id) == original
+        assert unlink_calls == editor.paths
+    finally:
+        for path in editor.paths:
+            original_unlink(path, missing_ok=True)
+
+
 def test_edit_workflow_cleans_temporary_file_when_editor_fails(tmp_path) -> None:
     repository = SummaryRepository(tmp_path / "summaries")
     original = make_record()

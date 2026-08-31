@@ -819,15 +819,20 @@ def test_regenerate_uses_a_falsey_repository_factory_when_supplied(
     def unexpected_default_repository() -> object:
         raise AssertionError("the supplied repository factory must be used")
 
+    def fake_summarizer(provider: object, *, operation: str) -> str:
+        captured["summarizer_operation"] = operation
+        return "summarizer"
+
     monkeypatch.setattr(cli, "RegenerateSummaryWorkflow", FakeWorkflow)
     monkeypatch.setattr(cli, "_provider", lambda: "provider")
-    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
+    monkeypatch.setattr(cli, "_summarizer", fake_summarizer)
     monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
     monkeypatch.setattr(cli, "_repository", unexpected_default_repository)
 
     cli._regenerate_workflow(repository_factory=FalseyRepositoryFactory())
 
     assert captured["repository"] is repository
+    assert captured["summarizer_operation"] == "regenerate"
 
 
 def test_production_regenerate_openai_constructs_only_openai_provider_dependencies(
@@ -871,8 +876,19 @@ def test_production_regenerate_openai_constructs_only_openai_provider_dependenci
     assert youtube == "youtube-extractor"
 
 
+@pytest.mark.parametrize(
+    ("provider", "missing_key", "other_key"),
+    [
+        ("gemini", "GEMINI_API_KEY", "OPENAI_API_KEY"),
+        ("openai", "OPENAI_API_KEY", "GEMINI_API_KEY"),
+    ],
+)
 def test_production_regenerate_missing_selected_key_fails_before_workflow_runs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    provider: str,
+    missing_key: str,
+    other_key: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workflow_started = False
 
@@ -881,9 +897,9 @@ def test_production_regenerate_missing_selected_key_fails_before_workflow_runs(
             nonlocal workflow_started
             workflow_started = True
 
-    monkeypatch.setenv("AI_DIGEST_PROVIDER", "openai")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("GEMINI_API_KEY", "other-provider-key")
+    monkeypatch.setenv("AI_DIGEST_PROVIDER", provider)
+    monkeypatch.delenv(missing_key, raising=False)
+    monkeypatch.setenv(other_key, "other-provider-key")
     monkeypatch.setenv("AI_DIGEST_SUMMARY_ROOT", str(tmp_path))
     monkeypatch.setattr(cli, "RegenerateSummaryWorkflow", FakeWorkflow)
 
@@ -893,7 +909,7 @@ def test_production_regenerate_missing_selected_key_fails_before_workflow_runs(
     assert json.loads(result.stderr) == {
         "stage": "input",
         "code": "MISSING_API_KEY",
-        "message": "OPENAI_API_KEY is required for add",
+        "message": f"{missing_key} is required for regenerate",
         "retryable": False,
     }
     assert workflow_started is False

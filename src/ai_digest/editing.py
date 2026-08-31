@@ -19,6 +19,15 @@ from ai_digest.storage import SummaryRepository
 _PROTECTED_ALIASES = ("schemaVersion", "id", "canonicalUrl", "sourceType", "createdAt")
 
 
+def _cleanup_temporary_file(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as error:
+        raise DigestError(
+            "save", "WRITE_FAILED", "Summary record could not be saved", True
+        ) from error
+
+
 class EditorRunner:
     """Run a configured text editor without a shell."""
 
@@ -121,13 +130,9 @@ class EditSummaryWorkflow:
             edited_payload["updatedAt"] = self._clock().isoformat()
             updated = SummaryRecord.model_validate(edited_payload)
             try:
-                temporary_path.unlink(missing_ok=True)
-            except OSError as error:
+                _cleanup_temporary_file(temporary_path)
+            finally:
                 temporary_path = None
-                raise DigestError(
-                    "save", "WRITE_FAILED", "Summary record could not be saved", True
-                ) from error
-            temporary_path = None
             self._repository.replace(record_id, updated)
             return updated
         except DigestError:
@@ -136,7 +141,4 @@ class EditSummaryWorkflow:
             raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False) from error
         finally:
             if temporary_path is not None:
-                try:
-                    temporary_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
+                _cleanup_temporary_file(temporary_path)
