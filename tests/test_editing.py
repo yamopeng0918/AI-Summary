@@ -39,6 +39,38 @@ def test_editor_runner_prefers_visual_and_never_uses_a_shell(tmp_path) -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("configured", "expected_command"),
+    [
+        (r"C:\Tools\editor.exe", [r"C:\Tools\editor.exe"]),
+        (
+            r'"C:\Program Files\Editor\editor.exe" --wait',
+            [r"C:\Program Files\Editor\editor.exe", "--wait"],
+        ),
+    ],
+)
+def test_editor_runner_preserves_windows_executable_paths(
+    configured, expected_command, tmp_path
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def run(args, *, check, shell):
+        calls.append({"args": args, "check": check, "shell": shell})
+        return subprocess.CompletedProcess(args, 0)
+
+    editor = EditorRunner({"VISUAL": configured}, platform="win32", command_runner=run)
+
+    editor.edit(tmp_path / "record.json")
+
+    assert calls == [
+        {
+            "args": [*expected_command, str(tmp_path / "record.json")],
+            "check": False,
+            "shell": False,
+        }
+    ]
+
+
 def test_editor_runner_uses_editor_when_visual_is_blank(tmp_path) -> None:
     calls: list[list[str]] = []
 
@@ -387,6 +419,41 @@ def test_edit_workflow_preserves_record_when_repository_write_fails(tmp_path, mo
     assert raised.value.code == "WRITE_FAILED"
     assert repository.get(original.id) == original
     assert_temporary_files_removed(editor)
+
+
+def test_edit_workflow_does_not_replace_when_temporary_file_cannot_be_removed(
+    tmp_path, monkeypatch
+) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    original = make_record()
+    repository.save(original)
+    editor = JsonEditingFake(lambda payload: payload.__setitem__("summary", "Edited summary."))
+    original_unlink = Path.unlink
+    unlink_calls: list[Path] = []
+
+    def fail_temporary_unlink(self: Path, *, missing_ok: bool = False) -> None:
+        if self in editor.paths:
+            unlink_calls.append(self)
+            raise OSError("temporary file is locked")
+        original_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", fail_temporary_unlink)
+
+    try:
+        with pytest.raises(DigestError) as raised:
+            EditSummaryWorkflow(repository, editor, lambda: NOW).run(original.id)
+
+        assert raised.value.as_dict() == {
+            "stage": "save",
+            "code": "WRITE_FAILED",
+            "message": "Summary record could not be saved",
+            "retryable": True,
+        }
+        assert repository.get(original.id) == original
+        assert unlink_calls == editor.paths
+    finally:
+        for path in editor.paths:
+            original_unlink(path, missing_ok=True)
 
 
 def test_edit_workflow_cleans_temporary_file_when_editor_fails(tmp_path) -> None:

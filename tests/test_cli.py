@@ -799,6 +799,37 @@ def test_production_regenerate_defaults_to_gemini_and_wires_add_source_boundarie
     assert callable(captured["on_progress"])
 
 
+def test_regenerate_uses_a_falsey_repository_factory_when_supplied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = object()
+    captured: dict[str, object] = {}
+
+    class FalseyRepositoryFactory:
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self) -> object:
+            return repository
+
+    class FakeWorkflow:
+        def __init__(self, **dependencies: object) -> None:
+            captured.update(dependencies)
+
+    def unexpected_default_repository() -> object:
+        raise AssertionError("the supplied repository factory must be used")
+
+    monkeypatch.setattr(cli, "RegenerateSummaryWorkflow", FakeWorkflow)
+    monkeypatch.setattr(cli, "_provider", lambda: "provider")
+    monkeypatch.setattr(cli, "_summarizer", lambda provider: "summarizer")
+    monkeypatch.setattr(cli, "_classifier", lambda: "classifier")
+    monkeypatch.setattr(cli, "_repository", unexpected_default_repository)
+
+    cli._regenerate_workflow(repository_factory=FalseyRepositoryFactory())
+
+    assert captured["repository"] is repository
+
+
 def test_production_regenerate_openai_constructs_only_openai_provider_dependencies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

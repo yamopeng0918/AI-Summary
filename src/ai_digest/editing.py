@@ -45,7 +45,14 @@ class EditorRunner:
         )
         try:
             if configured is not None:
-                command = shlex.split(configured)
+                command = shlex.split(configured, posix=self._platform != "win32")
+                if self._platform == "win32":
+                    command = [
+                        token[1:-1]
+                        if len(token) >= 2 and token[0] == token[-1] and token[0] in {"'", '"'}
+                        else token
+                        for token in command
+                    ]
                 if not command:
                     raise ValueError("empty editor command")
             elif self._platform == "win32":
@@ -113,6 +120,14 @@ class EditSummaryWorkflow:
                     )
             edited_payload["updatedAt"] = self._clock().isoformat()
             updated = SummaryRecord.model_validate(edited_payload)
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError as error:
+                temporary_path = None
+                raise DigestError(
+                    "save", "WRITE_FAILED", "Summary record could not be saved", True
+                ) from error
+            temporary_path = None
             self._repository.replace(record_id, updated)
             return updated
         except DigestError:

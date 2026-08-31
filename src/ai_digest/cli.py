@@ -173,7 +173,7 @@ def _regenerate_workflow(
     repository_factory: Callable[[], SummaryRepository] | None = None,
 ) -> RegenerateSummaryWorkflow:
     provider = _provider()
-    selected_repository_factory = repository_factory or _repository
+    selected_repository_factory = _repository if repository_factory is None else repository_factory
     return RegenerateSummaryWorkflow(
         extractor=ExtractorRouter(
             WebExtractor(client_factory=_web_client_factory),
