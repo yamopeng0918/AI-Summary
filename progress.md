@@ -73,10 +73,11 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 
 ### 2026-08-31：本機編輯／重新產生摘要文件與完整驗證
 
-- 完成的功能提交依序為 `ecbf809`（原子 replace）、`5ae3384`（replace 驗證）、`a720f3f`（序列化失敗映射）、`69d916d` 與 `84e9fe6`（安全本機編輯）、`9145652`（重新產生 workflow）、`133be90`（CLI `edit`／`regenerate`）。README 已記錄 Windows PowerShell 的 `VISUAL`／`EDITOR`／Notepad 選擇順序、受保護欄位、Schema 驗證、失敗時原子保留、provider 金鑰選擇及付費重新產生條件。
+- 完成的功能提交依序為 `ecbf809`（原子 replace）、`5ae3384`（replace 驗證）、`a720f3f`（序列化失敗映射）、`69d916d` 與 `84e9fe6`（安全本機編輯）、`9145652`（重新產生 workflow）、`133be90`（CLI `edit`／`regenerate`）、`5e58dba`（Windows 編輯器路徑、falsey factory 與 pre-replace cleanup）。README 已記錄 Windows PowerShell 的 `VISUAL`／`EDITOR`／Notepad 選擇順序、受保護欄位、Schema 驗證、失敗時原子保留、provider 金鑰選擇及付費重新產生條件。
 - 指定 focused Python 測試為 `118 passed, 1 warning`；完整 Python suite 為 `663 passed, 2 skipped, 1 warning`。兩個 skip 都是現有 Windows symlink 建立權限不足（`WinError 1314`）；唯一 warning 是第三方 `google-genai` 的 `_UnionGenericAlias` deprecation warning。
 - `SummaryRepository(Path('data/summaries')).list()` 重新驗證 `7` 筆已保存記錄；`scripts/verify_deployment.py --tracked` 與 `git diff --check` 都 exit `0`。
 - 在已忽略的暫存 `AI_DIGEST_SUMMARY_ROOT` 中複製一筆版本控制的 fictional demo 記錄，清空兩個 provider key、以注入的 Python editor helper 執行 `ai-digest edit`。命令 exit `0`，可編輯 `summary` 已變更、`schemaVersion`／`id`／`canonicalUrl`／`sourceType`／`createdAt` 均未變、`updatedAt` 前進，根目錄僅保留一個記錄 JSON，並已移除整個暫存 root。
+- 第二輪 final review 修正 commit `75785f1` 已補上 editor／無效 JSON 後 cleanup unlink 失敗必須回報 `save/WRITE_FAILED`，以及 regenerate 專用 missing-key wording 與 add wording 保留的測試及實作。focused `tests/test_editing.py tests/test_cli.py` 為 `94 passed, 1 warning`；完整 Python 為 `670 passed, 2 skipped, 1 warning`。改以本里程碑正確的 tracked-only 命令執行 `python scripts/verify_deployment.py --tracked` 並 exit `0`；7 筆保存資料重新驗證與 `git diff --check` 亦通過。未將缺少 `site/dist` 的 dist 驗證誤列為成功。
 - 本次沒有重新擷取、付費摘要、Git push、GitHub Pages 部署或遠端查詢。遠端狀態只保留先前已驗證資訊：最新成功 workflow `33245288929`，head `00b25eb`；不得將本機 edit/regenerate 驗證視為新部署。
 - 下一步為 `build-site` CLI 的核准設計與 TDD 實作；任何真實 `regenerate` 付費呼叫、push 或部署都仍需要個別明確授權。
 
