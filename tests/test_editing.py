@@ -123,6 +123,29 @@ def test_editor_runner_reports_os_error(tmp_path) -> None:
     }
 
 
+def test_editor_runner_reports_malformed_editor_command(tmp_path) -> None:
+    calls: list[object] = []
+
+    def run(args, *, check, shell):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0)
+
+    editor = EditorRunner(
+        {"VISUAL": 'code "unterminated'}, platform="linux", command_runner=run
+    )
+
+    with pytest.raises(DigestError) as raised:
+        editor.edit(tmp_path / "record.json")
+
+    assert raised.value.as_dict() == {
+        "stage": "input",
+        "code": "EDITOR_FAILED",
+        "message": "The text editor could not be run",
+        "retryable": False,
+    }
+    assert calls == []
+
+
 def make_record(record_id: str = "example") -> SummaryRecord:
     return SummaryRecord.model_validate(
         {
@@ -219,6 +242,26 @@ def test_edit_workflow_rejects_each_protected_field(alias, value, tmp_path) -> N
     assert_temporary_files_removed(editor)
 
 
+@pytest.mark.parametrize("value", [True, 1.0])
+def test_edit_workflow_rejects_type_changed_schema_version(value, tmp_path) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    original = make_record()
+    repository.save(original)
+    editor = JsonEditingFake(lambda payload: payload.__setitem__("schemaVersion", value))
+
+    with pytest.raises(DigestError) as raised:
+        EditSummaryWorkflow(repository, editor, lambda: NOW).run(original.id)
+
+    assert raised.value.as_dict() == {
+        "stage": "save",
+        "code": "PROTECTED_FIELD_CHANGED",
+        "message": "Protected summary fields cannot be changed",
+        "retryable": False,
+    }
+    assert repository.get(original.id) == original
+    assert_temporary_files_removed(editor)
+
+
 def test_edit_workflow_rejects_malformed_json_without_changing_record(tmp_path) -> None:
     repository = SummaryRepository(tmp_path / "summaries")
     original = make_record()
@@ -274,6 +317,25 @@ def test_edit_workflow_rejects_schema_failure_without_changing_record(tmp_path) 
         EditSummaryWorkflow(repository, editor, lambda: NOW).run(original.id)
 
     assert raised.value.code == "INVALID_RECORD"
+    assert repository.get(original.id) == original
+    assert_temporary_files_removed(editor)
+
+
+def test_edit_workflow_rejects_unexpected_json_alias_without_changing_record(tmp_path) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    original = make_record()
+    repository.save(original)
+    editor = JsonEditingFake(lambda payload: payload.__setitem__("unexpected", "value"))
+
+    with pytest.raises(DigestError) as raised:
+        EditSummaryWorkflow(repository, editor, lambda: NOW).run(original.id)
+
+    assert raised.value.as_dict() == {
+        "stage": "save",
+        "code": "INVALID_RECORD",
+        "message": "Summary record is invalid",
+        "retryable": False,
+    }
     assert repository.get(original.id) == original
     assert_temporary_files_removed(editor)
 

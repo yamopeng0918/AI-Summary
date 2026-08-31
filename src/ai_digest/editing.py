@@ -99,8 +99,12 @@ class EditSummaryWorkflow:
             edited_payload = json.loads(temporary_path.read_text(encoding="utf-8"))
             if not isinstance(edited_payload, dict):
                 raise ValueError("summary record must be a JSON object")
+            if set(edited_payload) != set(original_payload):
+                raise ValueError("summary record fields do not match")
             for alias in _PROTECTED_ALIASES:
-                if edited_payload.get(alias) != original_payload[alias]:
+                edited_value = edited_payload.get(alias)
+                original_value = original_payload[alias]
+                if type(edited_value) is not type(original_value) or edited_value != original_value:
                     raise DigestError(
                         "save",
                         "PROTECTED_FIELD_CHANGED",
