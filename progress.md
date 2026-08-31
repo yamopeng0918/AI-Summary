@@ -78,7 +78,8 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - `SummaryRepository(Path('data/summaries')).list()` 重新驗證 `7` 筆已保存記錄；`scripts/verify_deployment.py --tracked` 與 `git diff --check` 都 exit `0`。
 - 在已忽略的暫存 `AI_DIGEST_SUMMARY_ROOT` 中複製一筆版本控制的 fictional demo 記錄，清空兩個 provider key、以注入的 Python editor helper 執行 `ai-digest edit`。命令 exit `0`，可編輯 `summary` 已變更、`schemaVersion`／`id`／`canonicalUrl`／`sourceType`／`createdAt` 均未變、`updatedAt` 前進，根目錄僅保留一個記錄 JSON，並已移除整個暫存 root。
 - 第二輪 final review 修正 commit `75785f1` 已補上 editor／無效 JSON 後 cleanup unlink 失敗必須回報 `save/WRITE_FAILED`，以及 regenerate 專用 missing-key wording 與 add wording 保留的測試及實作。focused `tests/test_editing.py tests/test_cli.py` 為 `94 passed, 1 warning`；完整 Python 為 `670 passed, 2 skipped, 1 warning`。改以本里程碑正確的 tracked-only 命令執行 `python scripts/verify_deployment.py --tracked` 並 exit `0`；7 筆保存資料重新驗證與 `git diff --check` 亦通過。未將缺少 `site/dist` 的 dist 驗證誤列為成功。
-- 本次沒有重新擷取、付費摘要、Git push、GitHub Pages 部署或遠端查詢。遠端狀態只保留先前已驗證資訊：最新成功 workflow `33245288929`，head `00b25eb`；不得將本機 edit/regenerate 驗證視為新部署。
+- `feature/local-edit-regenerate` 已 fast-forward 合併至本機 `master`，主工作樹 `.venv` 也已重新 editable install 指向 `D:\Project\AI-Summary`。合併後重新驗證為 Python `670 passed, 2 skipped, 1 warning`、tracked verifier 與 `git diff --check origin/master..HEAD` exit `0`，7 筆保存資料均重新載入成功。此紀錄建立時尚待依使用者授權 push 至 GitHub、確認 Pages workflow，再清理已整合 worktree／分支。
+- 上述本機功能驗證沒有重新擷取、付費摘要、Git push、GitHub Pages 部署或遠端查詢；其遠端基準只沿用先前已驗證的 workflow `33245288929`、head `00b25eb`，不得將本機 edit/regenerate 驗證本身視為新部署。後續整合 push／workflow 結果以實際 GitHub 驗收為準。
 - 下一步為 `build-site` CLI 的核准設計與 TDD 實作；任何真實 `regenerate` 付費呼叫、push 或部署都仍需要個別明確授權。
 
 ### 2026-08-29：Windows CLI UTF-8 相容性實作、文件與驗證完成
