@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import ValidationError
+from pydantic_core import PydanticSerializationError
 
 from ai_digest.domain import DigestError, SummaryRecord
 
@@ -51,7 +52,7 @@ class SummaryRepository:
             validated_record = SummaryRecord.model_validate(
                 updated_record.model_dump(mode="json", by_alias=True)
             )
-        except ValidationError as error:
+        except (ValidationError, PydanticSerializationError) as error:
             raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False) from error
         if validated_record.id != record_id:
             raise DigestError("save", "INVALID_RECORD", "Summary record is invalid", False)

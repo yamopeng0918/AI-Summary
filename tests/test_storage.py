@@ -293,3 +293,19 @@ def test_replace_rejects_an_invalid_copied_record_without_changing_data(tmp_path
     )
     assert repository.get("example") == original
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_replace_rejects_a_non_serializable_copied_record_without_changing_data(tmp_path) -> None:
+    repository = SummaryRepository(tmp_path)
+    original = make_record("example")
+    repository.save(original)
+    invalid = original.model_copy(update={"summary": object()})
+
+    with pytest.raises(DigestError) as raised:
+        repository.replace("example", invalid)
+
+    assert (raised.value.stage, raised.value.code, raised.value.retryable) == (
+        "save", "INVALID_RECORD", False
+    )
+    assert repository.get("example") == original
+    assert not list(tmp_path.glob("*.tmp"))
