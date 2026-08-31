@@ -115,7 +115,7 @@
 
 - [x] 完成 Windows 互動式終端 UTF-8 相容性根因診斷與設計核准。
 - [x] 依核准規格以 TDD 修正 Windows CP950 下 `list`／`show` 的 Unicode 輸出，並完成完整 Python 與安全驗證（實作 `d8ed9ae`、CP950 regression 補強 `13ad440`；Python `608 passed, 2 skipped, 1 warning`；tracked verifier 與 `git diff --check` exit `0`）。
-- [ ] 支援本機編輯與重新產生摘要。
+- [x] 支援本機編輯與重新產生摘要：`edit`／`regenerate` CLI、Schema 驗證後原子覆寫與失敗保留均已完成；focused Python `118 passed, 1 warning`、完整 Python `663 passed, 2 skipped, 1 warning`、7 筆保存資料重驗證、tracked verifier、diff check 與無金鑰隔離 edit smoke 均有證據。未執行真實付費重新產生、push 或部署。
 - [x] 支援下架與重新發布，並保留建立與更新時間。
 - [x] 實作 `evaluate-classifier` 指令。
 - [ ] 實作 `build-site` 與稍後獨立的 `deploy` 指令。

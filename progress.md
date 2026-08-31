@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-08-29
+> 最後更新：2026-08-31
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；GitHub Pages、OG 圖與 failed-image fallback 已完成遠端驗收；Windows 互動式 CLI UTF-8 相容性已完成驗證
+> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯與重新產生已完成自動化、儲存安全與無金鑰本機 smoke 驗證；GitHub Pages、OG 圖與 failed-image fallback 的遠端驗收維持既有已驗證狀態
 >
-> 下次續作：決定本機編輯／重新產生摘要與 `build-site` CLI 的優先順序；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：設計並實作 `build-site` CLI，之後才獨立決定 `deploy`；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 已完成 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕與無字幕案例均完整到達 `complete`，通過資料驗證並確認本機／遠端零殘留 |
 | 公開社群單篇貼文 | 已完成 | Bluesky 獨立解析器、DID canonical URL、AppView 邊界、CLI 路由與資料契約已完成；真實 AppView、付費摘要、GitHub push、Pages 列表／詳情／來源連結與 OG 圖均已驗收 |
-| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；`build:pages` 為每筆 `published` 摘要產生 OG PNG，卡片與詳情頁 metadata 已串接；最新 Run #39（`33241201006`）部署 commit `1d56037` 成功 |
+| GitHub repository 與 Pages | 已完成（既有遠端驗收） | Pages Source 已設為 GitHub Actions；`build:pages` 為每筆 `published` 摘要產生 OG PNG，卡片與詳情頁 metadata 已串接；本次未查詢遠端，既有已驗證的最新成功 workflow 為 `33245288929`，head `00b25eb` |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -63,13 +63,22 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
 | YouTube 本機工具與手動驗收 | 2026-08-26 已使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、`gemini-3.6-flash` 與使用者核准的有字幕／無字幕公開影片完成兩案驗收；兩案均 exit 0、到達 `complete`、通過資料驗證，且本機媒體與 Gemini Files 均為 0 |
-| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；最新 Run #39（`33241201006`）已成功部署 commit `1d56037`；首頁 OG 圖正常載入與封鎖圖片 fallback 均已完成 Chrome 遠端驗收 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；本次未查詢遠端，既有已驗證的最新成功 workflow 為 `33245288929`，head `00b25eb`；首頁 OG 圖正常載入與封鎖圖片 fallback 均已完成 Chrome 遠端驗收 |
 | OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併、push 並完成 GitHub Pages 遠端驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | Bluesky 真實／遠端驗收 | 已使用核准的 Bluesky 官方公開非回覆貼文完成 AppView、付費摘要、DID canonical JSON、push、Pages workflow 與公開列表／詳情／來源連結／OG 圖驗收 |
 | 摘要或分類正確性 | 保留原文連結；正式分類器 Accuracy 0.9167、Macro F1 0.9179，已嚴格高於最大類基準 0.1667 |
 
 ## 進度紀錄
+
+### 2026-08-31：本機編輯／重新產生摘要文件與完整驗證
+
+- 完成的功能提交依序為 `ecbf809`（原子 replace）、`5ae3384`（replace 驗證）、`a720f3f`（序列化失敗映射）、`69d916d` 與 `84e9fe6`（安全本機編輯）、`9145652`（重新產生 workflow）、`133be90`（CLI `edit`／`regenerate`）。README 已記錄 Windows PowerShell 的 `VISUAL`／`EDITOR`／Notepad 選擇順序、受保護欄位、Schema 驗證、失敗時原子保留、provider 金鑰選擇及付費重新產生條件。
+- 指定 focused Python 測試為 `118 passed, 1 warning`；完整 Python suite 為 `663 passed, 2 skipped, 1 warning`。兩個 skip 都是現有 Windows symlink 建立權限不足（`WinError 1314`）；唯一 warning 是第三方 `google-genai` 的 `_UnionGenericAlias` deprecation warning。
+- `SummaryRepository(Path('data/summaries')).list()` 重新驗證 `7` 筆已保存記錄；`scripts/verify_deployment.py --tracked` 與 `git diff --check` 都 exit `0`。
+- 在已忽略的暫存 `AI_DIGEST_SUMMARY_ROOT` 中複製一筆版本控制的 fictional demo 記錄，清空兩個 provider key、以注入的 Python editor helper 執行 `ai-digest edit`。命令 exit `0`，可編輯 `summary` 已變更、`schemaVersion`／`id`／`canonicalUrl`／`sourceType`／`createdAt` 均未變、`updatedAt` 前進，根目錄僅保留一個記錄 JSON，並已移除整個暫存 root。
+- 本次沒有重新擷取、付費摘要、Git push、GitHub Pages 部署或遠端查詢。遠端狀態只保留先前已驗證資訊：最新成功 workflow `33245288929`，head `00b25eb`；不得將本機 edit/regenerate 驗證視為新部署。
+- 下一步為 `build-site` CLI 的核准設計與 TDD 實作；任何真實 `regenerate` 付費呼叫、push 或部署都仍需要個別明確授權。
 
 ### 2026-08-29：Windows CLI UTF-8 相容性實作、文件與驗證完成
 

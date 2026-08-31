@@ -9,7 +9,7 @@ AI Digest 是一套在本機執行的公開內容摘要工具。目前支援可�
 - Windows PowerShell
 - Python 3.12 以上
 - Node.js 22.12.0 以上與 npm
-- 只有執行真實 `add` 時才需要所選摘要 provider 的 API 金鑰
+- 只有執行真實 `add` 或 `regenerate` 時才需要所選摘要 provider 的 API 金鑰
 - 處理 YouTube 時需要 `yt-dlp` 在 `PATH`；無可用字幕時另需 FFmpeg 在 `PATH`
 
 ## Python 安裝
@@ -64,7 +64,7 @@ $env:OPENAI_MODEL = 'gpt-5-mini' # optional; this is the default
 $env:OPENAI_TRANSCRIPTION_MODEL = 'gpt-transcribe' # optional; no-caption YouTube default
 ```
 
-There is no automatic fallback between providers. `AI_DIGEST_PROVIDER` selects both structured summarization and no-caption YouTube audio transcription, and `add` requires only the API key for that selected provider. Local `list`, `show`, `archive`, and `publish` commands do not require either provider key.
+There is no automatic fallback between providers. `AI_DIGEST_PROVIDER` selects both structured summarization and no-caption YouTube audio transcription; `add` and `regenerate` require only the API key for that selected provider. Local `list`, `show`, `archive`, `publish`, and `edit` commands do not require either provider key.
 
 可用 `AI_DIGEST_SUMMARY_ROOT` 將 JSON 寫入其他本機目錄；未設定時使用 `data/summaries`。
 
@@ -80,9 +80,27 @@ ai-digest list
 ai-digest show '<summary-id>'
 ai-digest archive '<summary-id>'
 ai-digest publish '<summary-id>'
+ai-digest edit '<summary-id>'
+ai-digest regenerate '<summary-id>'
 ```
 
 `add` 處理可直接讀取的公開 HTML 文章與受支援的公開 YouTube 單支影片；遇到登入、付費牆、私有位址或其他不可讀來源會明確失敗。
+
+## 本機編輯與重新產生
+
+`edit` 會在外部文字編輯器開啟一筆既有摘要的暫存 UTF-8 JSON；編輯器關閉後才驗證並更新原記錄。需要等待 GUI 編輯器關閉時，可在目前 PowerShell 設定：
+
+```powershell
+$env:VISUAL = "code --wait"
+ai-digest edit <record-id>
+ai-digest regenerate <record-id>
+```
+
+編輯器依序選擇 `VISUAL`、`EDITOR`，兩者皆未設定時 Windows 使用 `notepad.exe`。設定中含空白的執行檔路徑必須加引號；命令會以參數陣列、`shell=False` 執行並等待結束。
+
+`edit` 可改動 `title`、`author`、`sourcePublishedAt`、`summary`、`keyPoints`、`category`、`tags`、`editorial` 與 `status`。`schemaVersion`、`id`、`canonicalUrl`、`sourceType`、`createdAt` 是受保護欄位，必須維持原值；使用者輸入的 `updatedAt` 會被忽略並改由系統的 Asia/Taipei 時鐘寫入。編輯結果必須是完整有效的 JSON 並通過 `SummaryRecord` Schema 驗證，才會以原子覆寫更新；編輯器失敗、JSON／Schema 驗證失敗、受保護欄位改動或寫入失敗時，既有 JSON 保持不變，暫存檔也會清理。
+
+`regenerate` 以既有記錄的 `canonicalUrl` 重新擷取、重新摘要與重新分類，保留原本的 `id`、`createdAt` 與 `status`。它使用 `AI_DIGEST_PROVIDER` 所選 provider，且只要求該 provider 的金鑰；指令在擷取與重複 URL 預檢成功後會進行一次付費摘要呼叫，沒有額外互動式確認。任一擷取、摘要、分類、驗證或儲存階段失敗都不覆寫既有 JSON。兩個指令都只改本機資料，不會自動提交、推送或部署 GitHub Pages。
 
 ## YouTube 公開影片
 
