@@ -453,7 +453,9 @@ Extend `create_app`:
 Resolve the lazy factory inside `create_app`:
 
 ```python
-    site_build_factory = site_build_service_factory or _site_build_service
+    site_build_factory = _site_build_service
+    if site_build_service_factory is not None:
+        site_build_factory = site_build_service_factory
 ```
 
 Register the command before `return application`:
