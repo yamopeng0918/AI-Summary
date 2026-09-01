@@ -17,6 +17,7 @@
 - Keep subprocess output attached to the interactive terminal; never include stdout, stderr, exception text, environment variables, or credentials in structured errors.
 - All failures use `stage="deploy"`, `code="SITE_BUILD_FAILED"`, `retryable=False`; build and verification messages remain distinct.
 - Preserve all existing untracked user files and unrelated working-tree changes.
+- Execute the real CLI from a worktree-local virtual environment installed with `pip install -e . --no-deps`; do not use the root checkout's editable console script.
 
 ---
 
@@ -156,6 +157,15 @@ class SiteBuildService:
         self.python_executable = python_executable
         self.on_progress = on_progress
 
+    @staticmethod
+    def _failure(step: str) -> DigestError:
+        message = (
+            "site build command failed"
+            if step == "build"
+            else "site verification failed"
+        )
+        return DigestError("deploy", "SITE_BUILD_FAILED", message, False)
+
     def run(self) -> Path:
         npm = "npm.cmd" if self.platform == "win32" else "npm"
         commands = [
@@ -177,12 +187,7 @@ class SiteBuildService:
             self.on_progress(step)
             result = self.run_command(command, cwd)
             if result.returncode != 0:
-                message = (
-                    "site build command failed"
-                    if step == "build"
-                    else "site verification failed"
-                )
-                raise DigestError("deploy", "SITE_BUILD_FAILED", message, False)
+                raise self._failure(step)
         return (self.repository_root / "site" / "dist").resolve()
 ```
 
@@ -294,17 +299,10 @@ Wrap only the runner call in `SiteBuildService.run()`:
             try:
                 result = self.run_command(command, cwd)
             except OSError:
-                message = (
-                    "site build command failed"
-                    if step == "build"
-                    else "site verification failed"
-                )
-                raise DigestError(
-                    "deploy", "SITE_BUILD_FAILED", message, False
-                ) from None
+                raise self._failure(step) from None
 ```
 
-Keep the nonzero-return branch and its safe message after this block.
+Keep the nonzero-return branch after this block; both failure paths must call the same `_failure(step)` helper.
 
 - [ ] **Step 8: Run the full service test file**
 
