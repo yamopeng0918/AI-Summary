@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -650,6 +651,41 @@ def test_build_site_reports_safe_structured_error(tmp_path: Path) -> None:
     assert json.loads(result.stderr) == error.as_dict()
 
 
+def test_build_site_uses_falsey_injected_factory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    injected_calls = 0
+    default_calls = 0
+
+    class FalseyFactory:
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, _on_progress) -> FakeSiteBuildService:
+            nonlocal injected_calls
+            injected_calls += 1
+            return FakeSiteBuildService(result=(tmp_path / "injected-dist").resolve())
+
+    def default_factory(_on_progress) -> FakeSiteBuildService:
+        nonlocal default_calls
+        default_calls += 1
+        return FakeSiteBuildService(result=(tmp_path / "default-dist").resolve())
+
+    monkeypatch.setattr(cli, "_site_build_service", default_factory)
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        site_build_service_factory=FalseyFactory(),
+    )
+
+    result = CliRunner().invoke(app, ["build-site"])
+
+    assert result.exit_code == 0
+    assert injected_calls == 1
+    assert default_calls == 0
+
+
 def test_build_site_rejects_extra_arguments(tmp_path: Path) -> None:
     service = FakeSiteBuildService(result=(tmp_path / "site" / "dist").resolve())
     app = create_app(
@@ -694,7 +730,23 @@ def test_production_build_site_does_not_initialize_provider_or_classifier(
     result = CliRunner().invoke(cli.app, ["build-site"])
 
     assert result.exit_code == 0
-    assert len(captured["calls"]) == 2
+    npm = "npm.cmd" if sys.platform == "win32" else "npm"
+    assert captured["calls"] == [
+        ([npm, "run", "build:pages"], tmp_path.resolve() / "site", False),
+        (
+            [
+                sys.executable,
+                "scripts/verify_deployment.py",
+                "--tracked",
+                "--dist",
+                "site/dist",
+                "--base",
+                "/AI-Summary/",
+            ],
+            tmp_path.resolve(),
+            False,
+        ),
+    ]
 
 
 def test_list_prints_id_title_category_and_status(tmp_path) -> None:

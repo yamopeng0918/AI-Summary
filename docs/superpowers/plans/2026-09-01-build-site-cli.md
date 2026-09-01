@@ -13,7 +13,7 @@
 - Follow strict TDD: add one minimal failing behavior test, observe the expected failure, implement the minimum, and rerun before continuing.
 - `build-site` accepts no options and fixes the site root to `site`, output to `site/dist`, and Pages base path to `/AI-Summary/`.
 - Use `npm.cmd` on Windows and `npm` on other platforms; use the active `sys.executable` for the verifier.
-- Do not run `npm ci`, install dependencies, access the network, initialize an AI provider or classifier, modify summary JSON, call Git, push, or deploy.
+- Do not run `npm ci`, install dependencies, access the network, initialize an AI provider or classifier, modify summary JSON, mutate Git state, create commits, push, or deploy. The required verifier may run read-only `git ls-files` to scan tracked files.
 - Keep subprocess output attached to the interactive terminal; never include stdout, stderr, exception text, environment variables, or credentials in structured errors.
 - All failures use `stage="deploy"`, `code="SITE_BUILD_FAILED"`, `retryable=False`; build and verification messages remain distinct.
 - Preserve all existing untracked user files and unrelated working-tree changes.

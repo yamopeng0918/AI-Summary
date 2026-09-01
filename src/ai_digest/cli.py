@@ -259,7 +259,9 @@ def create_app(
         regenerate_factory = lambda on_progress: _regenerate_workflow(
             on_progress, repository_factory=repository_factory
         )
-    site_build_factory = site_build_service_factory or _site_build_service
+    site_build_factory = _site_build_service
+    if site_build_service_factory is not None:
+        site_build_factory = site_build_service_factory
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)
