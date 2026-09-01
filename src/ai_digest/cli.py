@@ -30,6 +30,8 @@ from ai_digest.extractors.youtube import (
 )
 from ai_digest.extractors.youtube_media import CommandRunner, YouTubeMediaPipeline
 from ai_digest.regeneration import RegenerateSummaryWorkflow
+from ai_digest.site_build import CommandResult as SiteBuildCommandResult
+from ai_digest.site_build import SiteBuildService
 from ai_digest.storage import SummaryRepository
 from ai_digest.summarizers.base import Summarizer
 from ai_digest.summarizers.gemini import GeminiSummarizer
@@ -197,6 +199,20 @@ def _evaluation_service() -> ClassifierEvaluationService:
     return ClassifierEvaluationService(clock=_now)
 
 
+def _site_build_service(on_progress: Callable[[str], None]) -> SiteBuildService:
+    def run_command(command, cwd: Path) -> SiteBuildCommandResult:
+        completed = subprocess.run(command, cwd=cwd, check=False)
+        return SiteBuildCommandResult(returncode=completed.returncode)
+
+    return SiteBuildService(
+        repository_root=Path.cwd().resolve(),
+        run_command=run_command,
+        platform=sys.platform,
+        python_executable=sys.executable,
+        on_progress=on_progress,
+    )
+
+
 def _emit(payload: dict[str, object], *, err: bool = False) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=True), err=err)
 
@@ -225,6 +241,10 @@ def create_app(
         [Callable[[str], None]], RegenerateSummaryWorkflow
     ]
     | None = None,
+    site_build_service_factory: Callable[
+        [Callable[[str], None]], SiteBuildService
+    ]
+    | None = None,
 ) -> typer.Typer:
     """Create the CLI with dependencies supplied by the caller."""
     application = typer.Typer(no_args_is_help=True)
@@ -239,6 +259,7 @@ def create_app(
         regenerate_factory = lambda on_progress: _regenerate_workflow(
             on_progress, repository_factory=repository_factory
         )
+    site_build_factory = site_build_service_factory or _site_build_service
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)
@@ -317,6 +338,18 @@ def create_app(
             service = evaluation_factory()
             result = service.run()
             _emit(service.cli_payload(result))
+        except DigestError as error:
+            report_error(error)
+
+    @application.command("build-site")
+    def build_site() -> None:
+        """Build and verify the local GitHub Pages site."""
+        try:
+            service = site_build_factory(
+                lambda step: _emit({"stage": "deploy", "step": step})
+            )
+            path = service.run()
+            _emit({"stage": "complete", "path": str(path)})
         except DigestError as error:
             report_error(error)
 

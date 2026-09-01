@@ -225,6 +225,22 @@ class FakeRegenerateWorkflow:
         return self.result
 
 
+class FakeSiteBuildService:
+    def __init__(
+        self,
+        result: Path | None = None,
+        error: DigestError | None = None,
+    ) -> None:
+        self.result = result
+        self.error = error
+
+    def run(self) -> Path:
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+
 def make_app(tmp_path: Path, workflow: FakeWorkflow):
     repository = SummaryRepository(tmp_path)
     def workflow_factory(on_progress):
@@ -589,6 +605,96 @@ def test_evaluate_classifier_hides_model_persistence_details(tmp_path: Path) -> 
     }
     assert "RAW_MODEL_PERSISTENCE_MARKER" not in result.stderr
     assert str(model_path.resolve()) not in result.stderr
+
+
+def test_build_site_emits_ordered_progress_and_complete_path(tmp_path: Path) -> None:
+    repository = SummaryRepository(tmp_path / "summaries")
+    dist = (tmp_path / "site" / "dist").resolve()
+
+    def factory(on_progress):
+        on_progress("build")
+        on_progress("verify")
+        return FakeSiteBuildService(result=dist)
+
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: repository,
+        lambda: NOW,
+        site_build_service_factory=factory,
+    )
+
+    result = CliRunner().invoke(app, ["build-site"])
+
+    assert result.exit_code == 0
+    assert [json.loads(line) for line in result.stdout.splitlines()] == [
+        {"stage": "deploy", "step": "build"},
+        {"stage": "deploy", "step": "verify"},
+        {"stage": "complete", "path": str(dist)},
+    ]
+
+
+def test_build_site_reports_safe_structured_error(tmp_path: Path) -> None:
+    error = DigestError(
+        "deploy", "SITE_BUILD_FAILED", "site verification failed", False
+    )
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        site_build_service_factory=lambda _on_progress: FakeSiteBuildService(error=error),
+    )
+
+    result = CliRunner().invoke(app, ["build-site"])
+
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == error.as_dict()
+
+
+def test_build_site_rejects_extra_arguments(tmp_path: Path) -> None:
+    service = FakeSiteBuildService(result=(tmp_path / "site" / "dist").resolve())
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        site_build_service_factory=lambda _on_progress: service,
+    )
+
+    result = CliRunner().invoke(app, ["build-site", "unexpected"])
+
+    assert result.exit_code == 2
+
+
+def test_production_build_site_does_not_initialize_provider_or_classifier(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        cli,
+        "_provider",
+        lambda: (_ for _ in ()).throw(AssertionError("provider must stay lazy")),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_classifier",
+        lambda: (_ for _ in ()).throw(AssertionError("classifier must stay lazy")),
+    )
+    captured: dict[str, object] = {}
+
+    class FakeCompleted:
+        returncode = 0
+
+    def fake_run(command, *, cwd, check):
+        captured.setdefault("calls", []).append((list(command), cwd, check))
+        return FakeCompleted()
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = CliRunner().invoke(cli.app, ["build-site"])
+
+    assert result.exit_code == 0
+    assert len(captured["calls"]) == 2
 
 
 def test_list_prints_id_title_category_and_status(tmp_path) -> None:
