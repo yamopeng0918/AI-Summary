@@ -74,9 +74,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 ### 2026-09-01：`build-site` CLI、文件與本機 gate
 
 - 功能實作提交為 `2a62142`（local site build service）與 `e990977`（CLI `build-site` command）。README 已記錄由 repository root 執行 `ai-digest build-site` 的單一入口，以及它只使用既有 dependencies、執行 `build:pages` 與 tracked／dist verifier，且不執行 `npm ci`、commit、push、GitHub Actions、部署或摘要 provider 呼叫。
-- 文件更新後的 focused Python `tests/test_site_build.py tests/test_cli.py -v` 為 `68 passed, 1 warning`。使用 worktree `.venv` 的完整 Python suite 收集 `682` 項：`679 passed, 2 skipped, 1 warning, 1 failed`。兩個 skip 是 Windows 帳號不具 symlink 建立權限，warning 是第三方 `google-genai` 的 deprecation warning。失敗項目是既有 `test_script_starts_by_file_path_in_a_clean_subprocess_without_module_errors`：隔離子程序 `python -I scripts/publish_url.py --help` 不載入 user-site，而此 `.venv` 未自行安裝 `httpx`；正常非隔離執行會由 user-site 載入該依賴。此環境阻礙未在本文件工作中修改，故不將完整 Python regression 宣稱為全綠。
+- 文件更新後的 focused Python `tests/test_site_build.py tests/test_cli.py -v` 為 `68 passed, 1 warning`。完整 Python suite 以 worktree `src` 作為 `PYTHONPATH`、並使用 repository root `.venv` 執行，結果為 `680 passed, 2 skipped, 1 warning`；兩個 skip 是 Windows 帳號不具 symlink 建立權限，warning 是第三方 `google-genai` 的 deprecation warning。這個 root venv 提供隔離子程序所需的本機依賴，故 `python -I scripts/publish_url.py --help` 回歸測試亦通過。
 - 完整 Vitest 為 `7` 個檔案、`67 passed`。實際 `& '.\\.venv\\Scripts\\ai-digest.exe' build-site` exit `0`，依序輸出 `build`、`verify`、`complete`；Astro check 為 `19` 個檔案、`0 errors / 0 warnings / 0 hints`，產生 `8` 個頁面與目前 `7` 筆 published record 對應的 `7` 個 OG PNG routes。`build:pages` 內部 verifier 與最後 tracked／`site/dist` verifier 均成功，完成 path 為 worktree 的 `site/dist`。
-- 本次未使用 provider key、網路、`npm ci`、Git push 或部署。`deploy` 尚未設計、實作或標記完成；下一步是在任何實作前獨立設計並取得 `deploy` 核准，同時修復 worktree venv 的隔離依賴以恢復完整 Python gate。
+- 本次未使用 provider key、網路、`npm ci`、Git push 或部署。`deploy` 尚未設計、實作或標記完成；下一步是在任何實作前獨立設計並取得 `deploy` 核准。
 
 ### 2026-08-31：本機編輯／重新產生摘要文件與完整驗證
 
