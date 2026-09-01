@@ -206,6 +206,14 @@ Set-Location site
 npm.cmd run build:pages
 ```
 
+若已完成 Python CLI 安裝，可由 repository 根目錄使用單一的 GitHub Pages 本機 gate：
+
+```powershell
+ai-digest build-site
+```
+
+此指令依序執行既有 Node.js dependencies 的 `npm.cmd run build:pages`，再驗證 tracked 檔案與 `site/dist`；不會執行 `npm ci`、Git commit、push、GitHub Actions 或部署，也不會呼叫摘要 provider。上述較低階的 npm 與 verifier 指令仍可作為疑難排解或手動執行的替代方式。
+
 `npm.cmd run build:pages` 會為每筆 `published` 摘要自動建立一張 PNG，輸出至 `site/dist/og/`，供首頁卡片及摘要詳情頁的 Open Graph／Twitter metadata 使用。這些 PNG 與 `site/dist` 的其他內容都是建置 artifact，不是要加入 Git 追蹤的內容；每次部署應由來源資料重新產生。
 
 OG 圖固定使用 repository 內的官方完整 Pan-CJK `NotoSerifCJKtc-Regular.otf`（400）與 `NotoSerifCJKtc-Bold.otf`（700），並保留 OFL-1.1 授權；正常測試與建置不會下載字型。渲染前會對所有顯示字串執行 fail-closed cmap 覆蓋檢查，避免缺字被靜默替換；標題、摘要與來源分別使用保守的 `18`／`40`／`36` 個全形等價字元界限，所有 fitted 行均保持不換行。替換字型時必須同時提供兩個完整靜態 OTF、更新授權文件，並通過完整字串覆蓋測試。
