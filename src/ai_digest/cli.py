@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 from typing import Literal, TextIO
 from zoneinfo import ZoneInfo
 
@@ -18,6 +19,7 @@ from openai import OpenAI
 from ai_digest.classifiers.base import Classifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
 from ai_digest.classifiers.trained import TrainedClassifier
+from ai_digest.deployment import DeployService
 from ai_digest.domain import DigestError, SummaryRecord
 from ai_digest.editing import EditorRunner, EditSummaryWorkflow
 from ai_digest.extractors.bluesky import BlueskyAppViewClient, BlueskyExtractor
@@ -213,6 +215,45 @@ def _site_build_service(on_progress: Callable[[str], None]) -> SiteBuildService:
     )
 
 
+def _deploy_service(
+    on_progress: Callable[[str, str | None], None],
+) -> DeployService:
+    repository_root = Path.cwd().resolve()
+
+    def run_command(command, cwd: Path) -> SiteBuildCommandResult:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return SiteBuildCommandResult(
+            returncode=completed.returncode,
+            stdout=completed.stdout,
+            stderr=completed.stderr,
+        )
+
+    def fetch_json(url: str) -> object:
+        response = httpx.get(
+            url,
+            headers={"User-Agent": "AI-Digest-Deployer/1.0"},
+            timeout=15.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    build_service = _site_build_service(lambda step: on_progress(step, None))
+    return DeployService(
+        repository_root,
+        build_service,
+        run_command,
+        fetch_json,
+        time.sleep,
+        on_progress,
+    )
+
+
 def _emit(payload: dict[str, object], *, err: bool = False) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=True), err=err)
 
@@ -245,6 +286,10 @@ def create_app(
         [Callable[[str], None]], SiteBuildService
     ]
     | None = None,
+    deploy_service_factory: Callable[
+        [Callable[[str, str | None], None]], DeployService
+    ]
+    | None = None,
 ) -> typer.Typer:
     """Create the CLI with dependencies supplied by the caller."""
     application = typer.Typer(no_args_is_help=True)
@@ -262,6 +307,9 @@ def create_app(
     site_build_factory = _site_build_service
     if site_build_service_factory is not None:
         site_build_factory = site_build_service_factory
+    deploy_factory = _deploy_service
+    if deploy_service_factory is not None:
+        deploy_factory = deploy_service_factory
 
     def report_error(error: DigestError) -> None:
         _emit(error.as_dict(), err=True)
@@ -352,6 +400,26 @@ def create_app(
             )
             path = service.run()
             _emit({"stage": "complete", "path": str(path)})
+        except DigestError as error:
+            report_error(error)
+
+    @application.command("deploy")
+    def deploy() -> None:
+        """Deploy committed master content and verify GitHub Pages."""
+        try:
+            def progress(step: str, status: str | None = None) -> None:
+                payload: dict[str, object] = {"stage": "deploy", "step": step}
+                if status is not None:
+                    payload["status"] = status
+                _emit(payload)
+
+            result = deploy_factory(progress).run()
+            _emit({
+                "stage": "complete",
+                "commit": result.commit_sha,
+                "workflow": result.workflow_url,
+                "site": result.site_url,
+            })
         except DigestError as error:
             report_error(error)
 

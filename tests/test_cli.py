@@ -19,6 +19,7 @@ from ai_digest.classifiers.evaluation import (
 )
 from ai_digest.classifiers.fixed import FixedClassifier
 from ai_digest.classifiers.service import ClassifierEvaluationService
+from ai_digest.deployment import DeployResult
 from ai_digest.domain import DigestError, SummaryDraft, SummaryRecord, VALID_CATEGORIES
 from ai_digest.storage import SummaryRepository
 
@@ -236,6 +237,22 @@ class FakeSiteBuildService:
         self.error = error
 
     def run(self) -> Path:
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+
+class FakeDeployService:
+    def __init__(
+        self,
+        result: DeployResult | None = None,
+        error: DigestError | None = None,
+    ) -> None:
+        self.result = result
+        self.error = error
+
+    def run(self) -> DeployResult:
         if self.error is not None:
             raise self.error
         assert self.result is not None
@@ -649,6 +666,223 @@ def test_build_site_reports_safe_structured_error(tmp_path: Path) -> None:
 
     assert result.exit_code == 1
     assert json.loads(result.stderr) == error.as_dict()
+
+
+def test_deploy_emits_ordered_progress_and_complete_result(tmp_path: Path) -> None:
+    expected = DeployResult(
+        commit_sha="a" * 40,
+        workflow_url="https://github.example/run/1",
+        site_url="https://yamopeng0918.github.io/AI-Summary/",
+        push_status="unchanged",
+    )
+
+    def factory(on_progress):
+        for step, status in (
+            ("preflight", None),
+            ("build", None),
+            ("verify", None),
+            ("push", "unchanged"),
+            ("workflow", None),
+            ("public", None),
+        ):
+            on_progress(step, status)
+        return FakeDeployService(result=expected)
+
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        deploy_service_factory=factory,
+    )
+
+    result = CliRunner().invoke(app, ["deploy"])
+
+    assert result.exit_code == 0
+    events = [json.loads(line) for line in result.stdout.splitlines()]
+    assert events[-1] == {
+        "stage": "complete",
+        "commit": "a" * 40,
+        "workflow": "https://github.example/run/1",
+        "site": "https://yamopeng0918.github.io/AI-Summary/",
+    }
+    assert events[3] == {
+        "stage": "deploy", "step": "push", "status": "unchanged"
+    }
+
+
+def test_deploy_reports_safe_structured_error(tmp_path: Path) -> None:
+    error = DigestError(
+        "deploy", "DEPLOY_WORKFLOW_FAILED", "deployment workflow failed", False
+    )
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        deploy_service_factory=lambda _progress: FakeDeployService(error=error),
+    )
+
+    result = CliRunner().invoke(app, ["deploy"])
+
+    assert result.exit_code == 1
+    assert json.loads(result.stderr) == error.as_dict()
+
+
+def test_deploy_rejects_extra_arguments(tmp_path: Path) -> None:
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        deploy_service_factory=lambda _progress: FakeDeployService(
+            result=DeployResult("a" * 40, "https://run", "https://site/", "unchanged")
+        ),
+    )
+
+    assert CliRunner().invoke(app, ["deploy", "unexpected"]).exit_code == 2
+
+
+def test_deploy_uses_falsey_injected_factory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    injected_calls = 0
+    default_calls = 0
+
+    class FalseyFactory:
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, _progress) -> FakeDeployService:
+            nonlocal injected_calls
+            injected_calls += 1
+            return FakeDeployService(
+                result=DeployResult("a" * 40, "https://run", "https://site/", "unchanged")
+            )
+
+    def default_factory(_progress) -> FakeDeployService:
+        nonlocal default_calls
+        default_calls += 1
+        return FakeDeployService(
+            result=DeployResult("b" * 40, "https://run", "https://site/", "unchanged")
+        )
+
+    monkeypatch.setattr(cli, "_deploy_service", default_factory)
+    app = create_app(
+        lambda on_progress: FakeWorkflow(make_record()),
+        lambda: SummaryRepository(tmp_path),
+        lambda: NOW,
+        deploy_service_factory=FalseyFactory(),
+    )
+
+    result = CliRunner().invoke(app, ["deploy"])
+
+    assert result.exit_code == 0
+    assert injected_calls == 1
+    assert default_calls == 0
+
+
+def test_production_deploy_is_lazy_and_uses_safe_adapters(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    head = "a" * 40
+    subprocess_calls: list[tuple[object, dict[str, object]]] = []
+    http_calls: list[tuple[str, dict[str, object]]] = []
+    sleeps: list[float] = []
+    monkeypatch.chdir(tmp_path)
+
+    for name in ("_provider", "_classifier", "_repository"):
+        monkeypatch.setattr(
+            cli,
+            name,
+            lambda: (_ for _ in ()).throw(AssertionError(f"{name} must stay lazy")),
+        )
+
+    class FakeCompleted:
+        def __init__(self, stdout: str = "") -> None:
+            self.returncode = 0
+            self.stdout = stdout
+            self.stderr = ""
+
+    def fake_run(command, **kwargs):
+        subprocess_calls.append((command, kwargs))
+        if command == ["git", "rev-parse", "--show-toplevel"]:
+            return FakeCompleted(str(tmp_path.resolve()))
+        if command == ["git", "branch", "--show-current"]:
+            return FakeCompleted("master\n")
+        if command == ["git", "status", "--porcelain", "--untracked-files=no"]:
+            return FakeCompleted()
+        if command == ["git", "rev-list", "--left-right", "--count", "master...origin/master"]:
+            return FakeCompleted("0\t0\n")
+        if command == ["git", "rev-parse", "HEAD"]:
+            return FakeCompleted(f"{head}\n")
+        if command in (
+            ["git", "fetch", "origin", "master"],
+            ["npm.cmd" if sys.platform == "win32" else "npm", "run", "build:pages"],
+            [
+                sys.executable,
+                "scripts/verify_deployment.py",
+                "--tracked",
+                "--dist",
+                "site/dist",
+                "--base",
+                "/AI-Summary/",
+            ],
+            [sys.executable, "scripts/smoke_pages.py"],
+        ):
+            return FakeCompleted()
+        raise AssertionError(f"unexpected command: {command}")
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> object:
+            return {
+                "workflow_runs": [
+                    {
+                        "head_sha": head,
+                        "name": "Deploy to GitHub Pages",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "html_url": "https://github.example/run/1",
+                    }
+                ]
+            }
+
+    def fake_get(url: str, **kwargs) -> FakeResponse:
+        http_calls.append((url, kwargs))
+        return FakeResponse()
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.httpx, "get", fake_get)
+    monkeypatch.setattr(cli.time, "sleep", sleeps.append)
+
+    result = CliRunner().invoke(cli.app, ["deploy"])
+
+    assert result.exit_code == 0
+    commands = [command for command, _kwargs in subprocess_calls]
+    assert all(isinstance(command, (list, tuple)) for command in commands)
+    assert all("shell" not in kwargs for _command, kwargs in subprocess_calls)
+    assert all(kwargs["check"] is False for _command, kwargs in subprocess_calls)
+    deploy_adapter_calls = [
+        kwargs
+        for command, kwargs in subprocess_calls
+        if command[0] == "git" or command == [sys.executable, "scripts/smoke_pages.py"]
+    ]
+    assert all(
+        kwargs["capture_output"] is True
+        and kwargs["text"] is True
+        for kwargs in deploy_adapter_calls
+    )
+    assert not any(
+        token in {"add", "commit", "reset", "checkout", "pull", "rebase", "--force", "-f"}
+        for command in commands
+        for token in command
+    )
+    assert http_calls[0][0].endswith(f"head_sha={head}&per_page=20")
+    assert http_calls[0][1] == {
+        "headers": {"User-Agent": "AI-Digest-Deployer/1.0"},
+        "timeout": 15.0,
+    }
+    assert sleeps == []
 
 
 def test_build_site_uses_falsey_injected_factory(
