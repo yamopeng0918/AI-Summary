@@ -12,21 +12,29 @@ HEAD = "a" * 40
 
 
 class FakeBuildService:
-    def __init__(self) -> None:
+    def __init__(self, events: list[str] | None = None) -> None:
         self.calls = 0
+        self.events = events
 
     def run(self) -> Path:
         self.calls += 1
+        if self.events is not None:
+            self.events.append("build-complete")
         return (ROOT / "site" / "dist").resolve()
 
 
 class RecordingRunner:
-    def __init__(self, responses: list[CommandResult]) -> None:
+    def __init__(
+        self, responses: list[CommandResult], events: list[str] | None = None
+    ) -> None:
         self.responses = list(responses)
         self.calls: list[tuple[list[str], Path]] = []
+        self.events = events
 
     def __call__(self, command, cwd: Path) -> CommandResult:
         self.calls.append((list(command), cwd))
+        if self.events is not None:
+            self.events.append(" ".join(command))
         return self.responses.pop(0)
 
 
@@ -53,7 +61,12 @@ def make_service(
     )
 
 
-def runner_for_success(counts: str, *, include_push: bool = False) -> RecordingRunner:
+def runner_for_success(
+    counts: str,
+    *,
+    include_push: bool = False,
+    events: list[str] | None = None,
+) -> RecordingRunner:
     responses = [
         CommandResult(0, stdout=str(ROOT)),
         CommandResult(0, stdout="master\n"),
@@ -67,7 +80,7 @@ def runner_for_success(counts: str, *, include_push: bool = False) -> RecordingR
         CommandResult(0, stdout=f"{HEAD}\n"),
         CommandResult(0),
     ])
-    return RecordingRunner(responses)
+    return RecordingRunner(responses, events)
 
 
 def test_synchronized_master_builds_without_push() -> None:
@@ -138,14 +151,16 @@ def test_remote_only_commits_fail_before_build(counts: str) -> None:
 
 
 def test_local_ahead_builds_then_pushes_all_commits() -> None:
-    runner = runner_for_success(counts="2\t0\n", include_push=True)
-    build = FakeBuildService()
+    events: list[str] = []
+    runner = runner_for_success(counts="2\t0\n", include_push=True, events=events)
+    build = FakeBuildService(events)
     service = make_service(runner, build=build)
 
     result = service.run()
 
     assert build.calls == 1
     assert (["git", "push", "origin", "master"], ROOT) in runner.calls
+    assert events.index("build-complete") < events.index("git push origin master")
     assert result.push_status == "pushed"
 
 
