@@ -1,6 +1,6 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-09-01
+> 最後更新：2026-09-02
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
@@ -70,6 +70,12 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結；正式分類器 Accuracy 0.9167、Macro F1 0.9179，已嚴格高於最大類基準 0.1667 |
 
 ## 進度紀錄
+
+### 2026-09-02：`build-site` 整合與推送前驗證
+
+- `feature/build-site-cli` 已以 fast-forward 整合至本機 `master`，整合 head 為 `0ce7a51`；獨立程式碼審查未發現 Critical、Important 或 Minor finding。既有未追蹤檔案均保留，未納入整合或提交。
+- 合併後重新執行完整 Python suite，結果為 `681 passed, 2 skipped, 1 warning`；兩個 skip 仍是 Windows symlink 權限限制，warning 仍是第三方 `google-genai` deprecation warning。完整 Vitest 為 `7` 個檔案、`67 passed`。
+- 使用者已明確授權將本次 `build-site` 功能、計畫與進度紀錄推送至 GitHub `origin/master`。本次不執行 Pages 部署；push 後的 GitHub Actions／Pages 狀態需另行查驗，且 `deploy` CLI 仍未設計或實作。
 
 ### 2026-09-01：`build-site` CLI、文件與本機 gate
 

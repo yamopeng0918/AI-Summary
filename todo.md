@@ -118,7 +118,7 @@
 - [x] 支援本機編輯與重新產生摘要：`edit`／`regenerate` CLI、Schema 驗證後原子覆寫與失敗保留均已完成；第二輪 final review 修正 `75785f1` 後，focused Python `94 passed, 1 warning`、完整 Python `670 passed, 2 skipped, 1 warning`、7 筆保存資料重驗證、tracked verifier、diff check 與無金鑰隔離 edit smoke 均有證據。未執行真實付費重新產生、push 或部署。
 - [x] 支援下架與重新發布，並保留建立與更新時間。
 - [x] 實作 `evaluate-classifier` 指令。
-- [x] 完成本機 `build-site` CLI 與文件；驗證證據記錄於 `progress.md` 的 2026-09-01 條目。
+- [x] 完成本機 `build-site` CLI 與文件，並於 2026-09-02 fast-forward 整合至本機 `master`；實作、審查與合併後驗證證據記錄於 `progress.md`。
 - [ ] 在任何實作前獨立設計並取得 `deploy` CLI 核准。
 - [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
 - [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
