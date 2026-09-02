@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -297,6 +298,49 @@ def test_workflow_in_progress_is_polled_until_success() -> None:
     assert all(f"head_sha={HEAD}" in url for url in fetcher.urls)
 
 
+def test_workflow_ignores_nonmatching_runs_until_exact_match() -> None:
+    wrong_sha = workflow("completed", "success", sha="b" * 40)
+    wrong_name = workflow("completed", "success")
+    wrong_name["name"] = "Other workflow"
+    fetcher = SequenceFetcher([
+        {"workflow_runs": [wrong_sha]},
+        {"workflow_runs": [wrong_name]},
+        {"workflow_runs": [workflow("completed", "success")]},
+    ])
+    sleeps: list[float] = []
+    service = make_service(
+        runner_for_success(),
+        fetch_json=fetcher,
+        sleep=sleeps.append,
+        poll_attempts=3,
+        poll_delay_seconds=0.25,
+    )
+
+    result = service.run()
+
+    assert result.workflow_url == "https://github.example/run/1"
+    assert sleeps == [0.25, 0.25]
+
+
+def test_workflow_failure_does_not_run_public_smoke() -> None:
+    runner = runner_for_success()
+    service = make_service(
+        runner,
+        fetch_json=SequenceFetcher([
+            {"workflow_runs": [workflow("completed", "failure")]}
+        ]),
+        poll_attempts=1,
+    )
+
+    with pytest.raises(DigestError):
+        service.run()
+
+    assert not any(
+        command == [sys.executable, "scripts/smoke_pages.py"]
+        for command, _cwd in runner.calls
+    )
+
+
 @pytest.mark.parametrize(
     ("payloads", "retryable"),
     [
@@ -330,3 +374,23 @@ def test_public_smoke_failure_is_retryable_and_safe() -> None:
         "message": "public deployment verification failed",
         "retryable": True,
     }
+
+
+def test_public_smoke_oserror_is_retryable_and_safe() -> None:
+    runner = runner_for_success()
+
+    def raises_for_smoke(command, cwd: Path) -> CommandResult:
+        if command == [sys.executable, "scripts/smoke_pages.py"]:
+            raise OSError("SECRET BODY")
+        return runner(command, cwd)
+
+    with pytest.raises(DigestError) as raised:
+        make_service(raises_for_smoke).run()
+
+    assert raised.value.as_dict() == {
+        "stage": "deploy",
+        "code": "DEPLOY_PUBLIC_FAILED",
+        "message": "public deployment verification failed",
+        "retryable": True,
+    }
+    assert "SECRET BODY" not in str(raised.value.as_dict())
