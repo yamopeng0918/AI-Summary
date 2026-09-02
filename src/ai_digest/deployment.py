@@ -130,11 +130,18 @@ class DeployService:
         self.on_progress("workflow", None)
         workflow_url = self._wait_for_workflow(commit)
         self.on_progress("public", None)
-        self._checked(
-            [sys.executable, "scripts/smoke_pages.py"],
-            "DEPLOY_PUBLIC_FAILED",
-            "public deployment verification failed",
-        )
+        try:
+            public_result = self.run_command(
+                [sys.executable, "scripts/smoke_pages.py"], self.repository_root
+            )
+        except OSError:
+            raise self._error(
+                "DEPLOY_PUBLIC_FAILED", "public deployment verification failed", True
+            ) from None
+        if public_result.returncode != 0:
+            raise self._error(
+                "DEPLOY_PUBLIC_FAILED", "public deployment verification failed", True
+            )
         return DeployResult(commit, workflow_url, self.site_url, push_status)
 
     def _wait_for_workflow(self, commit_sha: str) -> str:
@@ -142,23 +149,41 @@ class DeployService:
             f"https://api.github.com/repos/{self.github_repository}/actions/runs"
             f"?head_sha={commit_sha}&per_page=20"
         )
-        try:
-            payload = self.fetch_json(url)
-        except Exception:
-            raise self._error(
-                "DEPLOY_WORKFLOW_FAILED",
-                "workflow status request failed",
-                True,
-            ) from None
+        for attempt in range(self.poll_attempts):
+            try:
+                payload = self.fetch_json(url)
+            except Exception:
+                raise self._error(
+                    "DEPLOY_WORKFLOW_FAILED",
+                    "workflow status request failed",
+                    True,
+                ) from None
+            run = self._matching_workflow(payload, commit_sha)
+            if run is not None and run.get("status") == "completed":
+                if run.get("conclusion") != "success":
+                    raise self._error(
+                        "DEPLOY_WORKFLOW_FAILED", "deployment workflow failed"
+                    )
+                workflow_url = run.get("html_url")
+                if not isinstance(workflow_url, str) or not workflow_url:
+                    raise self._error(
+                        "DEPLOY_WORKFLOW_FAILED", "deployment workflow failed"
+                    )
+                return workflow_url
+            if attempt + 1 < self.poll_attempts:
+                self.sleep(self.poll_delay_seconds)
+        raise self._error(
+            "DEPLOY_WORKFLOW_FAILED", "deployment workflow timed out", True
+        )
+
+    def _matching_workflow(
+        self, payload: object, commit_sha: str
+    ) -> dict[str, object] | None:
         if not isinstance(payload, dict):
-            raise self._error(
-                "DEPLOY_WORKFLOW_FAILED", "deployment workflow timed out", True
-            )
+            return None
         runs = payload.get("workflow_runs")
         if not isinstance(runs, list):
-            raise self._error(
-                "DEPLOY_WORKFLOW_FAILED", "deployment workflow timed out", True
-            )
+            return None
         for run in runs:
             if not isinstance(run, dict):
                 continue
@@ -166,13 +191,5 @@ class DeployService:
                 continue
             if run.get("name") != self.workflow_name:
                 continue
-            if run.get("status") != "completed" or run.get("conclusion") != "success":
-                raise self._error(
-                    "DEPLOY_WORKFLOW_FAILED", "deployment workflow failed"
-                )
-            workflow_url = run.get("html_url")
-            if isinstance(workflow_url, str) and workflow_url:
-                return workflow_url
-        raise self._error(
-            "DEPLOY_WORKFLOW_FAILED", "deployment workflow timed out", True
-        )
+            return run
+        return None

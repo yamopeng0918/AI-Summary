@@ -38,34 +38,58 @@ class RecordingRunner:
         return self.responses.pop(0)
 
 
+class SequenceFetcher:
+    def __init__(self, payloads: list[object]) -> None:
+        self.payloads = list(payloads)
+        self.urls: list[str] = []
+
+    def __call__(self, url: str) -> object:
+        self.urls.append(url)
+        value = self.payloads.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+
+def workflow(
+    status: str, conclusion=None, *, sha: str = HEAD
+) -> dict[str, object]:
+    return {
+        "head_sha": sha,
+        "name": "Deploy to GitHub Pages",
+        "status": status,
+        "conclusion": conclusion,
+        "html_url": "https://github.example/run/1",
+    }
+
+
 def make_service(
     runner: RecordingRunner,
     *,
     build: FakeBuildService | None = None,
+    fetch_json=None,
+    sleep=None,
+    poll_attempts: int = 30,
+    poll_delay_seconds: float = 10,
 ) -> DeployService:
     return DeployService(
         ROOT,
         build or FakeBuildService(),
         runner,
-        fetch_json=lambda _url: {
-            "workflow_runs": [{
-                "head_sha": HEAD,
-                "name": "Deploy to GitHub Pages",
-                "status": "completed",
-                "conclusion": "success",
-                "html_url": "https://github.example/run/1",
-            }]
-        },
-        sleep=lambda _seconds: None,
+        fetch_json=fetch_json or (lambda _url: {"workflow_runs": [workflow("completed", "success")]}),
+        sleep=sleep or (lambda _seconds: None),
         on_progress=lambda _step, _status=None: None,
+        poll_attempts=poll_attempts,
+        poll_delay_seconds=poll_delay_seconds,
     )
 
 
 def runner_for_success(
-    counts: str,
+    counts: str = "0\t0\n",
     *,
     include_push: bool = False,
     events: list[str] | None = None,
+    smoke: CommandResult | None = None,
 ) -> RecordingRunner:
     responses = [
         CommandResult(0, stdout=str(ROOT)),
@@ -78,7 +102,7 @@ def runner_for_success(
         responses.append(CommandResult(0))
     responses.extend([
         CommandResult(0, stdout=f"{HEAD}\n"),
-        CommandResult(0),
+        smoke or CommandResult(0),
     ])
     return RecordingRunner(responses, events)
 
@@ -250,3 +274,59 @@ def test_push_nonzero_result_is_sanitized_after_build() -> None:
     }
     assert build.calls == 1
     assert marker not in str(raised.value)
+
+
+def test_workflow_in_progress_is_polled_until_success() -> None:
+    fetcher = SequenceFetcher([
+        {"workflow_runs": [workflow("in_progress")]},
+        {"workflow_runs": [workflow("completed", "success")]},
+    ])
+    sleeps: list[float] = []
+    service = make_service(
+        runner_for_success(),
+        fetch_json=fetcher,
+        sleep=sleeps.append,
+        poll_attempts=2,
+        poll_delay_seconds=0.25,
+    )
+
+    result = service.run()
+
+    assert result.workflow_url == "https://github.example/run/1"
+    assert sleeps == [0.25]
+    assert all(f"head_sha={HEAD}" in url for url in fetcher.urls)
+
+
+@pytest.mark.parametrize(
+    ("payloads", "retryable"),
+    [
+        ([{"workflow_runs": [workflow("completed", "failure")]}], False),
+        ([OSError("PRIVATE HTTP BODY")], True),
+        ([{"workflow_runs": []}], True),
+    ],
+)
+def test_workflow_failures_are_safe(payloads, retryable: bool) -> None:
+    service = make_service(
+        runner_for_success(), fetch_json=SequenceFetcher(payloads), poll_attempts=1
+    )
+
+    with pytest.raises(DigestError) as raised:
+        service.run()
+
+    assert raised.value.code == "DEPLOY_WORKFLOW_FAILED"
+    assert raised.value.retryable is retryable
+    assert "PRIVATE HTTP BODY" not in str(raised.value.as_dict())
+
+
+def test_public_smoke_failure_is_retryable_and_safe() -> None:
+    runner = runner_for_success(smoke=CommandResult(3, stderr="SECRET BODY"))
+
+    with pytest.raises(DigestError) as raised:
+        make_service(runner).run()
+
+    assert raised.value.as_dict() == {
+        "stage": "deploy",
+        "code": "DEPLOY_PUBLIC_FAILED",
+        "message": "public deployment verification failed",
+        "retryable": True,
+    }
