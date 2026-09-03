@@ -902,15 +902,12 @@ def test_production_deploy_is_lazy_and_uses_safe_adapters(
     assert all(isinstance(command, (list, tuple)) for command in commands)
     assert all("shell" not in kwargs for _command, kwargs in subprocess_calls)
     assert all(kwargs["check"] is False for _command, kwargs in subprocess_calls)
-    deploy_adapter_calls = [
-        kwargs
-        for command, kwargs in subprocess_calls
-        if command[0] == "git" or command == [sys.executable, "scripts/smoke_pages.py"]
-    ]
     assert all(
-        kwargs["capture_output"] is True
-        and kwargs["text"] is True
-        for kwargs in deploy_adapter_calls
+        kwargs.get("capture_output") is True
+        and kwargs.get("text") is True
+        and kwargs.get("encoding") == "utf-8"
+        and kwargs.get("errors") == "replace"
+        for _command, kwargs in subprocess_calls
     )
     assert not any(
         token in {"add", "commit", "reset", "checkout", "pull", "rebase", "--force", "-f"}
