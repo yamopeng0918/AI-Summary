@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生、`build-site` 與 `deploy` CLI 的自動化／本機 gate 已完成；`deploy` 的真實 push、matching workflow 與公開 smoke acceptance 仍待使用者明確授權後驗證
+> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生、`build-site` 與 `deploy` CLI 的自動化、本機 gate、真實 push、matching workflow 與公開 smoke acceptance 均已完成
 >
-> 下次續作：在使用者明確授權後才執行一次真實 `ai-digest deploy`，驗證 push、matching workflow 與公開 smoke；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：核心 MVP 已完成；如要繼續，先由使用者選擇並核准選配項目。不得自行擴張到 PDF／OCR、登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 已完成 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕與無字幕案例均完整到達 `complete`，通過資料驗證並確認本機／遠端零殘留 |
 | 公開社群單篇貼文 | 已完成 | Bluesky 獨立解析器、DID canonical URL、AppView 邊界、CLI 路由與資料契約已完成；真實 AppView、付費摘要、GitHub push、Pages 列表／詳情／來源連結與 OG 圖均已驗收 |
-| GitHub repository 與 Pages | 已完成（既有遠端驗收） | Pages Source 已設為 GitHub Actions；`build:pages` 為每筆 `published` 摘要產生 OG PNG，卡片與詳情頁 metadata 已串接；本次未查詢遠端，既有紀錄中最新已驗證的 workflow 為 `33583046013`，對應 head `4d872542f3958904405f9c9d2d0dbb02c9fb5e4d`，已於 2026-09-02 確認為 `completed`／`success` |
+| GitHub repository 與 Pages | 已完成 | Pages Source 已設為 GitHub Actions；`build:pages` 為每筆 `published` 摘要產生 OG PNG，卡片與詳情頁 metadata 已串接；2026-09-03 `ai-digest deploy` 功能驗收成功，驗收 workflow 為 `33739413130`，對應 head `1d484e493c290eb3a36c496c0829ff18564f8f15`，公開 smoke 通過 |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -63,13 +63,20 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
 | YouTube 本機工具與手動驗收 | 2026-08-26 已使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、`gemini-3.6-flash` 與使用者核准的有字幕／無字幕公開影片完成兩案驗收；兩案均 exit 0、到達 `complete`、通過資料驗證，且本機媒體與 Gemini Files 均為 0 |
-| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；本次未查詢遠端，既有紀錄中最新已驗證的 workflow 為 `33583046013`，對應 head `4d872542f3958904405f9c9d2d0dbb02c9fb5e4d`，已於 2026-09-02 確認為 `completed`／`success`；首頁 OG 圖正常載入與封鎖圖片 fallback 均已完成 Chrome 遠端驗收 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；2026-09-03 修正後的真實 `ai-digest deploy` 對 head `1d484e493c290eb3a36c496c0829ff18564f8f15` 完成 workflow `33739413130` 與公開 smoke；首頁 OG 圖正常載入與封鎖圖片 fallback 亦已有 Chrome 遠端驗收 |
 | OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併、push 並完成 GitHub Pages 遠端驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | Bluesky 真實／遠端驗收 | 已使用核准的 Bluesky 官方公開非回覆貼文完成 AppView、付費摘要、DID canonical JSON、push、Pages workflow 與公開列表／詳情／來源連結／OG 圖驗收 |
 | 摘要或分類正確性 | 保留原文連結；正式分類器 Accuracy 0.9167、Macro F1 0.9179，已嚴格高於最大類基準 0.1667 |
 
 ## 進度紀錄
+
+### 2026-09-03：`deploy` CLI 真實驗收與 Windows UTF-8 修正
+
+- 首次真實 `ai-digest deploy` 已成功完成 preflight、build、verify、push、matching workflow `33714724234` 與公開 smoke，部署 head 為 `e9a13a5`。驗收同時發現 deploy 的捕捉型 subprocess runner 以 Windows CP950 解碼 Astro UTF-8 輸出，reader thread 產生 `UnicodeDecodeError` traceback，違反純 JSON Lines 契約；push 與公開部署本身維持成功，未執行回滾。
+- 依根因新增 production-adapter 回歸斷言，將 deploy 專用 runner 固定為 `encoding="utf-8"`、`errors="replace"`；修正 commit 為 `1d484e4`。focused regression 為 `1 passed, 1 warning`，deployment／site-build／CLI 為 `103 passed, 1 warning`，完整 Python 為 `715 passed, 2 skipped, 1 warning`，`git diff --check` 通過。
+- 修正後再次執行真實 `ai-digest deploy`，依序只輸出 `preflight`、`build`、`verify`、`push: pushed`、`workflow`、`public`、`complete` JSON Lines，未再出現 CP950 traceback。命令 exit `0`，部署 commit 為 `1d484e493c290eb3a36c496c0829ff18564f8f15`，matching workflow 為 `33739413130`，公開網站 <https://yamopeng0918.github.io/AI-Summary/> smoke 通過。
+- 核心 `deploy` 工作已完成；本驗收紀錄納入本次使用者已授權的 GitHub 上傳範圍。後續只剩使用者另行選擇並核准的非核心選配項目。
 
 ### 2026-09-03：`deploy` CLI 本機 gates、審查與文件
 

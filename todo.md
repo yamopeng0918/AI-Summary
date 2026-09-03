@@ -120,7 +120,7 @@
 - [x] 實作 `evaluate-classifier` 指令。
 - [x] 完成本機 `build-site` CLI 與文件，並於 2026-09-02 fast-forward 整合至本機 `master`；實作、審查與合併後驗證證據記錄於 `progress.md`。
 - [x] 完成 `deploy` CLI 獨立設計、TDD 實作與 final-review 修正（2026-09-02～03：`602e4e1`、`58730e3`、`fbaa000`、`568d9bc`、`bf2fd9b`、`492c80a`、`b492ce5`）；`deploy` 僅輸出結構化 JSON Lines，所有子程序輸出均捕捉，獨立 `build-site` 仍保留即時診斷。final-review focused Python 為 `103 passed, 1 warning`，完整 Python 為 `715 passed, 2 skipped, 1 warning`；先前 Vitest `67 passed`、`build-site`、tracked／dist verifier 與 diff check 證據仍保留。
-- [ ] 在使用者明確授權後執行一次真實 `ai-digest deploy`，驗證 push（如需要）、相同 HEAD 的 GitHub Pages workflow 與公開 smoke acceptance；完成前不得標記 deploy 完成。
+- [x] 依使用者明確授權完成真實 `ai-digest deploy`；首次驗收發現 Windows CP950 捕捉解碼問題，修正 `1d484e4` 後以純 JSON Lines 成功 push，matching workflow `33739413130` 與公開 smoke 均通過。
 - [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
 - [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
 - [x] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（<https://yamopeng0918.github.io/AI-Summary/>）。
