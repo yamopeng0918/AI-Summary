@@ -4,7 +4,7 @@
 
 **Goal:** Add a key-free `ai-digest deploy` command that safely deploys already committed `master` content, reuses the local Pages gates, waits for the matching GitHub Pages workflow, and verifies the public site.
 
-**Architecture:** A new `DeployService` owns Git preflight, fast-forward push decisions, workflow polling, and public smoke orchestration through injected boundaries. It composes the existing `SiteBuildService`; Typer remains a thin dependency-wiring and JSON Lines layer, and no summary provider, classifier, repository mutation, commit, or force push is involved.
+**Architecture:** A new `DeployService` owns Git preflight, fast-forward push decisions, workflow polling, and public smoke orchestration through injected boundaries. It composes the existing `SiteBuildService`; the deploy composition injects one capturing runner into Git, npm/Astro build, verifier, and public smoke so Typer emits JSON Lines only. The standalone `build-site` composition retains its live diagnostics. No summary provider, classifier, repository mutation, commit, or force push is involved.
 
 **Tech Stack:** Python 3.12+, Typer, HTTPX, subprocess, pytest, Git, GitHub Actions public REST API, existing Astro/Vitest build and `scripts/smoke_pages.py`.
 
@@ -18,6 +18,7 @@
 - Run the existing `SiteBuildService` before any push.
 - Query the public GitHub Actions API without a token and run the existing public smoke script only after the matching workflow succeeds.
 - Do not expose subprocess output, HTTP response bodies, exception text, environment variables, credentials, or sensitive local paths in `DigestError`.
+- `deploy` stdout/stderr must contain structured JSON Lines only; capture and suppress every Git, npm/Astro, verifier, and public-smoke subprocess stream. Keep standalone `build-site` live diagnostics unchanged.
 - Automated tests must not require a real network, GitHub account, paid API, or real push.
 - A real `ai-digest deploy` run requires a fresh explicit user authorization after all local gates pass.
 - Preserve all unrelated tracked and untracked user files.
@@ -742,8 +743,12 @@ def _deploy_service(
         response.raise_for_status()
         return response.json()
 
-    build_service = _site_build_service(
-        lambda step: on_progress(step, None)
+    build_service = SiteBuildService(
+        repository_root=repository_root,
+        run_command=run_command,
+        platform=sys.platform,
+        python_executable=sys.executable,
+        on_progress=lambda step: on_progress(step, None),
     )
     return DeployService(
         repository_root,
@@ -852,7 +857,7 @@ def test_deploy_uses_falsey_injected_factory(
     assert default_calls == 0
 ```
 
-For production laziness, patch `cli._provider`, `cli._classifier`, and `cli._repository` to raise `AssertionError`; patch `cli.httpx.get`, `cli.subprocess.run`, and `cli.time.sleep` with deterministic fakes that return the exact preflight, synchronized-state, matching-workflow, and smoke results. Invoke `cli.app` with `deploy`, assert exit `0`, assert neither lazy dependency was called, assert the Git command list contains no `add`, `commit`, `reset`, `checkout`, `pull`, `rebase`, or force option, assert the workflow request contains the current fake HEAD, and assert every subprocess call receives an argument sequence rather than `shell=True`.
+For production laziness, patch `cli._provider`, `cli._classifier`, and `cli._repository` to raise `AssertionError`; patch `cli.httpx.get`, `cli.subprocess.run`, and `cli.time.sleep` with deterministic fakes that return the exact preflight, synchronized-state, matching-workflow, and smoke results. Invoke `cli.app` with `deploy`, assert exit `0`, assert neither lazy dependency was called, assert the Git command list contains no `add`, `commit`, `reset`, `checkout`, `pull`, `rebase`, or force option, assert the workflow request contains the current fake HEAD, and assert every subprocess call receives an argument sequence rather than `shell=True`. Make the fake npm/Astro and verifier commands produce noisy stdout/stderr whenever `capture_output=True` is absent, then assert the complete ordered `pushed` and `unchanged` event sequences and that both CLI streams contain JSON Lines only. Retain a separate production `build-site` assertion showing its live diagnostics are still visible.
 
 - [ ] **Step 6: Run all deploy CLI and directly related tests**
 

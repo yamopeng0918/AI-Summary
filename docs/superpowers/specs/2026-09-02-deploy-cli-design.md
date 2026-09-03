@@ -14,7 +14,7 @@ ai-digest deploy
 
 ## 2. 採用方案
 
-新增獨立 `DeployService`，重用現有 `SiteBuildService`，並以可注入的 Git command runner、GitHub workflow client、sleep callback 與 public smoke runner 保持所有外部作用可測試。
+新增獨立 `DeployService`，重用現有 `SiteBuildService`，並以可注入的 Git command runner、GitHub workflow client、sleep callback 與 public smoke runner 保持所有外部作用可測試。CLI 的 deploy 組合為 Git、npm／Astro build、verifier 與 public smoke 共用同一個捕捉型 runner；獨立的 `build-site` 組合則維持既有即時診斷輸出。
 
 不擴充 `SummaryPublisher`：該服務負責單篇摘要的建立與發布，若同時承擔一般 repository 部署，會把部署錯誤地綁定到摘要 provider 與內容建立流程。
 
@@ -74,7 +74,9 @@ CLI 只建立服務、輸出 JSON Lines 進度與完成結果，並沿用既有 
 {"stage":"deploy","step":"push","status":"unchanged"}
 ```
 
-`SiteBuildService` 產生的 `build` 與 `verify` 事件透過同一個 progress callback 轉送，不重複輸出。成功 exit code 為 `0`，失敗 exit code 為 `1`。
+`SiteBuildService` 產生的 `build` 與 `verify` 事件透過同一個 progress callback 轉送，不重複輸出。`deploy` 的 stdout 與 stderr 只允許上述 JSON Lines：所有 Git、npm／Astro、verifier 與 public smoke 子程序輸出都必須捕捉且不得轉送；成功進度與完成結果寫到 stdout，失敗只在 stderr 寫入結構化 `DigestError`。成功 exit code 為 `0`，失敗 exit code 為 `1`。
+
+這項限制只適用於 `deploy`。獨立執行 `build-site` 時保留既有的 npm／Astro／verifier 即時診斷，方便人工疑難排解。
 
 ## 6. 錯誤契約
 
@@ -110,9 +112,10 @@ CLI 測試至少覆蓋：
 
 - `deploy` 存在且不接受額外參數。
 - 完整事件順序，以及 `pushed`／`unchanged` 兩種 push 狀態。
+- 即使 build 或 verifier 產生 stdout／stderr 噪音，`deploy` 的兩個 stream 仍只包含合法 JSON Lines。
 - 成功與失敗 exit code。
 - 不初始化 provider、分類器或摘要 repository。
-- `build-site` 既有行為不受影響。
+- `build-site` 既有即時診斷行為不受影響。
 
 所有自動化測試必須使用 fake runner、fixture 或注入 client，不依賴真實網路、GitHub、付費 API 或真實 push。
 

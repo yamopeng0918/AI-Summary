@@ -6,7 +6,7 @@
 >
 > 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生、`build-site` 與 `deploy` CLI 的自動化／本機 gate 已完成；`deploy` 的真實 push、matching workflow 與公開 smoke acceptance 仍待使用者明確授權後驗證
 >
-> 下次續作：完成 `deploy` 的全分支最終審查，並在使用者明確授權後才執行一次真實 `ai-digest deploy`；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：在使用者明確授權後才執行一次真實 `ai-digest deploy`，驗證 push、matching workflow 與公開 smoke；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -74,8 +74,9 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 ### 2026-09-03：`deploy` CLI 本機 gates、審查與文件
 
 - 2026-09-02 的設計 commit 為 `602e4e1`；實作／測試 commits 為 `58730e3`（safe deployment service）、`fbaa000`（build-before-push regression）、`568d9bc`（workflow 與公開 smoke 驗證）、`bf2fd9b`（deployment workflow boundary coverage）與 `492c80a`（`deploy` CLI）。命令只處理已提交的 `master`，忽略 untracked files、拒絕 tracked changes 與 behind/diverged state，並重用既有本機 build／verifier gates；只有嚴格超前才會一般 push，已同步時重用相同 HEAD 的成功 workflow，最後才執行公開 smoke。
-- 2026-09-03 新鮮完整 Python suite 為 `703 passed, 2 skipped, 1 warning`。兩個 skip 為 Windows symlink 權限限制（`WinError 1314`）；warning 是第三方 `google-genai` deprecation warning。完整 Vitest 為 `7` 個檔案、`67 passed`。`ai-digest build-site` exit `0`，Astro check 為 `19` 個檔案、`0 errors / 0 warnings / 0 hints`，建置 `8` 個頁面，並輸出 `build`、`verify`、`complete` 事件。tracked／`site/dist` deployment verifier 與 `git diff --check` 均 exit `0`。
-- Task 1 與 Task 2 的獨立審查在修正後均為 clean、沒有剩餘 finding；Task 3 規格／task-quality 審查通過，但保留一項 Minor 觀察：CLI 測試尚未完整覆蓋有序事件序列及 `pushed` 狀態，此項留待全分支最終審查。廣泛最終審查仍待完成，不得宣稱已完成。
+- final-review 修正 commit `b492ce5` 將 deploy 組合中的 `SiteBuildService` 改用同一個捕捉型 runner，確保 Git、npm／Astro、verifier 與 public smoke 的子程序輸出都不會污染 stdout／stderr；獨立 `build-site` 仍保留即時診斷。CLI 回歸測試現在精確比對完整有序事件，並同時覆蓋 `pushed`／`unchanged`。服務安全測試補齊 build 失敗不 push、push 失敗不查 workflow、非 root、非 master、無效 revision counts、fetch 失敗、queued 輪詢與 cancelled workflow。
+- 2026-09-03 final-review 修正後的 focused deployment／site-build／CLI 測試為 `103 passed, 1 warning`；新鮮完整 Python suite 收集 `717` 項，結果為 `715 passed, 2 skipped, 1 warning`。兩個 skip 為 Windows symlink 權限限制（`WinError 1314`）；warning 是第三方 `google-genai` deprecation warning。先前本輪完整 Vitest 證據仍為 `7` 個檔案、`67 passed`；`ai-digest build-site`、Astro check（`19` 個檔案、`0 errors / 0 warnings / 0 hints`、`8` 個頁面）、tracked／`site/dist` deployment verifier 均維持先前已驗證狀態，本次 final-review 修正未重新執行這些前端 gates。
+- 全分支 final review 所列輸出契約、服務邊界測試與完整 CLI 序列 finding 已全部處理；本地 self-review 未發現未解決的 Critical、Important 或 Minor finding。文件提交前後的 `git diff --check` 均為 exit `0`，證據記錄於 final-fix report。
 - 本次沒有執行 `ai-digest deploy`、Git fetch/push、GitHub API、workflow 查詢或公開 smoke。真實 deployment acceptance 仍待使用者對這次會 push commits 並查驗 GitHub Pages 的動作提出明確授權；在 workflow 與公開 smoke 都成功前，`deploy` 保持未完成。
 
 ### 2026-09-02：`build-site` 整合與推送前驗證

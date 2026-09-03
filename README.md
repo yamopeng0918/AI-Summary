@@ -212,7 +212,7 @@ npm.cmd run build:pages
 ai-digest build-site
 ```
 
-此指令依序執行既有 Node.js dependencies 的 `npm.cmd run build:pages`，再驗證 tracked 檔案與 `site/dist`；不會執行 `npm ci`、Git commit、push、GitHub Actions 或部署，也不會呼叫摘要 provider。上述較低階的 npm 與 verifier 指令仍可作為疑難排解或手動執行的替代方式。
+此指令依序執行既有 Node.js dependencies 的 `npm.cmd run build:pages`，再驗證 tracked 檔案與 `site/dist`；不會執行 `npm ci`、Git commit、push、GitHub Actions 或部署，也不會呼叫摘要 provider。`build-site` 會保留 npm／Astro／verifier 的即時診斷輸出，方便人工排錯；上述較低階的 npm 與 verifier 指令仍可作為疑難排解或手動執行的替代方式。
 
 `npm.cmd run build:pages` 會為每筆 `published` 摘要自動建立一張 PNG，輸出至 `site/dist/og/`，供首頁卡片及摘要詳情頁的 Open Graph／Twitter metadata 使用。這些 PNG 與 `site/dist` 的其他內容都是建置 artifact，不是要加入 Git 追蹤的內容；每次部署應由來源資料重新產生。
 
@@ -235,6 +235,8 @@ ai-digest deploy
 ```
 
 `deploy` 只處理已提交的 `master` 內容。它忽略 untracked files，但拒絕 staged 或 unstaged 的 tracked 變更，也拒絕本機落後或與 `origin/master` 分歧的狀態。通過 preflight 後，命令會執行既有的本機 `build-site` gates；只有本機嚴格超前時才以一般 `git push origin master` 推送。若已同步，命令不 push，改用同一 HEAD 已成功的 `Deploy to GitHub Pages` workflow；接著才執行公開網站 smoke 驗證。
+
+`deploy` 的 stdout 與 stderr 嚴格只輸出 JSON Lines。Git、npm／Astro、verifier 與 public smoke 的子程序輸出會被捕捉且不轉送；進度與完成結果寫到 stdout，失敗則在 stderr 寫入單一結構化錯誤。因此可安全交由腳本逐行解析。這不會改變獨立 `build-site` 的即時診斷行為。
 
 這個命令永遠不會建立 commit、force push、以 `workflow_dispatch` 重複觸發 workflow、初始化摘要 provider，或部署非 `master` 分支。它也不會加入、提交或推送 untracked files。只有本機 gate、相同 commit 的 workflow 與公開 smoke 都成功時，才可視為一次部署完成。
 
