@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-09-02
+> 最後更新：2026-09-03
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生與 `build-site` 已完成自動化與本機 gate 驗證；GitHub Pages、OG 圖與 failed-image fallback 的遠端驗收維持既有已驗證狀態
+> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生、`build-site` 與 `deploy` CLI 的自動化／本機 gate 已完成；`deploy` 的真實 push、matching workflow 與公開 smoke acceptance 仍待使用者明確授權後驗證
 >
-> 下次續作：在任何實作前，獨立設計並取得 `deploy` 核准；不得擴張到登入內容、私人內容、完整討論串或網站後台
+> 下次續作：完成 `deploy` 的全分支最終審查，並在使用者明確授權後才執行一次真實 `ai-digest deploy`；不得擴張到登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -70,6 +70,13 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結；正式分類器 Accuracy 0.9167、Macro F1 0.9179，已嚴格高於最大類基準 0.1667 |
 
 ## 進度紀錄
+
+### 2026-09-03：`deploy` CLI 本機 gates、審查與文件
+
+- 2026-09-02 的設計 commit 為 `602e4e1`；實作／測試 commits 為 `58730e3`（safe deployment service）、`fbaa000`（build-before-push regression）、`568d9bc`（workflow 與公開 smoke 驗證）、`bf2fd9b`（deployment workflow boundary coverage）與 `492c80a`（`deploy` CLI）。命令只處理已提交的 `master`，忽略 untracked files、拒絕 tracked changes 與 behind/diverged state，並重用既有本機 build／verifier gates；只有嚴格超前才會一般 push，已同步時重用相同 HEAD 的成功 workflow，最後才執行公開 smoke。
+- 2026-09-03 新鮮完整 Python suite 為 `703 passed, 2 skipped, 1 warning`。兩個 skip 為 Windows symlink 權限限制（`WinError 1314`）；warning 是第三方 `google-genai` deprecation warning。完整 Vitest 為 `7` 個檔案、`67 passed`。`ai-digest build-site` exit `0`，Astro check 為 `19` 個檔案、`0 errors / 0 warnings / 0 hints`，建置 `8` 個頁面，並輸出 `build`、`verify`、`complete` 事件。tracked／`site/dist` deployment verifier 與 `git diff --check` 均 exit `0`。
+- Task 1 與 Task 2 的獨立審查在修正後均為 clean、沒有剩餘 finding；Task 3 規格／task-quality 審查通過，但保留一項 Minor 觀察：CLI 測試尚未完整覆蓋有序事件序列及 `pushed` 狀態，此項留待全分支最終審查。廣泛最終審查仍待完成，不得宣稱已完成。
+- 本次沒有執行 `ai-digest deploy`、Git fetch/push、GitHub API、workflow 查詢或公開 smoke。真實 deployment acceptance 仍待使用者對這次會 push commits 並查驗 GitHub Pages 的動作提出明確授權；在 workflow 與公開 smoke 都成功前，`deploy` 保持未完成。
 
 ### 2026-09-02：`build-site` 整合與推送前驗證
 

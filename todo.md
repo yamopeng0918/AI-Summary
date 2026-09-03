@@ -2,7 +2,7 @@
 
 > 專案期程：2026-07-31～2026-08-27
 >
-> 最後同步：2026-09-01
+> 最後同步：2026-09-03
 >
 > 狀態標記：`[ ]` 尚未開始或尚未通過驗證、`[x]` 已完成且有驗證證據
 >
@@ -119,7 +119,8 @@
 - [x] 支援下架與重新發布，並保留建立與更新時間。
 - [x] 實作 `evaluate-classifier` 指令。
 - [x] 完成本機 `build-site` CLI 與文件，並於 2026-09-02 fast-forward 整合至本機 `master`；實作、審查與合併後驗證證據記錄於 `progress.md`。
-- [ ] 在任何實作前獨立設計並取得 `deploy` CLI 核准。
+- [x] 完成 `deploy` CLI 獨立設計與 TDD 實作（2026-09-02：`602e4e1`、`58730e3`、`fbaa000`、`568d9bc`、`bf2fd9b`、`492c80a`），並於 2026-09-03 完成本機 gates：完整 Python `703 passed, 2 skipped, 1 warning`、Vitest `7` 個檔案／`67 passed`、`build-site`、tracked／dist verifier 與 diff check 均有本機證據。
+- [ ] 在使用者明確授權後執行一次真實 `ai-digest deploy`，驗證 push（如需要）、相同 HEAD 的 GitHub Pages workflow 與公開 smoke acceptance；完成前不得標記 deploy 完成。
 - [x] 在取得明確授權後設定 GitHub repository，並推送 `master`。
 - [x] 建立 official GitHub Pages workflow，並完成本機 build、測試、base-path 連結與敏感資料 gate。
 - [x] 完成真實 GitHub Pages deployment 與公開 smoke acceptance（<https://yamopeng0918.github.io/AI-Summary/>）。

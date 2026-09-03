@@ -228,6 +228,16 @@ python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summar
 
 公開網址是 <https://yamopeng0918.github.io/AI-Summary/>。`.github/workflows/deploy-pages.yml` 會在 push 到 `master` 時自動觸發，也可到 GitHub repository 的 **Actions → Deploy to GitHub Pages → Run workflow** 手動觸發。最新已記錄的部署為 workflow run `31674616177`，成功部署 commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`，公開首頁與 demo 詳情頁均已通過 smoke acceptance。
 
+在 repository root，只有在使用者明確授權這次會造成 Git push 與 GitHub Pages 驗收的實際動作後，才執行：
+
+```powershell
+ai-digest deploy
+```
+
+`deploy` 只處理已提交的 `master` 內容。它忽略 untracked files，但拒絕 staged 或 unstaged 的 tracked 變更，也拒絕本機落後或與 `origin/master` 分歧的狀態。通過 preflight 後，命令會執行既有的本機 `build-site` gates；只有本機嚴格超前時才以一般 `git push origin master` 推送。若已同步，命令不 push，改用同一 HEAD 已成功的 `Deploy to GitHub Pages` workflow；接著才執行公開網站 smoke 驗證。
+
+這個命令永遠不會建立 commit、force push、以 `workflow_dispatch` 重複觸發 workflow、初始化摘要 provider，或部署非 `master` 分支。它也不會加入、提交或推送 untracked files。只有本機 gate、相同 commit 的 workflow 與公開 smoke 都成功時，才可視為一次部署完成。
+
 部署完成後，在 repository 根目錄執行公開 smoke check：
 
 ```powershell
