@@ -4,6 +4,7 @@ import sys
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -668,12 +669,15 @@ def test_build_site_reports_safe_structured_error(tmp_path: Path) -> None:
     assert json.loads(result.stderr) == error.as_dict()
 
 
-def test_deploy_emits_ordered_progress_and_complete_result(tmp_path: Path) -> None:
+@pytest.mark.parametrize("push_status", ["pushed", "unchanged"])
+def test_deploy_emits_exact_ordered_json_lines(
+    tmp_path: Path, push_status: Literal["pushed", "unchanged"]
+) -> None:
     expected = DeployResult(
         commit_sha="a" * 40,
         workflow_url="https://github.example/run/1",
         site_url="https://yamopeng0918.github.io/AI-Summary/",
-        push_status="unchanged",
+        push_status=push_status,
     )
 
     def factory(on_progress):
@@ -681,7 +685,7 @@ def test_deploy_emits_ordered_progress_and_complete_result(tmp_path: Path) -> No
             ("preflight", None),
             ("build", None),
             ("verify", None),
-            ("push", "unchanged"),
+            ("push", push_status),
             ("workflow", None),
             ("public", None),
         ):
@@ -698,16 +702,21 @@ def test_deploy_emits_ordered_progress_and_complete_result(tmp_path: Path) -> No
     result = CliRunner().invoke(app, ["deploy"])
 
     assert result.exit_code == 0
-    events = [json.loads(line) for line in result.stdout.splitlines()]
-    assert events[-1] == {
-        "stage": "complete",
-        "commit": "a" * 40,
-        "workflow": "https://github.example/run/1",
-        "site": "https://yamopeng0918.github.io/AI-Summary/",
-    }
-    assert events[3] == {
-        "stage": "deploy", "step": "push", "status": "unchanged"
-    }
+    assert [json.loads(line) for line in result.stdout.splitlines()] == [
+        {"stage": "deploy", "step": "preflight"},
+        {"stage": "deploy", "step": "build"},
+        {"stage": "deploy", "step": "verify"},
+        {"stage": "deploy", "step": "push", "status": push_status},
+        {"stage": "deploy", "step": "workflow"},
+        {"stage": "deploy", "step": "public"},
+        {
+            "stage": "complete",
+            "commit": "a" * 40,
+            "workflow": "https://github.example/run/1",
+            "site": "https://yamopeng0918.github.io/AI-Summary/",
+        },
+    ]
+    assert result.stderr == ""
 
 
 def test_deploy_reports_safe_structured_error(tmp_path: Path) -> None:
@@ -796,13 +805,27 @@ def test_production_deploy_is_lazy_and_uses_safe_adapters(
         )
 
     class FakeCompleted:
-        def __init__(self, stdout: str = "") -> None:
+        def __init__(self, stdout: str = "", stderr: str = "") -> None:
             self.returncode = 0
             self.stdout = stdout
-            self.stderr = ""
+            self.stderr = stderr
 
     def fake_run(command, **kwargs):
         subprocess_calls.append((command, kwargs))
+        if command in (
+            ["npm.cmd" if sys.platform == "win32" else "npm", "run", "build:pages"],
+            [
+                sys.executable,
+                "scripts/verify_deployment.py",
+                "--tracked",
+                "--dist",
+                "site/dist",
+                "--base",
+                "/AI-Summary/",
+            ],
+        ) and not kwargs.get("capture_output"):
+            print("NOISY BUILD STDOUT")
+            print("NOISY BUILD STDERR", file=sys.stderr)
         if command == ["git", "rev-parse", "--show-toplevel"]:
             return FakeCompleted(str(tmp_path.resolve()))
         if command == ["git", "branch", "--show-current"]:
@@ -858,6 +881,23 @@ def test_production_deploy_is_lazy_and_uses_safe_adapters(
     result = CliRunner().invoke(cli.app, ["deploy"])
 
     assert result.exit_code == 0
+    assert [json.loads(line) for line in result.stdout.splitlines()] == [
+        {"stage": "deploy", "step": "preflight"},
+        {"stage": "deploy", "step": "build"},
+        {"stage": "deploy", "step": "verify"},
+        {"stage": "deploy", "step": "push", "status": "unchanged"},
+        {"stage": "deploy", "step": "workflow"},
+        {"stage": "deploy", "step": "public"},
+        {
+            "stage": "complete",
+            "commit": head,
+            "workflow": "https://github.example/run/1",
+            "site": "https://yamopeng0918.github.io/AI-Summary/",
+        },
+    ]
+    assert result.stderr == ""
+    assert "NOISY BUILD" not in result.stdout
+    assert "NOISY BUILD" not in result.stderr
     commands = [command for command, _kwargs in subprocess_calls]
     assert all(isinstance(command, (list, tuple)) for command in commands)
     assert all("shell" not in kwargs for _command, kwargs in subprocess_calls)
@@ -957,6 +997,8 @@ def test_production_build_site_does_not_initialize_provider_or_classifier(
 
     def fake_run(command, *, cwd, check):
         captured.setdefault("calls", []).append((list(command), cwd, check))
+        print("LIVE BUILD DIAGNOSTIC")
+        print("LIVE BUILD ERROR DIAGNOSTIC", file=sys.stderr)
         return FakeCompleted()
 
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
@@ -964,6 +1006,8 @@ def test_production_build_site_does_not_initialize_provider_or_classifier(
     result = CliRunner().invoke(cli.app, ["build-site"])
 
     assert result.exit_code == 0
+    assert "LIVE BUILD DIAGNOSTIC" in result.stdout
+    assert "LIVE BUILD ERROR DIAGNOSTIC" in result.stderr
     npm = "npm.cmd" if sys.platform == "win32" else "npm"
     assert captured["calls"] == [
         ([npm, "run", "build:pages"], tmp_path.resolve() / "site", False),

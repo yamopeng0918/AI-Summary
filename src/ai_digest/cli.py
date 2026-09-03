@@ -243,7 +243,13 @@ def _deploy_service(
         response.raise_for_status()
         return response.json()
 
-    build_service = _site_build_service(lambda step: on_progress(step, None))
+    build_service = SiteBuildService(
+        repository_root=repository_root,
+        run_command=run_command,
+        platform=sys.platform,
+        python_executable=sys.executable,
+        on_progress=lambda step: on_progress(step, None),
+    )
     return DeployService(
         repository_root,
         build_service,
