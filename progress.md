@@ -30,7 +30,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 分類模型與評估 | 已完成 | 180 筆已核准、六類各 30 筆；固定 144/36 分層切分的 Accuracy 0.9167、Macro F1 0.9179，嚴格高於最大類基準 0.1667，production artifacts 已驗證 |
 | YouTube 公開影片 | 已完成 | Gemini Files API 轉錄、安全遠端清理、單一 provider 路由與有限 delete 重試已完成；2026-08-26 核准有字幕與無字幕案例均完整到達 `complete`，通過資料驗證並確認本機／遠端零殘留 |
 | 公開社群單篇貼文 | 已完成 | Bluesky 獨立解析器、DID canonical URL、AppView 邊界、CLI 路由與資料契約已完成；真實 AppView、付費摘要、GitHub push、Pages 列表／詳情／來源連結與 OG 圖均已驗收 |
-| GitHub repository 與 Pages | 已完成（既有遠端驗收） | Pages Source 已設為 GitHub Actions；`build:pages` 為每筆 `published` 摘要產生 OG PNG，卡片與詳情頁 metadata 已串接；本次未查詢遠端，既有已驗證的最新成功 workflow 為 `33245288929`，head `00b25eb` |
+| GitHub repository 與 Pages | 已完成（既有遠端驗收） | Pages Source 已設為 GitHub Actions；`build:pages` 為每筆 `published` 摘要產生 OG PNG，卡片與詳情頁 metadata 已串接；本次未查詢遠端，既有紀錄中最新已驗證的 workflow 為 `33583046013`，對應 head `4d872542f3958904405f9c9d2d0dbb02c9fb5e4d`，已於 2026-09-02 確認為 `completed`／`success` |
 | PDF／論文、OCR、標籤篩選 | 選配／未開始 | 不列入核心 MVP |
 
 ## 已確認的產品與技術決策
@@ -63,7 +63,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | npm advisory audit | 後續可連線驗證已完成；`npm audit --json` 回報各嚴重度均為 0 漏洞 |
 | 憑證 grep 已知基準警告 | Task 7 規定的寬鬆 `git grep` 式子回傳 exit `0`並命中 9 處既有計畫文件、placeholder 與故意的安全測試字串；這是尚未排除的 false-positive baseline。實際 deployment verifier 對 tracked 與 `site/dist` 掃描為 exit `0`，本次 diff 也未包含真實金鑰、Cookie 或憑證值 |
 | YouTube 本機工具與手動驗收 | 2026-08-26 已使用 `yt-dlp 2026.08.19`、`FFmpeg 9.0.1`、`gemini-3.6-flash` 與使用者核准的有字幕／無字幕公開影片完成兩案驗收；兩案均 exit 0、到達 `complete`、通過資料驗證，且本機媒體與 Gemini Files 均為 0 |
-| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；本次未查詢遠端，既有已驗證的最新成功 workflow 為 `33245288929`，head `00b25eb`；首頁 OG 圖正常載入與封鎖圖片 fallback 均已完成 Chrome 遠端驗收 |
+| GitHub Pages 遠端驗收 | Pages `build_type=workflow`；本次未查詢遠端，既有紀錄中最新已驗證的 workflow 為 `33583046013`，對應 head `4d872542f3958904405f9c9d2d0dbb02c9fb5e4d`，已於 2026-09-02 確認為 `completed`／`success`；首頁 OG 圖正常載入與封鎖圖片 fallback 均已完成 Chrome 遠端驗收 |
 | OG 圖建置 artifact 與字型 | `site/dist/og/` 由建置重新產生且不納入 Git；renderer 納管官方完整 Pan-CJK Regular／Bold 靜態 OTF 與 OFL-1.1，並在渲染前執行 fail-closed cmap 覆蓋檢查。功能已合併、push 並完成 GitHub Pages 遠端驗收 |
 | YouTube 與社群平台變動 | 各來源保持獨立解析器，於對應里程碑以真實案例驗證 |
 | Bluesky 真實／遠端驗收 | 已使用核准的 Bluesky 官方公開非回覆貼文完成 AppView、付費摘要、DID canonical JSON、push、Pages workflow 與公開列表／詳情／來源連結／OG 圖驗收 |
@@ -76,7 +76,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 2026-09-02 的設計 commit 為 `602e4e1`；實作／測試 commits 為 `58730e3`（safe deployment service）、`fbaa000`（build-before-push regression）、`568d9bc`（workflow 與公開 smoke 驗證）、`bf2fd9b`（deployment workflow boundary coverage）與 `492c80a`（`deploy` CLI）。命令只處理已提交的 `master`，忽略 untracked files、拒絕 tracked changes 與 behind/diverged state，並重用既有本機 build／verifier gates；只有嚴格超前才會一般 push，已同步時重用相同 HEAD 的成功 workflow，最後才執行公開 smoke。
 - final-review 修正 commit `b492ce5` 將 deploy 組合中的 `SiteBuildService` 改用同一個捕捉型 runner，確保 Git、npm／Astro、verifier 與 public smoke 的子程序輸出都不會污染 stdout／stderr；獨立 `build-site` 仍保留即時診斷。CLI 回歸測試現在精確比對完整有序事件，並同時覆蓋 `pushed`／`unchanged`。服務安全測試補齊 build 失敗不 push、push 失敗不查 workflow、非 root、非 master、無效 revision counts、fetch 失敗、queued 輪詢與 cancelled workflow。
 - 2026-09-03 final-review 修正後的 focused deployment／site-build／CLI 測試為 `103 passed, 1 warning`；新鮮完整 Python suite 收集 `717` 項，結果為 `715 passed, 2 skipped, 1 warning`。兩個 skip 為 Windows symlink 權限限制（`WinError 1314`）；warning 是第三方 `google-genai` deprecation warning。先前本輪完整 Vitest 證據仍為 `7` 個檔案、`67 passed`；`ai-digest build-site`、Astro check（`19` 個檔案、`0 errors / 0 warnings / 0 hints`、`8` 個頁面）、tracked／`site/dist` deployment verifier 均維持先前已驗證狀態，本次 final-review 修正未重新執行這些前端 gates。
-- 全分支 final review 所列輸出契約、服務邊界測試與完整 CLI 序列 finding 已全部處理；本地 self-review 未發現未解決的 Critical、Important 或 Minor finding。文件提交前後的 `git diff --check` 均為 exit `0`，證據記錄於 final-fix report。
+- 以 `e6f4368` 為 head 的 broad final review 未發現 Critical 或 Important finding；該輪先前指出的 JSON-only deploy wiring 與服務安全覆蓋缺口，以及 Task 3 已知的 CLI 完整事件順序／`pushed` 狀態 Minor，均已由 `b492ce5` 與 `e6f4368` 解決。文件提交前後的 `git diff --check` 均為 exit `0`，證據記錄於 final-fix report。
 - 本次沒有執行 `ai-digest deploy`、Git fetch/push、GitHub API、workflow 查詢或公開 smoke。真實 deployment acceptance 仍待使用者對這次會 push commits 並查驗 GitHub Pages 的動作提出明確授權；在 workflow 與公開 smoke 都成功前，`deploy` 保持未完成。
 
 ### 2026-09-02：`build-site` 整合與推送前驗證

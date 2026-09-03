@@ -226,7 +226,7 @@ python scripts/verify_deployment.py --tracked --dist site/dist --base /AI-Summar
 
 ## GitHub Pages 操作
 
-公開網址是 <https://yamopeng0918.github.io/AI-Summary/>。`.github/workflows/deploy-pages.yml` 會在 push 到 `master` 時自動觸發，也可到 GitHub repository 的 **Actions → Deploy to GitHub Pages → Run workflow** 手動觸發。最新已記錄的部署為 workflow run `31674616177`，成功部署 commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`，公開首頁與 demo 詳情頁均已通過 smoke acceptance。
+公開網址是 <https://yamopeng0918.github.io/AI-Summary/>。`.github/workflows/deploy-pages.yml` 會在 push 到 `master` 時自動觸發，也可到 GitHub repository 的 **Actions → Deploy to GitHub Pages → Run workflow** 手動觸發。最新已記錄的部署為 workflow run `33583046013`，對應 head `4d872542f3958904405f9c9d2d0dbb02c9fb5e4d`，已於 2026-09-02 確認為 `completed`／`success`；公開首頁與 demo 詳情頁的既有 smoke acceptance 維持有效。
 
 在 repository root，只有在使用者明確授權這次會造成 Git push 與 GitHub Pages 驗收的實際動作後，才執行：
 

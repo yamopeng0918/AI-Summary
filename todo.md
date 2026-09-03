@@ -52,7 +52,7 @@
 - [x] 忽略 `archived` 資料、處理無資料與無搜尋結果；資料驗證失敗時採 fail-closed，直接中止靜態建置。
 - [x] 完成手機與桌面版基本響應式介面與本機靜態建置。
 - [x] 建立 GitHub Pages workflow、`/AI-Summary/` base path、artifact verifier 與本機 `build:pages` gate。
-- [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（最新 run `31674616177`，commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`）。
+- [x] 觸發真實 GitHub Pages deployment，並對公開首頁與 demo 詳情頁完成 smoke acceptance（當時驗收 run `31674616177`，commit `7f7dc1ebd8fcb3e06ee79d748d5338f246aca0d1`；最新已記錄的成功 deployment 另見 README 與 `progress.md`）。
 - [x] 為每筆已發布摘要產生 OG PNG，使用官方完整 Pan-CJK Regular／Bold OTF、渲染前 fail-closed cmap 檢查與 `18`／`40`／`36` 安全排版；詳情頁 metadata、首頁卡片、分類右上／來源 footer、containment-first 圖片 resolver 與 `--dist` 全樹 inventory、記憶體有界 PNG decoder、完整 artifact gate，以及全部六張原始解析度視覺驗收均通過。
 
 ### 文件與安全收尾
