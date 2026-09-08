@@ -246,6 +246,8 @@ ai-digest deploy
 python scripts/smoke_pages.py
 ```
 
+預設驗證首頁的 `AI Digest` 標記，從目前首頁的摘要卡片取得 ID，再逐一檢查詳情頁與品牌標記；不再依賴固定的虛構示例。所有摘要下架時，首頁必須包含明確的 `no-data` 空資料提示才通過。若要指定單筆驗證，仍可使用 `--demo-id '<summary-id>'`。下架以 `archive` 修改狀態，提交並部署後，驗證會自動跟隨新的公開列表。
+
 若 Actions 執行失敗，前往 **Actions → Deploy to GitHub Pages → 該次失敗的 workflow run → Re-run jobs** 重試，並先查看失敗 job 的日誌。後續部署仍應先執行本機 `build:pages`、敏感資料掃描與 smoke checker。
 
 專案已推送至 <https://github.com/yamopeng0918/AI-Summary.git>；只有實際成功的 workflow run 與公開 smoke acceptance 可作為部署完成證據。

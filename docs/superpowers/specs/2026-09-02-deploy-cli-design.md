@@ -38,7 +38,7 @@ CLI 只建立服務、輸出 JSON Lines 進度與完成結果，並沿用既有 
    - 已成功：直接使用該 run。
    - queued 或 in progress：有限次輪詢。
    - 失敗、取消或逾時：回報錯誤。
-9. 執行既有 `scripts/smoke_pages.py`，確認公開 Pages 網站可讀取。
+9. 執行 `scripts/smoke_pages.py`，確認公開 Pages 網站可讀取。2026-09-08 依使用者核准修正：預設從首頁摘要卡片探索現行 ID，逐一驗證詳情頁；全數下架時必須存在明確空資料提示。保留 `--demo-id` 明確指定模式，不再固定依賴虛構示例。
 10. 回傳 commit SHA、workflow URL 與固定公開站 URL。
 
 若本機與遠端已同步，命令不透過 `workflow_dispatch` 重複部署；它只驗證相同 commit 已存在的成功 workflow 與公開網站。

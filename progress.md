@@ -1,12 +1,12 @@
 # AI Digest 專案進度
 
-> 最後更新：2026-09-03
+> 最後更新：2026-09-08
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
 > 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生、`build-site` 與 `deploy` CLI 的自動化、本機 gate、真實 push、matching workflow 與公開 smoke acceptance 均已完成
 >
-> 下次續作：核心 MVP 已完成；如要繼續，先由使用者選擇並核准選配項目。不得自行擴張到 PDF／OCR、登入內容、私人內容、完整討論串或網站後台
+> 下次續作：九頁 PowerPoint 結案報告已完成，可依使用者試講回饋調整；核心 MVP 已完成，不得自行擴張到 PDF／OCR、登入內容、私人內容、完整討論串或網站後台
 
 ## 專案目標
 
@@ -70,6 +70,29 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結；正式分類器 Accuracy 0.9167、Macro F1 0.9179，已嚴格高於最大類基準 0.1667 |
 
 ## 進度紀錄
+
+### 2026-09-08：下架後 Pages 驗證修正與未提交成果整理
+
+- 使用者要求推送未提交變更並更新驗證。`bec2ea6` 已將虛構示例設為 archived；workflow `34181942089` 的 build 與 Pages artifact 發布成功，但固定示例詳情頁的 public smoke 失敗。公開首頁已正確顯示 6 筆摘要。
+- 以 TDD 修正 `scripts/smoke_pages.py`：預設從首頁 `data-summary-card` 取得目前摘要 ID，解碼 HTML entities、去重並 URL 編碼後逐一檢查詳情頁與 `AI Digest` 標記；沒有摘要時要求 `no-data` 提示，缺少列表與空資料狀態則失敗並依既有規則重試。保留 `--demo-id` 相容模式；不改摘要資料格式或部署 CLI。
+- 紅燈為 7 failed、5 passed；修正後 focused 12 passed，完整 Python 722 passed、2 skipped、1 warning（既有 Windows symlink 權限及第三方 deprecation），完整 Vitest 67 passed，Astro 0 diagnostics、7 pages，build-site 與 tracked/dist verifier exit 0。新版腳本對真實公開網站（首頁及六筆摘要詳情）exit 0，獨立程式碼審查無 actionable finding。
+- 依授權整理九頁結案報告、既有企劃書及產生腳本、舊版 redirect 計畫與進度文件；Office 壓縮檔完整性及 XML 已知憑證格式掃描通過。`.pytest-review-temp/` 納入忽略，保留本機檔案。
+- 本機修正與檢查完成；本次 commits 的遠端 workflow 結果待推送後確認，尚不宣稱新版本部署驗收成功。
+
+### 2026-09-05：九頁 PowerPoint 結案報告完成
+
+- 使用者明確允許改用本機其他工具。以現有 python-pptx、Microsoft JhengHei、無視窗 Edge、LibreOffice 與 PDFium 完成 [結案 PowerPoint](docs/reports/output/AI-Digest-結案報告.pptx)，保留原生文字、流程圖、原生分類橫條圖及九頁講者備註。
+- 已擷取本機 `site/dist` 首頁與三種真實來源詳情頁，沒有使用虛構 demo；封面與成果總覽分別展示首頁品牌區與搜尋／列表區。講稿目標配時 380 秒，尚未真人試講。
+- `python docs/reports/verify-presentation.py` exit 0：PPTX 與渲染結果各 9 頁、備註 9 份、分類圖數值正確、超出畫布 0、渲染遺失文字 0、文字框非預期重疊 0；已逐頁檢視，修正初版文字框邊界相交與末頁連結對比問題。
+- 交付 SHA-256：`756abdc9c95504dec9a9edb4353e00a16bb7bb11e92bfcb4f7fb7eaeb9df89b4`。已掃描 PPTX XML 的已知憑證格式，未命中。檢查使用 LibreOffice 渲染，未宣稱在 Microsoft PowerPoint 應用程式內驗收。
+- 本次只新增報告及製作／驗證腳本、更新文件；沒有變更產品行為、重跑付費來源、Git push 或部署。重製方式與驗證限制記錄於 [報告 README](docs/reports/README.md)。
+
+### 2026-09-05：PowerPoint 結案報告內容準備
+
+- 使用者明確要求繼續製作已核准的結案 PowerPoint，依九頁設計續作，未變更產品程式或 MVP 範圍。
+- 已保存 [九頁文案與講者備註](docs/reports/ai-digest-closure-slide-content.md)，包含逐頁畫面文字、配置、來源及 380 秒目標配時；尚未真人試講。分類數字對照 `data/classifier/evaluation.json`，三來源展示選用真實 published JSON，不使用虛構 demo。
+- 阻礙：本次工具清單沒有簡報技能指定的 `load_workspace_dependencies`，已檢查的套件位置也沒有 `@oai/artifact-tool`。技能禁止自行安裝替代工具，尚未產生 PPTX、截圖或逐頁渲染；不可宣稱簡報交付完成。
+- 下一步：恢復指定 runtime，或取得使用者對替代製作工具的明確允許，再完成實際畫面、可編輯 PPTX、講者備註與逐頁 QA。產品測試與部署數字引用既有驗收，這次沒有重跑，也沒有 push 或部署。
 
 ### 2026-09-03：`deploy` CLI 真實驗收與 Windows UTF-8 修正
 
