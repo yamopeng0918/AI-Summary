@@ -1,7 +1,9 @@
 # AI Digest 結案報告 PowerPoint 設計
 
 日期：2026-09-05
-狀態：方向已核准，待使用者審閱書面規格
+狀態：已完成九頁 PPTX 與逐頁渲染檢查（2026-09-05）；使用者已允許改用本機工具製作
+
+交付：[AI-Digest-結案報告.pptx](../../reports/output/AI-Digest-結案報告.pptx)。製作與驗證紀錄：[README](../../reports/README.md)。
 
 ## 目的與觀眾
 
