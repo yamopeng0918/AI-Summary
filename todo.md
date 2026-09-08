@@ -12,7 +12,7 @@
 
 - [x] 以 TDD 移除 public smoke 對固定示例的依賴，涵蓋現行卡片、空資料、重試及指定 ID 相容性。
 - [x] 完整 Python 722 passed、2 skipped；Vitest 67 passed；正式建置、敏感資料 gate 與修正後真實 public smoke 通過。
-- [ ] 推送未提交成果與驗證修正，確認對應 GitHub Actions 與公開 Pages 通過。
+- [x] 推送未提交成果與驗證修正（`295baa0`、`9d7e3f7`），matching workflow `34183638258` completed / success，包含新版公開 Pages 驗證。
 
 ## 結案 PowerPoint 完成紀錄
 

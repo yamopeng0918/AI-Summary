@@ -77,7 +77,7 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 - 以 TDD 修正 `scripts/smoke_pages.py`：預設從首頁 `data-summary-card` 取得目前摘要 ID，解碼 HTML entities、去重並 URL 編碼後逐一檢查詳情頁與 `AI Digest` 標記；沒有摘要時要求 `no-data` 提示，缺少列表與空資料狀態則失敗並依既有規則重試。保留 `--demo-id` 相容模式；不改摘要資料格式或部署 CLI。
 - 紅燈為 7 failed、5 passed；修正後 focused 12 passed，完整 Python 722 passed、2 skipped、1 warning（既有 Windows symlink 權限及第三方 deprecation），完整 Vitest 67 passed，Astro 0 diagnostics、7 pages，build-site 與 tracked/dist verifier exit 0。新版腳本對真實公開網站（首頁及六筆摘要詳情）exit 0，獨立程式碼審查無 actionable finding。
 - 依授權整理九頁結案報告、既有企劃書及產生腳本、舊版 redirect 計畫與進度文件；Office 壓縮檔完整性及 XML 已知憑證格式掃描通過。`.pytest-review-temp/` 納入忽略，保留本機檔案。
-- 本機修正與檢查完成；本次 commits 的遠端 workflow 結果待推送後確認，尚不宣稱新版本部署驗收成功。
+- 已推送 `295baa0`（企劃／結案成果）與 `9d7e3f7`（驗證修正及進度），matching workflow [34183638258](https://github.com/yamopeng0918/AI-Summary/actions/runs/34183638258) 已 completed / success；包含 build、Pages artifact 發布與新版 public smoke。七筆保存 JSON 均通過 Schema 驗證，狀態為 6 published、1 archived。這是本次修正的真實遠端驗收紀錄；後續文件提交不改產品行為。
 
 ### 2026-09-05：九頁 PowerPoint 結案報告完成
 
