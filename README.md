@@ -1,8 +1,8 @@
 # AI Digest
 
-AI Digest 是一套在本機執行的公開內容摘要工具。目前支援可直接讀取的公開網頁與公開 YouTube 單支影片，經繁體中文結構化摘要、分類與 Schema 驗證後儲存為本機 JSON，再由 Astro 建置靜態網站。
+AI Digest 是一套在本機執行的公開內容摘要工具。目前支援可直接讀取的公開網頁、公開 YouTube 單支影片（含無可用字幕）及 Bluesky 公開單篇貼文，經繁體中文結構化摘要、分類與 Schema 驗證後儲存為本機 JSON，再由 Astro 建置靜態網站。
 
-完整 MVP 仍要加入無須登入的公開社群單篇貼文。分類模型已通過固定評估；YouTube 字幕與音訊轉錄路徑已有自動化覆蓋，但真實有字幕與無字幕影片驗收狀態以 `progress.md` 為準。PDF／論文、OCR 與標籤篩選是核心 MVP 穩定後才評估的選配項目。
+三來源核心 MVP 已完成真實端到端驗收，分類模型已通過固定評估，本機摘要編輯／重新產生及 GitHub Pages 發布流程亦已完成。最新驗證與結案紀錄見 [progress.md](progress.md)，交付簡報見 [結案報告](docs/reports/README.md)。PDF／論文、OCR 與標籤篩選不列入本次核心 MVP。
 
 ## 環境需求
 
@@ -256,10 +256,10 @@ python scripts/smoke_pages.py
 
 ## 目前範圍與後續
 
-本里程碑已建立公開網頁與 YouTube 來源擷取、Gemini 與 OpenAI 結構化摘要邊界、provider-aware CLI、JSON Schema 驗證與儲存，以及 Astro 列表、詳情、搜尋、分類篩選與日期排序。
+核心 MVP 已完成公開網頁、YouTube 與 Bluesky 公開單篇貼文來源擷取、Gemini 與 OpenAI 結構化摘要邊界、provider-aware CLI、正式分類器、JSON Schema 驗證與儲存，以及 Astro 列表、詳情、搜尋、分類篩選與日期排序。本機編輯、重新產生、下架／重新發布、建置及部署 CLI 均已完成。
 
-以下是後續里程碑：
+目前已進入結案與維護階段：
 
-- 以真實公開有字幕與無字幕 YouTube 影片完成手動整合驗收。
-- 無須登入的公開社群單篇貼文。
-- 核心 MVP 穩定後才評估 PDF／論文、OCR 與標籤篩選。
+- 三來源真實驗收與 GitHub Pages 公開驗證已有紀錄，詳見 [progress.md](progress.md)。
+- 九頁結案 PowerPoint 已交付，講稿目標 6 分 20 秒，尚待真人試講。
+- PDF／論文、OCR、標籤篩選及網站後台等選配功能未實作，須另行核准才開始。

@@ -90,8 +90,9 @@ def new(title=None,dark=False):
 s=new()
 text(s,'AI Digest',.6,1.02,6,1.12,60,bold=True)
 text(s,'從公開網址到可驗證、\n可部署的 AI 知識摘要系統',.65,2.48,5.4,1.5,25)
+text(s,'課程名稱：非結構型資料的分析案例',.65,4.82,5.7,.5,18)
 text(s,'彭元懋',.65,5.67,5,.4,20,bold=True)
-text(s,'專案結案報告  ·  2026.09',.65,6.16,5,.4,16,MUTED)
+text(s,'專案結案報告  ·  2026 年 9 月 8 日',.65,6.16,5.7,.4,16,MUTED)
 picture(s,'cover.png',6.45,1,6.3,5.3)
 
 # 2 — Product problem and objective.
@@ -190,17 +191,17 @@ for y,no,challenge,solution,detail in [(1.65,'01','文字取得方式不同','�
     text(s,detail,6.85,y+.72,5.85,.65,17,MUTED)
 
 # 9 — Evidence and conclusion; readable limits remain visible.
-s=new('三來源核心 MVP 已完成',dark=True)
-text(s,'715',.65,1.6,3.1,1.1,60,BG,True)
-text(s,'Python passed · 2 skipped',.65,2.87,5.5,.5,18,PALE)
-text(s,'67',6.8,1.6,3.1,1.1,60,BG,True)
-text(s,'Vitest passed',6.8,2.87,5.5,.5,18,PALE)
-text(s,'正式建置與部署驗證通過',.65,3.72,12,.6,27,BG,True)
-text(s,'真實 push → matching workflow → 公開 smoke 通過',.65,4.45,12,.5,20,BG)
-text(s,'學習成果｜資料契約、安全邊界、可重現評估與部署可靠性',.65,5.4,12,.7,20,BG)
-text(s,'未實作：PDF／OCR／登入內容／網站後台',.65,6.24,12,.4,17,PALE)
-text(s,'驗收依據：2026-09-03 進度紀錄',.65,6.74,9.5,.27,12,PALE)
-link=text(s,'公開網站 ↗',10.4,6.64,2.2,.33,14,PALE)
+s=new('三來源核心 MVP 已完成')
+text(s,'715',.65,1.6,3.1,1.1,60,ACCENT,True)
+text(s,'Python passed · 2 skipped',.65,2.87,5.5,.5,18,MUTED)
+text(s,'67',6.8,1.6,3.1,1.1,60,ACCENT,True)
+text(s,'Vitest passed',6.8,2.87,5.5,.5,18,MUTED)
+text(s,'正式建置與部署驗證通過',.65,3.72,12,.6,27,INK,True)
+text(s,'真實 push → matching workflow → 公開 smoke 通過',.65,4.45,12,.5,20,INK)
+text(s,'學習成果｜資料契約、安全邊界、可重現評估與部署可靠性',.65,5.4,12,.7,20,INK)
+text(s,'未實作：PDF／OCR／登入內容／網站後台',.65,6.24,12,.4,17,MUTED)
+text(s,'驗收依據：2026-09-03 進度紀錄',.65,6.74,9.5,.27,12,MUTED)
+link=text(s,'公開網站 ↗',10.4,6.64,2.2,.33,14,MUTED)
 link.click_action.hyperlink.address='https://yamopeng0918.github.io/AI-Summary/'
 
 OUTPUT.parent.mkdir(exist_ok=True,parents=True)
