@@ -4,9 +4,9 @@
 >
 > 專案期程：2026-07-31～2026-08-27（四週，不含企畫日）
 >
-> 目前階段：一般公開網頁、YouTube 公開影片與 Bluesky 公開單篇貼文三來源核心 MVP 均已完成真實端到端驗收；本機摘要編輯／重新產生、`build-site` 與 `deploy` CLI 的自動化、本機 gate、真實 push、matching workflow 與公開 smoke acceptance 均已完成
+> 目前階段：核心 MVP 結案完成。三來源真實端到端驗收、本機內容管理、分類評估、建置與部署 CLI 均已完成；2026-09-11 結案成果已推送 GitHub，對應 Pages workflow 與公開 smoke 成功。
 >
-> 下次續作：九頁 PowerPoint 結案報告已完成，可依使用者試講回饋調整；核心 MVP 已完成，不得自行擴張到 PDF／OCR、登入內容、私人內容、完整討論串或網站後台
+> 下一步：進入維護階段，無未完成的核心 MVP 工作。九頁 PowerPoint 可依真人試講回饋另行調整；選配功能須另行核准，不得自行擴張到 PDF／OCR、登入內容、私人內容、完整討論串或網站後台。
 
 ## 專案目標
 
@@ -70,6 +70,14 @@ PDF／論文、圖片 OCR 與標籤篩選不屬於核心 MVP，只在核心範�
 | 摘要或分類正確性 | 保留原文連結；正式分類器 Accuracy 0.9167、Macro F1 0.9179，已嚴格高於最大類基準 0.1667 |
 
 ## 進度紀錄
+
+### 2026-09-11：結案成果推送與 Pages 最終驗證完成
+
+- 結案成果提交 `21b25974e34ae08dbbca680b3b2074ee19008648`（`docs: finalize MVP closure report and project status`）已透過一般 push 推送至 `origin/master`；包含最新簡報、製作腳本、相關文案／設計、README 及進度文件，未納入暫存素材、建置輸出或憑證。
+- GitHub API 確認相同 head 的 [Pages workflow 34556916806](https://github.com/yamopeng0918/AI-Summary/actions/runs/34556916806) 為 `completed / success`。既有 workflow 包含完整 Python／前端測試、正式 Pages 建置、安全驗證、Pages artifact 發布及公開首頁／現行摘要詳情 smoke。
+- 六份本次相關 Markdown 的本機連結檢查無缺失。分類模型與七筆保存資料均保持原樣；公開站點為六筆摘要，歷史虛構示例維持 archived。
+- 核心 MVP 與本次結案交付已完成，無阻礙。尚未真人試講及 Microsoft PowerPoint 應用程式內驗收；PDF／OCR／標籤篩選等選配維持未實作。後續只依新的使用者需求維護。
+- 本段與 todo 的最終驗證紀錄另以純文件提交推送，使用 `[skip ci]` 避免為記錄同一驗收結果再次部署；網站部署對應的成果 head 仍為上述 `21b2597`。
 
 ### 2026-09-11：專案結案收尾與本機驗證
 

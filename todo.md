@@ -13,7 +13,7 @@
 - [x] 修正 README 的來源支援與後續里程碑描述，確認與三來源 MVP 完成狀態一致。
 - [x] 重驗完整 Python 722 passed、2 skipped，Vitest 67 passed、正式建置七頁、七筆摘要 Schema、tracked/dist 安全 gate 與 diff check。
 - [x] 重驗九頁結案簡報及備註、圖表數字、文件版面檢查與已知憑證格式掃描；保留使用者指定的封面及末頁修訂。
-- [ ] 推送結案成果並確認對應 Pages workflow 與公開 smoke，記錄最終結果。
+- [x] 結案成果 `21b2597` 已推送 `origin/master`；同 head 的 Pages workflow `34556916806` completed / success，包含公開 smoke；最終驗證結果已記錄於 progress.md。
 
 ## 下架後驗證與成果推送（2026-09-08）
 
